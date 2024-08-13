@@ -195,6 +195,9 @@ archive
 # output
 output
 
+# data - for now the entire directory will not be pushed; the files are too large. may make exceptions for small csv files in the future
+data
+
 # project
 FLKEYS_SIR.Rproj
 
