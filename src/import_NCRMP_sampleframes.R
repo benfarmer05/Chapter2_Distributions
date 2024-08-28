@@ -1,70 +1,88 @@
-# Clear workspace
-rm(list=ls())
 
-# Load necessary libraries
-# library(raster)
-# library(ggplot2)
-library(sf)
-# library(tabularaster)
-# library(dplyr)
-library(here)
+.rs.restartR(clean = TRUE)
+
+# library(sf)
+# library(here)
+# 
+# # cover_USVI_2013 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2013_Benthic_Data01_BenthicCover.csv"))
+# # cover_USVI_2021 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2021_Benthic_Data01_BenthicCover.csv"))
+# 
+# #retrieve data from cloned NCRMP benthics GitHub repo
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_site.rda"))
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_species.rda"))
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_site.rda"))
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_species.rda"))
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_site.rda"))
+# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_species.rda"))
+# 
+# cover_site_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_site
+# cover_spp_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_species
+# cover_site_PR = NCRMP_PRICO_2014_21_percent_cover_site
+# cover_spp_PR = NCRMP_PRICO_2014_21_percent_cover_species
+# cover_site_STX = NCRMP_STX_2015_21_percent_cover_site
+# cover_spp_STX = NCRMP_STX_2015_21_percent_cover_species
+# 
+# # Optionally, remove the original variable names if they are no longer needed
+# rm(NCRMP_STTSTJ_2013_21_percent_cover_site, NCRMP_STTSTJ_2013_21_percent_cover_species, NCRMP_PRICO_2014_21_percent_cover_site,
+#    NCRMP_PRICO_2014_21_percent_cover_species, NCRMP_STX_2015_21_percent_cover_site, NCRMP_STX_2015_21_percent_cover_species)
+# 
+# # Refactor YEAR column for each dataset
+# cover_site_STTSTJ$YEAR <- as.factor(cover_site_STTSTJ$YEAR)
+# cover_spp_STTSTJ$YEAR <- as.factor(cover_spp_STTSTJ$YEAR)
+# 
+# cover_site_PR$YEAR <- as.factor(cover_site_PR$YEAR)
+# cover_spp_PR$YEAR <- as.factor(cover_spp_PR$YEAR)
+# 
+# cover_site_STX$YEAR <- as.factor(cover_site_STX$YEAR)
+# cover_spp_STX$YEAR <- as.factor(cover_spp_STX$YEAR)
+# 
+# # Optionally, check levels of YEAR column in each dataset
+# levels(cover_site_STTSTJ$YEAR)
+# levels(cover_spp_STTSTJ$YEAR)
+# levels(cover_site_PR$YEAR)
+# levels(cover_spp_PR$YEAR)
+# levels(cover_site_STX$YEAR)
+# levels(cover_spp_STX$YEAR)
+# 
+# #load sampleframes
+# sampleframe_USVI = st_read(here("data/NCEI_inport/USVI/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_STTSTJ_2023_SampleFrame.shp"))
+# sampleframe_PR = st_read(here("data/NCEI_inport/PR/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_PR2023_SAMPLE_FRAME.shp"))
 
 
-# cover_USVI_2013 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2013_Benthic_Data01_BenthicCover.csv"))
-# cover_USVI_2021 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2021_Benthic_Data01_BenthicCover.csv"))
 
-#retrieve data from cloned NCRMP benthics GitHub repo
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_site.rda"))
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_species.rda"))
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_site.rda"))
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_species.rda"))
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_site.rda"))
-load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_species.rda"))
 
-cover_site_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_site
-cover_spp_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_species
-cover_site_PR = NCRMP_PRICO_2014_21_percent_cover_site
-cover_spp_PR = NCRMP_PRICO_2014_21_percent_cover_species
-cover_site_STX = NCRMP_STX_2015_21_percent_cover_site
-cover_spp_STX = NCRMP_STX_2015_21_percent_cover_species
-
-# Optionally, remove the original variable names if they are no longer needed
-rm(NCRMP_STTSTJ_2013_21_percent_cover_site, NCRMP_STTSTJ_2013_21_percent_cover_species, NCRMP_PRICO_2014_21_percent_cover_site,
-   NCRMP_PRICO_2014_21_percent_cover_species, NCRMP_STX_2015_21_percent_cover_site, NCRMP_STX_2015_21_percent_cover_species)
-
-# Refactor YEAR column for each dataset
-cover_site_STTSTJ$YEAR <- as.factor(cover_site_STTSTJ$YEAR)
-cover_spp_STTSTJ$YEAR <- as.factor(cover_spp_STTSTJ$YEAR)
-
-cover_site_PR$YEAR <- as.factor(cover_site_PR$YEAR)
-cover_spp_PR$YEAR <- as.factor(cover_spp_PR$YEAR)
-
-cover_site_STX$YEAR <- as.factor(cover_site_STX$YEAR)
-cover_spp_STX$YEAR <- as.factor(cover_spp_STX$YEAR)
-
-# Optionally, check levels of YEAR column in each dataset
-levels(cover_site_STTSTJ$YEAR)
-levels(cover_spp_STTSTJ$YEAR)
-levels(cover_site_PR$YEAR)
-levels(cover_spp_PR$YEAR)
-levels(cover_site_STX$YEAR)
-levels(cover_spp_STX$YEAR)
-
-#load sampleframes
-sampleframe_USVI = st_read(here("data/NCEI_inport/USVI/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_STTSTJ_2023_SampleFrame.shp"))
-sampleframe_PR = st_read(here("data/NCEI_inport/PR/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_PR2023_SAMPLE_FRAME.shp"))
-
+# - 28 August 2024. STOPPING POINT
+#     The below, with terra package, only worked after some massive amounts of research. The latest version of GDAL does not get
+#     recognized, at least on my Macbook, without using Homebrew specifically to install proj and gdal. No clue why macports doesn't
+#     get the job done. Anyways, the newest GDAL is needed to properly read ESRI geodatabase data (https://github.com/OSGeo/gdal/pull/7389).
+#     all this could become an issue again at some point because I had to use macports specifically to install qgis properly from source.
+#     there may end up being some real and severe dependency issues, having half of my spatial packages installed using brew and half
+#     using ports. we'll see!!!
+#
+# - anyways, yeah I stopped at extracting the raster objects properly from the GDB. Psyched this seems to be working
 
 library(terra)
+
+# file_temp = rast(dsn = '/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb', subds = 'PuertoRico_West_2m')
 
 # Specify the path to your ESRI geodatabase
 gdb_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb"
 
-# #the below did not work because GDAL nested in terra is not capable of this yet (I guess)
-# # List all raster layers within the geodatabase
+# List all raster layers within the geodatabase
+# Check sub-datasets
+describe(gdb_path, sds = TRUE)
 # raster_layers <- rast(gdb_path)
 # names(raster_layers)  # Print the names of the raster layers
-# 
+# Load specific sub-datasets from the geodatabase
+raster_STX <- rast(gdb_path, subds = "STX_2m")
+raster_PuertoRico_East <- rast(gdb_path, subds = "PuertoRico_East_2m")
+raster_PuertoRico_South <- rast(gdb_path, subds = "PuertoRico_South_2m")
+raster_PuertoRico_West <- rast(gdb_path, subds = "PuertoRico_West_2m")
+raster_PuertoRico_North <- rast(gdb_path, subds = "PuertoRico_North_2m")
+
+
+
+
 # library(rgdal)
 # subset(ogrDrivers(), grepl("GDB", name))
 # ogrListLayers("/path/to/folder.gdb")
