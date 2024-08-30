@@ -1,67 +1,137 @@
 
-.rs.restartR(clean = TRUE)
+# NOTE - consider using glue package to insert dates for output files
+#   https://stackoverflow.com/questions/73584505/how-to-write-a-file-into-a-specific-folder-using-here-package
 
-# library(sf)
-# library(here)
-# 
-# # cover_USVI_2013 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2013_Benthic_Data01_BenthicCover.csv"))
-# # cover_USVI_2021 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2021_Benthic_Data01_BenthicCover.csv"))
-# 
-# #retrieve data from cloned NCRMP benthics GitHub repo
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_site.rda"))
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_species.rda"))
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_site.rda"))
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_species.rda"))
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_site.rda"))
-# load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_species.rda"))
-# 
-# cover_site_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_site
-# cover_spp_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_species
-# cover_site_PR = NCRMP_PRICO_2014_21_percent_cover_site
-# cover_spp_PR = NCRMP_PRICO_2014_21_percent_cover_species
-# cover_site_STX = NCRMP_STX_2015_21_percent_cover_site
-# cover_spp_STX = NCRMP_STX_2015_21_percent_cover_species
-# 
-# # Optionally, remove the original variable names if they are no longer needed
-# rm(NCRMP_STTSTJ_2013_21_percent_cover_site, NCRMP_STTSTJ_2013_21_percent_cover_species, NCRMP_PRICO_2014_21_percent_cover_site,
-#    NCRMP_PRICO_2014_21_percent_cover_species, NCRMP_STX_2015_21_percent_cover_site, NCRMP_STX_2015_21_percent_cover_species)
-# 
-# # Refactor YEAR column for each dataset
-# cover_site_STTSTJ$YEAR <- as.factor(cover_site_STTSTJ$YEAR)
-# cover_spp_STTSTJ$YEAR <- as.factor(cover_spp_STTSTJ$YEAR)
-# 
-# cover_site_PR$YEAR <- as.factor(cover_site_PR$YEAR)
-# cover_spp_PR$YEAR <- as.factor(cover_spp_PR$YEAR)
-# 
-# cover_site_STX$YEAR <- as.factor(cover_site_STX$YEAR)
-# cover_spp_STX$YEAR <- as.factor(cover_spp_STX$YEAR)
-# 
-# # Optionally, check levels of YEAR column in each dataset
-# levels(cover_site_STTSTJ$YEAR)
-# levels(cover_spp_STTSTJ$YEAR)
-# levels(cover_site_PR$YEAR)
-# levels(cover_spp_PR$YEAR)
-# levels(cover_site_STX$YEAR)
-# levels(cover_spp_STX$YEAR)
-# 
-# #load sampleframes
-# sampleframe_USVI = st_read(here("data/NCEI_inport/USVI/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_STTSTJ_2023_SampleFrame.shp"))
-# sampleframe_PR = st_read(here("data/NCEI_inport/PR/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_PR2023_SAMPLE_FRAME.shp"))
+# potentially useful:
+#https://www.benjaminbell.co.uk/2019/08/bathymetric-maps-in-r-colour-palettes.html
+#https://stackoverflow.com/questions/20581746/increase-resolution-of-color-scale-for-values-close-to-zero
 
+# .rs.restartR(clean = TRUE)
 
+library(sf)
+library(here)
+library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see
+library(here)
+library(tidyterra)
+library(ggplot2)
+library(tmap)
+library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
 
+# # these were old file paths direct from either github or NCEI - maybe can delete. I think I was trying to find the source data
+# #  (it's here somewhere though)
+# cover_USVI_2013 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2013_Benthic_Data01_BenthicCover.csv"))
+# cover_USVI_2021 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2021_Benthic_Data01_BenthicCover.csv"))
 
-# - 28 August 2024. STOPPING POINT
-#     The below, with terra package, only worked after some massive amounts of research. The latest version of GDAL does not get
-#     recognized, at least on my Macbook, without using Homebrew specifically to install proj and gdal. No clue why macports doesn't
-#     get the job done. Anyways, the newest GDAL is needed to properly read ESRI geodatabase data (https://github.com/OSGeo/gdal/pull/7389).
-#     all this could become an issue again at some point because I had to use macports specifically to install qgis properly from source.
-#     there may end up being some real and severe dependency issues, having half of my spatial packages installed using brew and half
-#     using ports. we'll see!!!
+#retrieve data from cloned NCRMP benthics GitHub repo
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_site.rda"))
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STTSTJ_2013_21_percent_cover_species.rda"))
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_site.rda"))
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_PRICO_2014_21_percent_cover_species.rda"))
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_site.rda"))
+load(here("data/NCRMP_benthics-master/ncrmp.benthics.analysis/data", "NCRMP_STX_2015_21_percent_cover_species.rda"))
+
+cover_site_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_site
+cover_spp_STTSTJ = NCRMP_STTSTJ_2013_21_percent_cover_species
+cover_site_PR = NCRMP_PRICO_2014_21_percent_cover_site
+cover_spp_PR = NCRMP_PRICO_2014_21_percent_cover_species
+cover_site_STX = NCRMP_STX_2015_21_percent_cover_site
+cover_spp_STX = NCRMP_STX_2015_21_percent_cover_species
+
+# Optionally, remove the original variable names if they are no longer needed
+rm(NCRMP_STTSTJ_2013_21_percent_cover_site, NCRMP_STTSTJ_2013_21_percent_cover_species, NCRMP_PRICO_2014_21_percent_cover_site,
+   NCRMP_PRICO_2014_21_percent_cover_species, NCRMP_STX_2015_21_percent_cover_site, NCRMP_STX_2015_21_percent_cover_species)
+
+# Refactor YEAR column for each dataset
+cover_site_STTSTJ$YEAR <- as.factor(cover_site_STTSTJ$YEAR)
+cover_spp_STTSTJ$YEAR <- as.factor(cover_spp_STTSTJ$YEAR)
+
+cover_site_PR$YEAR <- as.factor(cover_site_PR$YEAR)
+cover_spp_PR$YEAR <- as.factor(cover_spp_PR$YEAR)
+
+cover_site_STX$YEAR <- as.factor(cover_site_STX$YEAR)
+cover_spp_STX$YEAR <- as.factor(cover_spp_STX$YEAR)
+
+# Optionally, check levels of YEAR column in each dataset
+levels(cover_site_STTSTJ$YEAR)
+levels(cover_spp_STTSTJ$YEAR)
+levels(cover_site_PR$YEAR)
+levels(cover_spp_PR$YEAR)
+levels(cover_site_STX$YEAR)
+levels(cover_spp_STX$YEAR)
+
+#load sampleframes
+sampleframe_USVI = st_read(here("data/NCEI_inport/USVI/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_STTSTJ_2023_SampleFrame.shp"))
+sampleframe_PR = st_read(here("data/NCEI_inport/PR/2023/1.1/data/0-data/Data_Sets/Sample_Frames/NCRMP_PR2023_SAMPLE_FRAME.shp"))
+sampleframe_DCRMP = st_read(here("data/MesophoticSampGrid/MesophoticSampGrid.shp"))
+
+# Determine a common CRS for the entire dataset; consider using a geographic CRS like WGS84
+common_crs <- st_crs(5070) # NAD83 / Conus Albers or use EPSG:4326 for WGS84 if desired
+
+# Transform all datasets to the common CRS
+sampleframe_USVI_transformed <- st_transform(sampleframe_USVI, common_crs)
+sampleframe_PR_transformed <- st_transform(sampleframe_PR, common_crs)
+sampleframe_DCRMP_transformed <- st_transform(sampleframe_DCRMP, common_crs)
+
+# STOPPING POINT - 30 AUGUST 2024
+#   - I need to consider what I want to accomplish. Merging these sampleframes probably isn't going to cut it, from what I am seeing.
+#     but do I even need to merge them? depends how I want to snap the bathy data to the frames, if at all. could just extract what I need
+#     using the frames as a reference and deal with everything else downstream
 #
-# - anyways, yeah I stopped at extracting the raster objects properly from the GDB. Psyched this seems to be working
+#   - yes okay the more I think about it, why not just use the native NCRMP grid(s) directly to calculate bathymetry, slope, aspect etc.
+#       within their grid squares? this might be really computationally expensive, I don't know. but I'll have to figure out something
+#   - and anyways, next steps will require
+#       - test how bad the mosaicing / artifact patterns matter in Blondeau's NOAA product (produce slope/complexity and plot)
+#       - compare with NOAA CRM exports. bring in mine and Holstein's to R, clip to 0-50 m, merge them (may need to clip PR against USVI
+#         first). then produce slope/complexity and plot. compare plot with that of Blondeau's product
+#       - lastly, and actually I'll do this first, is porting data from Allen Coral Atlas and seeing how that bathy looks! and turbidity
 
-library(terra)
+# # Convert 'sf' objects to 'terra' SpatVector objects for better handling
+# vect_USVI <- vect(sampleframe_USVI_transformed)
+# vect_PR <- vect(sampleframe_PR_transformed)
+# vect_DCRMP <- vect(sampleframe_DCRMP_transformed)
+# 
+# # Chunk-wise merge approach
+# # Split the large PR dataset into chunks
+# chunk_size <- 10000  # Define chunk size for processing
+# num_chunks <- ceiling(nrow(vect_PR) / chunk_size)
+# 
+# # Initialize the progress bar
+# pb <- txtProgressBar(min = 0, max = num_chunks, style = 3)
+# 
+# # Process in chunks
+# for (i in 1:num_chunks) {
+#   start_row <- ((i - 1) * chunk_size) + 1
+#   end_row <- min(i * chunk_size, nrow(vect_PR))
+# 
+#   # Subset PR chunk
+#   chunk_PR <- vect_PR[start_row:end_row, ]
+# 
+#   # Merge chunk with USVI and DCRMP using terra's union
+#   merged_chunk <- union(vect_USVI, chunk_PR)
+#   merged_chunk <- union(merged_chunk, vect_DCRMP)
+# 
+#   # Append merged chunk to the list
+#   merged_chunks[[i]] <- merged_chunk
+# 
+#   # Update progress bar
+#   setTxtProgressBar(pb, i)
+# }
+# 
+# # Combine all chunks into a final merged SpatVector
+# final_merged <- do.call(union, merged_chunks)
+# 
+# # Convert back to 'sf' object if needed
+# final_merged_sf <- st_as_sf(final_merged)
+# 
+# # Save the merged output to a new shapefile
+# st_write(final_merged_sf, here("output", "merged_sampleframes.shp"))
+
+
+
+
+
+
+############# 29 August 2024
 
 # file_temp = rast(dsn = '/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb', subds = 'PuertoRico_West_2m')
 
@@ -74,94 +144,143 @@ describe(gdb_path, sds = TRUE)
 # raster_layers <- rast(gdb_path)
 # names(raster_layers)  # Print the names of the raster layers
 # Load specific sub-datasets from the geodatabase
-raster_STX <- rast(gdb_path, subds = "STX_2m")
-raster_PuertoRico_East <- rast(gdb_path, subds = "PuertoRico_East_2m")
-raster_PuertoRico_South <- rast(gdb_path, subds = "PuertoRico_South_2m")
-raster_PuertoRico_West <- rast(gdb_path, subds = "PuertoRico_West_2m")
-raster_PuertoRico_North <- rast(gdb_path, subds = "PuertoRico_North_2m")
+bathy_STTSTJ = rast(gdb_path, subds = "STTSTJ_2m")
+bathy_STX <- rast(gdb_path, subds = "STX_2m")
+bathy_PR_East <- rast(gdb_path, subds = "PuertoRico_East_2m")
+bathy_PR_South <- rast(gdb_path, subds = "PuertoRico_South_2m")
+bathy_PR_West <- rast(gdb_path, subds = "PuertoRico_West_2m")
+bathy_PR_North <- rast(gdb_path, subds = "PuertoRico_North_2m")
 
 
+#downscale the resolution of the bathymetry grid
+# NOTE - may eventually simply snap the bathymetry to the NCRMP grid itself. probably makes more sense
+#
+# Define the aggregation factor
+agg_factor <- 25
+
+# Aggregate the rasters
+bathy_STTSTJ_agg <- aggregate(bathy_STTSTJ, fact = agg_factor, fun = mean, na.rm = TRUE)
+bathy_STX_agg <- aggregate(bathy_STX, fact = agg_factor, fun = mean, na.rm = TRUE)
+bathy_PR_East_agg <- aggregate(bathy_PR_East, fact = agg_factor, fun = mean, na.rm = TRUE)
+bathy_PR_South_agg <- aggregate(bathy_PR_South, fact = agg_factor, fun = mean, na.rm = TRUE)
+bathy_PR_West_agg <- aggregate(bathy_PR_West, fact = agg_factor, fun = mean, na.rm = TRUE)
+bathy_PR_North_agg <- aggregate(bathy_PR_North, fact = agg_factor, fun = mean, na.rm = TRUE)
+
+# # Merge the aggregated rasters. merge would be quicker but maybe mosaic is better?
+# agg_rasters <- c(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
+# merged_bathy <- mosaic(agg_rasters, fun = mean, na.rm = TRUE)
+merged_bathy = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
+
+# Save the merged raster
+output_dir <- here("output")
+output_file <- file.path(output_dir, "bathy_50m.tif")
+writeRaster(merged_bathy, filename = output_file, overwrite = TRUE)
+
+# PLOTTING
+#
+#plot method, with terra natively
+raster_data <- rast(output_file)
+
+# Define the color palette for the plot
+color_palette <- rev(terrain.colors(100))
+
+# Plot the raster
+plot(raster_data,
+     col = color_palette,
+     zlim = c(-50, 0),
+     main = "Bathymetry (50m Resolution)",
+     legend = TRUE)
+
+# #ggplot method, with tidyterra
+# 
+# # # Convert raster to a data frame for ggplot2
+# # bathy_raster <- rast(here("output", "bathy_50m.tif"))
+# # bathy_df <- as_tibble(bathy_raster, xy = TRUE)
+# bathy_df <- as_tibble(merged_bathy, xy = TRUE)
+# 
+# # Plot raster data
+# ggplot(bathy_df) +
+#   geom_raster(aes(x = x, y = y, fill = layer)) +
+#   scale_fill_viridis_c(option = "D", limits = c(-50, 0)) + # Adjust limits to desired depth range
+#   labs(
+#     title = "Bathymetry",
+#     fill = "Depth (meters)"
+#   ) +
+#   coord_fixed() + # Fix aspect ratio to make sure x and y are scaled equally
+#   theme_minimal() +
+#   theme(
+#     axis.title = element_blank(),
+#     axis.text = element_text(size = 8),
+#     legend.title = element_text(size = 10),
+#     legend.text = element_text(size = 8)
+#   )
+# 
+# ggplot(bathy_df) +
+#   geom_raster(aes(x = x, y = y))
+
+#tmap method
+tm_shape(merged_bathy) +
+  tm_raster(style = 'cont')
+bathy_map = tm_shape(merged_bathy) +
+  tm_raster(style = 'cont')
+
+# output_file = file.path(here('output'), "bathy_50m.svg")
+# tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+# output_file = file.path(here('output'), "bathy_50m.pdf")
+# tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+# output_file = file.path(here('output'), "bathy_50m.jpeg")
+# tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+# output_file = file.path(here('output'), "bathy_50m.tiff")
+# tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+
+# # Save the merged raster
+# output_dir <- here("output")
+# output_file <- file.path(output_dir, "bathy_50m.tif")
+# writeRaster(merged_bathy, filename = output_file, overwrite = TRUE)
+
+#rayshader method
+# in 2D
+# elmat = raster_to_matrix(merged_bathy)
+# elmat %>%
+#   sphere_shade(texture = "desert") %>%
+#   plot_map()
+raster_to_matrix(merged_bathy) |> height_shade() |> plot_map()
+
+# # in 3D
+# elmat %>%
+#   # sphere_shade(texture = "desert") %>%
+#   # add_water(detect_water(elmat), color = "desert") %>%
+#   # add_shadow(ray_shade(elmat, zscale = 3), 0.5) %>%
+#   add_shadow(ambient_shade(elmat), 0) %>%
+#   plot_3d(elmat, zscale = 10, fov = 0, theta = 135, zoom = 0.75, phi = 45, windowsize = c(1000, 800))
+# Sys.sleep(0.2)
+# render_snapshot()
+
+### Port in Allen Coral Atlas bathymetry & turbidity data. maybe try this using CLI in the future - https://openoceans.xyz/projects/pycoral/
+# okay upon looking at the bathy - it's very grainy. I guess that makes sense for satellite imaging, but either way cannot use.
+# note that it is in centimeters, and >depth = positive values.
+#   - the turbidity raster also doesn't seem like it has great resolution either. very focused on super nearshore reefs. could be useful
+#     for PR though ? not sure
+bathy_ACA = rast(here("data/Allen_Coral_Atlas/PR_USVI-20240830214543/Bathymetry---composite-depth/bathymetry_0.tif"))
+turbidity_ACA = rast(here("data/Allen_Coral_Atlas/PR_USVI-20240830214543/Turbidity-2019/turbidity-annual_0.tif"))
+bathy_ACA <- clamp(bathy_ACA, lower = 0, upper = 50, values = TRUE)
+tm_shape(bathy_ACA) +
+  tm_raster(style = 'cont')
+tm_shape(turbidity_ACA) +
+  tm_raster(style = 'cont')
+
+bathy_ACA_Culebra = rast(here("data/Allen_Coral_Atlas/Culebrita-20240830215241/Bathymetry---composite-depth/bathymetry_0.tif"))
+turbidity_ACA_Culebra = rast(here("data/Allen_Coral_Atlas/Culebrita-20240830215241/Turbidity-2019/turbidity-annual_0.tif"))
+bathy_ACA_Culebra <- clamp(bathy_ACA_Culebra, lower = 0, upper = 50, values = TRUE)
+tm_shape(bathy_ACA_Culebra) +
+  tm_raster(style = 'cont')
+turbidity_ACA_Culebra <- clamp(turbidity_ACA_Culebra, lower = 0, upper = 100, values = TRUE)
+tm_shape(turbidity_ACA_Culebra) +
+  tm_raster(style = 'cont')
 
 
-# library(rgdal)
-# subset(ogrDrivers(), grepl("GDB", name))
-# ogrListLayers("/path/to/folder.gdb")
-
-#with the above not working, I wanted to try and resample the rasters directly in QGIS, export as geoTIFFS, and import here
-#   I tried starting a script in VSCode but was struggling, and didn't get far with the QGIS console either (and it seems janky).
-#   so, I guess I'll just do the work in QGIS myself and return to an attempt at scripting later!
-
-
-# STOPPING POINT
-# - 20 August 2024
-
-
-# # 'fortify' the data to get a dataframe format required by ggplot2 and other sundry packages
-# grid_STTSTJ_df = fortify(grid_STTSTJ)
-# df.PRICO_grid = fortify(PRICO_grid) #this may take forever
-# df.STX_grid = fortify(STX_grid)
-# object.size(df.STX_grid)/1000000 #this prints in megabytes, but will still say bytes
-# object.size(PRICO_grid)/1000000
-# rm(STTSTJ_grid) #clear up space; can also re-load these if needed
-# rm(PRICO_grid)
-# rm(STX_grid)
-
-
-# # Sarah Groves note on grid: can resample to lo-res but then need to re-classify percent area of habitat (if of interest)
-# #export shapefiles for Q
-# shapefile(x = STTSTJ_grid, file = "/Users/benja/Documents/Carib_Habitat/Carib_Habitat_QGIS/Sampleframes/STTSTJ_2021_sample_frame.shp") #includes all metadata! very handy
-# shapefile(x = PRICO_grid, file = "/Users/benja/Documents/Carib_Habitat/Carib_Habitat_QGIS/Sampleframes/PRICO_2021_sample_frame.shp") #includes all metadata! very handy
-# shapefile(x = STX_grid, file = "/Users/benja/Documents/Carib_Habitat/Carib_Habitat_QGIS/Sampleframes/STX_2021_sample_frame.shp") #includes all metadata! very handy
-
-# r = raster("final_merge_6Oct2022_NAs-for-land.tif")
-# r = raster("final_merge_6Oct2022_zeros-for-land.tif")
-bathymetry_50m = raster("final_merge_WGS1984.tif")
-
-#resample to lower resolution using initial raster layer; defaults to mean value of cells (?)
-bathymetry_650m = aggregate(bathymetry_50m, fact = 21.0964788648) #take ~30.18 res grid and resample to 650 m. napkin math-y
-bathymetry_650m #not exact - 647 m res here (according to GIS). not sure how to address
-# object.size(bathymetry_650m)/1000000 #this prints in megabytes, but will still say bytes
-
-# plot(bathymetry_650m) #garb
-
-df.bathymetry_50m = as.data.frame(bathymetry_50m, xy = T)
-df.bathymetry_650m = as.data.frame(bathymetry_650m, xy = T)
-# object.size(df.bathymetry_650m)/1000000 #this prints in megabytes, but will still say bytes
-
-# potentially useful:
-#https://www.benjaminbell.co.uk/2019/08/bathymetric-maps-in-r-colour-palettes.html
-#https://stackoverflow.com/questions/20581746/increase-resolution-of-color-scale-for-values-close-to-zero
-
-# #50 m - THIS EXCEEDS MEMORY ON A 16GB RAM LAPTOP
-# ggplot() +
-#   geom_tile(data = df.bathymetry_50m, aes(x = x, y = y, fill = final_merge_WGS1984)) +
-#   scale_fill_gradientn(colors = terrain.colors(50), limits = c(-80, 0)) +
-#   # scale_fill_gradientn(col=c(blue.col(50), terrain.colors(50)), breaks=s3,
-#   #                        values = rescale(c(-10, -1, 0, 1, 10)),
-#   #                        guide = "colorbar", limits=c(-10, 10))y
-#   theme_bw() +
-#   xlim(-65.2, -64.6) +
-#   ylim(18.15, 18.45)
-
-#650 m
-#STTSTJ
-ggplot() +
-  geom_tile(data = df.bathymetry_650m, aes(x = x, y = y, fill = final_merge_WGS1984)) +
-  scale_fill_gradientn(colors = terrain.colors(50), limits = c(-80, 0)) +
-  # scale_fill_gradientn(col=c(blue.col(50), terrain.colors(50)), breaks=s3,
-  #                        values = rescale(c(-10, -1, 0, 1, 10)),
-  #                        guide = "colorbar", limits=c(-10, 10))y
-  theme_bw() +
-  xlim(-65.2, -64.6) +
-  ylim(18.15, 18.45)
-
-#PR - Vieques & Culebra
-ggplot() +
-  geom_tile(data = df.bathymetry_650m, aes(x = x, y = y, fill = final_merge_WGS1984)) +
-  scale_fill_gradientn(colors = terrain.colors(50), limits = c(-80, 0)) +
-  theme_bw() +
-  xlim(-65.60, -64.5) +
-  ylim(18.05, 18.60)
+########## STOPPING POINT - 30 August 2024
+# below was some old scripting from 2022 that I am adopting for the here and now
 
 # plot habitat grids
 #50m NOAA sampleframe

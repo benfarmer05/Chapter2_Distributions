@@ -70,6 +70,7 @@ o	https://noaa.maps.arcgis.com/home/webmap/viewer.html?webmap=3849f7c4a0ca4fe8a5
 -	Check out: Coral Health Survey Basic mapping (SCTLD) (2019-2021)
 o	This includes the DR!
 o	https://us-shallow-coral-reef-mapping-priorities-noaa.hub.arcgis.com/pages/results
+- Allen Coral Atlas. This seems like an amazing resource!! (https://allencoralatlas.org/blog/)
 
 - Puerto Rico Long-Term Coral Reef Monitoring Program (1999 - 2023)
 https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0204647

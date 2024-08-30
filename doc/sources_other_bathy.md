@@ -2,7 +2,7 @@
 o	https://allencoralatlas.org/methods/
 -	If I ever want to reach out to NOAA about most recent bathymetry, Jen Kraus is probably the contact!
 
-
+- Blue Habitats is intriguing, but maybe not needed for my applications: https://bluehabitats.org/
 
 
 
