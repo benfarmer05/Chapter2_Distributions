@@ -9,23 +9,68 @@ library(here)
 library(tidyterra)
 library(ggplot2)
 library(tmap)
-library(rayshader)
+library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
 library(scico)
 library(RColorBrewer)
 
-load(here("output", "workspace.RData"))
+load(here("output", "workspace.RData")) #this returns pointer issues with terra Spat objects - not the most useful method of transferring workspaces
 
 # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
-bathy_merged = rast(here("output", "bathy_50m.tif"))
-bathy_STTSTJ_agg <- rast(here("output", "bathy_STTSTJ_agg.tif"))
-bathy_STX_agg <- rast(here("output", "bathy_STX_agg.tif"))
-bathy_PR_East_agg <- rast(here("output", "bathy_PR_East_agg.tif"))
-bathy_PR_South_agg <- rast(here("output", "bathy_PR_South_agg.tif"))
-bathy_PR_West_agg <- rast(here("output", "bathy_PR_West_agg.tif"))
-bathy_PR_North_agg <- rast(here("output", "bathy_PR_North_agg.tif"))
+# bathy_merged = rast(here("output", "bathy_50m.tif"))
+# bathy_STTSTJ_agg <- rast(here("output", "bathy_STTSTJ_agg.tif"))
+# bathy_STX_agg <- rast(here("output", "bathy_STX_agg.tif"))
+# bathy_PR_East_agg <- rast(here("output", "bathy_PR_East_agg.tif"))
+# bathy_PR_South_agg <- rast(here("output", "bathy_PR_South_agg.tif"))
+# bathy_PR_West_agg <- rast(here("output", "bathy_PR_West_agg.tif"))
+# bathy_PR_North_agg <- rast(here("output", "bathy_PR_North_agg.tif"))
+bathy_merged = readRDS(here("output", "bathy_50m.rds"))
+bathy_STTSTJ_agg <- readRDS(here("output", "bathy_STTSTJ_agg.rds"))
+bathy_STX_agg <- readRDS(here("output", "bathy_STX_agg.rds"))
+bathy_PR_East_agg <- readRDS(here("output", "bathy_PR_East_agg.rds"))
+bathy_PR_South_agg <- readRDS(here("output", "bathy_PR_South_agg.rds"))
+bathy_PR_West_agg <- readRDS(here("output", "bathy_PR_West_agg.rds"))
+bathy_PR_North_agg <- readRDS(here("output", "bathy_PR_North_agg.rds"))
 
 # Clip the raster to include only depths of 50 meters and shallower
-bathy_merged <- clamp(bathy_merged, lower = -50, upper = 0, values = TRUE)
+# bathy_merged <- clamp(bathy_merged, lower = -50, upper = 0, values = TRUE) #clamp does not introduce NAs, rather fills in -50's
+bathy_merged <- ifel(bathy_merged < -50, NA, bathy_merged)
+
+
+#verify that the clamp worked and introduced NAs
+values <- values(bathy_merged)
+deeper_than_50m <- any(values < -50, na.rm = TRUE)
+if (deeper_than_50m) {
+  cat("There are values deeper than 50 meters in the raster.")
+} else {
+  cat("All values are within the specified range (i.e., shallower than 50 meters).")
+}
+na_values <- any(is.na(values))
+if (na_values) {
+  cat("There are NA values in the raster.")
+} else {
+  cat("There are no NA values in the raster.")
+}
+# Create a mask raster where NA values are set to 1 and all other values are set to 0
+na_mask <- is.na(bathy_merged)
+# Define a color palette for the mask
+mask_palette <- c("transparent", "red")  # Transparent for non-NA, red for NA
+# Plot the NA mask raster
+plot(na_mask,
+     col = mask_palette,
+     main = "NA Mask of Bathymetry Raster",
+     legend = FALSE)  # No legend for binary mask
+# Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
+deep_mask <- bathy_merged
+deep_mask[] <- ifelse(values(bathy_merged) > -50, 1, 0)
+# Define a color palette for the binary raster
+deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas (I think)
+# Plot the binary raster for values deeper than 50 meters
+plot(deep_mask,
+     col = deep_palette,
+     main = "Binary Mask for Depths Deeper Than 50 Meters",
+     legend = FALSE)  # No legend for binary mask
+
+
 
 
 # PLOTTING
@@ -51,10 +96,56 @@ plot(bathy_merged_geo,
      legend = TRUE)
 
 
-# Save the reprojected raster if needed
-writeRaster(bathy_merged_geo, "path_to_save_reprojected_raster.tif")
+#plot just north of STT to verify clamping function above worked correctly
+# Define the extent for the region north of St. Thomas up to latitude 19°
+extent_area <- ext(c(-65.1, -64.75, 18.25, 18.6))
+# Crop the raster to the defined extent
+bathy_cropped <- crop(bathy_merged_geo, extent_area)
+# Define a color palette for the plot
+color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100)
+# Plot the cropped raster
+plot(bathy_cropped,
+     col = color_palette,
+     main = "Bathymetry North of St. Thomas Up to Latitude 19°",
+     legend = TRUE)
 
 
+#verify that the clamp worked and introduced NAs
+values <- values(bathy_cropped)
+deeper_than_50m <- any(values < -50, na.rm = TRUE)
+if (deeper_than_50m) {
+  cat("There are values deeper than 50 meters in the raster.")
+} else {
+  cat("All values are within the specified range (i.e., shallower than 50 meters).")
+}
+na_values <- any(is.na(values))
+if (na_values) {
+  cat("There are NA values in the raster.")
+} else {
+  cat("There are no NA values in the raster.")
+}
+# Create a mask raster where NA values are set to 1 and all other values are set to 0
+na_mask <- is.na(bathy_cropped)
+# Define a color palette for the mask
+mask_palette <- c("transparent", "red")  # Transparent for non-NA, red for NA
+# Plot the NA mask raster
+plot(na_mask,
+     col = mask_palette,
+     main = "NA Mask of Bathymetry Raster",
+     legend = FALSE)  # No legend for binary mask
+# Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
+deep_mask <- bathy_cropped
+deep_mask[] <- ifelse(values(bathy_cropped) < -50, 1, 0)
+# Define a color palette for the binary raster
+deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas (I think)
+# Plot the binary raster for values deeper than 50 meters
+plot(deep_mask,
+     col = deep_palette,
+     main = "Binary Mask for Depths Deeper Than 50 Meters",
+     legend = FALSE)  # No legend for binary mask
+
+
+bathy_value <- extract(bathy_cropped, cbind(-64.95, 18.45))
 
 
 # #ggplot method, with tidyterra. this maybe didn't work because of the size of the rasters, so I went with tmap & rayshader below
@@ -86,7 +177,7 @@ writeRaster(bathy_merged_geo, "path_to_save_reprojected_raster.tif")
 
 #tmap method
 tm_shape(bathy_merged) +
-  tm_raster(style = 'cont')
+  tm_raster(style = 'cont', palette = color_palette)
 # bathy_map = tm_shape(merged_bathy) +
 #   tm_raster(style = 'cont')
 
