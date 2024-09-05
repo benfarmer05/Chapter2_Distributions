@@ -1,19 +1,19 @@
 
-
 # .rs.restartR(clean = TRUE)
 
 library(sf)
 library(here)
 library(terra) 
-library(here)
 library(tidyterra)
 library(ggplot2)
 library(tmap)
 library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
 library(scico)
 library(RColorBrewer)
+source(here("src/functions.R"))
 
-load(here("output", "workspace.RData")) #this returns pointer issues with terra Spat objects - not the most useful method of transferring workspaces
+load(here("output", "workspace.RData")) #depending how scripts have to be staged in sequence, 'workspace' name may need to change?
+load_spat_objects(directory = here("output"))
 
 # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
 # bathy_merged = rast(here("output", "bathy_50m.tif"))
@@ -23,18 +23,17 @@ load(here("output", "workspace.RData")) #this returns pointer issues with terra 
 # bathy_PR_South_agg <- rast(here("output", "bathy_PR_South_agg.tif"))
 # bathy_PR_West_agg <- rast(here("output", "bathy_PR_West_agg.tif"))
 # bathy_PR_North_agg <- rast(here("output", "bathy_PR_North_agg.tif"))
-bathy_merged = readRDS(here("output", "bathy_50m.rds"))
-bathy_STTSTJ_agg <- readRDS(here("output", "bathy_STTSTJ_agg.rds"))
-bathy_STX_agg <- readRDS(here("output", "bathy_STX_agg.rds"))
-bathy_PR_East_agg <- readRDS(here("output", "bathy_PR_East_agg.rds"))
-bathy_PR_South_agg <- readRDS(here("output", "bathy_PR_South_agg.rds"))
-bathy_PR_West_agg <- readRDS(here("output", "bathy_PR_West_agg.rds"))
-bathy_PR_North_agg <- readRDS(here("output", "bathy_PR_North_agg.rds"))
+# bathy_merged = readRDS(here("output", "bathy_50m.rds"))
+# bathy_STTSTJ_agg <- readRDS(here("output", "bathy_STTSTJ_agg.rds"))
+# bathy_STX_agg <- readRDS(here("output", "bathy_STX_agg.rds"))
+# bathy_PR_East_agg <- readRDS(here("output", "bathy_PR_East_agg.rds"))
+# bathy_PR_South_agg <- readRDS(here("output", "bathy_PR_South_agg.rds"))
+# bathy_PR_West_agg <- readRDS(here("output", "bathy_PR_West_agg.rds"))
+# bathy_PR_North_agg <- readRDS(here("output", "bathy_PR_North_agg.rds"))
 
 # Clip the raster to include only depths of 50 meters and shallower
 # bathy_merged <- clamp(bathy_merged, lower = -50, upper = 0, values = TRUE) #clamp does not introduce NAs, rather fills in -50's
 bathy_merged <- ifel(bathy_merged < -50, NA, bathy_merged)
-
 
 #verify that the clamp worked and introduced NAs
 values <- values(bathy_merged)
@@ -247,13 +246,57 @@ raster_to_matrix(bathy_merged) |> height_shade() |> plot_map()
 #       - lastly, and actually I'll do this first, is porting data from Allen Coral Atlas and seeing how that bathy looks! and turbidity
 
 # Calculate terrain attributes. may consider Benthic Terrain Modeler (but need Arc & potentially arcgisbinding package in R) or MultiscaleDTM package (https://cran.r-project.org/web/packages/MultiscaleDTM/readme/README.html)
-slope <- terrain(bathy_merged, v = "slope", unit = 'degrees')
+slope <- terrain(bathy_merged_50m, v = "slope", unit = 'degrees')
 slopeofslope = terrain(slope, v = "slope", unit = 'degrees')
 aspect <- terrain(bathy_merged, v = "aspect", unit = 'degrees')
 flowdir <- terrain(bathy_merged, v = "flowdir")
 roughness = terrain(bathy_merged, v = "roughness")
 TPI = terrain(bathy_merged, v = 'TRI') #Wilson 2007 bathymetric-friendly method
 TRI = terrain(bathy_merged, v = 'TPI')
+
+
+slope_STTSTJ = terrain(bathy_STTSTJ, v = "slope", unit = 'degrees')
+slopeofslope_STTSTJ = terrain(slope_STTSTJ, v = "slope", unit = 'degrees')
+slope_PR_East = terrain(bathy_PR_East, v = "slope", unit = 'degrees')
+
+plot(slope_STTSTJ, col = color_palette, main = "Slope (degrees)", legend = TRUE)
+plot(slopeofslope_STTSTJ, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(slope_PR_East, col = color_palette, main = "Slope (degrees)", legend = TRUE)
+
+
+slope_STTSTJ_50m = terrain(bathy_STTSTJ_agg, v = "slope", unit = 'degrees')
+slopeofslope_STTSTJ_50m = terrain(slope_STTSTJ_50m, v = "slope", unit = 'degrees')
+slope_PR_East_50m = terrain(bathy_PR_East_agg, v = "slope", unit = 'degrees')
+slopeofslope_PR_East_50m = terrain(slope_PR_East_50m, v = "slope", unit = 'degrees')
+
+plot(slope_STTSTJ_50m, col = color_palette, main = "Slope (degrees)", legend = TRUE)
+plot(slopeofslope_STTSTJ_50m, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(slope_PR_East_50m, col = color_palette, main = "Slope (degrees)", legend = TRUE)
+plot(slopeofslope_PR_East_50m, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(bathy_PR_East, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(bathy_PR_East_agg, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(bathy_STTSTJ, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+plot(bathy_STTSTJ_agg, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+
+# STOPPING POINT - 4 SEP 2024
+#   Okay, now I'm starting to understand the computational limits I'm working against. Merging the bathymetry or sample frame rasters
+#     across regions is kind of out of the question, at least as long as I am interested in Puerto Rico being in the same analysis as the
+#     VI. So, what makes the most sense is deriving all bathymetry products at 2 m resolution, within each section of the bathymetry (if
+#     that is even possible ?). Assuming that is possible though, then we have the problem of all the issues in the Blondeau files.
+#     ideally, I would just use a bathymetry data source that doesn't have the weird patterns. maybe, no matter the source of the bathy,
+#     I'll need to break it up into chunks, derive the products necessary slope, aspect, etc.) and then aggregate their mean & SD within
+#     the relevant sample frames? pretty messy. phew
+#
+#   - big problem: what is in fact coastline is for some reason underwater in the Blondeau output. I could mask it using other bathy
+#     and set that section to NA. but I would want to be confident that there aren't major issues right next to the "new" correct coastline
+#   - another thought, just in general, is clipping all rasters to 50 m depth and seeing how much that helps with processing times. not
+#       only clipping but also using 'ifel' as above
+#   - last thought of the day: as sad as it is, I might need to seriously consider simply downscaling the everything to a common resolution
+#       ...which I was pretty much doing from the start already with the 50 m thing. ironically that might be perfect since it avoids
+#       totally losing slope and slope of slope data where resolution drops off. it's a bummer but I think I should probably consider this
+#   - last thought...would be great to simply extract the areas of highest resolution from all the rasters I have to work with. but is this
+#       feasible? would be easiest if I had proper access to the underlying tiles (of different resolutions) making up the products I've
+#       been given or found. yeehaw
 
 # # Roughness, TPI, TRI
 # roughness <- focal(bathy_merged, w = matrix(1, nrow = 3, ncol = 3), fun = function(x) max(x) - min(x))

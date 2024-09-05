@@ -1,3 +1,38 @@
+
+
+# .rs.restartR(clean = TRUE)
+
+# library(sf)
+library(here)
+library(terra)
+# library(tidyterra)
+# library(ggplot2)
+# library(tmap)
+# library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
+# library(scico)
+# library(RColorBrewer)
+
+#import objects from from import_merge_rasters.R
+load(here("output", "workspace.RData"))
+load_spat_objects(directory = here("output")) #extra care is required for terra-produced objects with pointers
+
+# # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
+# # bathy_merged = rast(here("output", "bathy_50m.tif"))
+# # bathy_STTSTJ_agg <- rast(here("output", "bathy_STTSTJ_agg.tif"))
+# # bathy_STX_agg <- rast(here("output", "bathy_STX_agg.tif"))
+# # bathy_PR_East_agg <- rast(here("output", "bathy_PR_East_agg.tif"))
+# # bathy_PR_South_agg <- rast(here("output", "bathy_PR_South_agg.tif"))
+# # bathy_PR_West_agg <- rast(here("output", "bathy_PR_West_agg.tif"))
+# # bathy_PR_North_agg <- rast(here("output", "bathy_PR_North_agg.tif"))
+# bathy_merged_2m = readRDS(here("output", "bathy_merged_2m.rds"))
+# bathy_merged_50m = readRDS(here("output", "bathy_merged_50m.rds"))
+# bathy_STTSTJ_agg <- readRDS(here("output", "bathy_STTSTJ_agg.rds"))
+# bathy_STX_agg <- readRDS(here("output", "bathy_STX_agg.rds"))
+# bathy_PR_East_agg <- readRDS(here("output", "bathy_PR_East_agg.rds"))
+# bathy_PR_South_agg <- readRDS(here("output", "bathy_PR_South_agg.rds"))
+# bathy_PR_West_agg <- readRDS(here("output", "bathy_PR_West_agg.rds"))
+# bathy_PR_North_agg <- readRDS(here("output", "bathy_PR_North_agg.rds"))
+
 # # these were old file paths direct from either github or NCEI - maybe can delete. I think I was trying to find the source data
 # #  (it's here somewhere though)
 # cover_USVI_2013 = read.csv(here("data/NCRMP_USVI_2013_2021", "NCRMP_USVI2013_Benthic_Data01_BenthicCover.csv"))
@@ -49,6 +84,27 @@ sampleframe_DCRMP = vect(here("data/MesophoticSampGrid/MesophoticSampGrid.shp"))
 # sampleframe_USVI_transformed <- project(sampleframe_USVI, common_crs) #st_transform(sampleframe_USVI, common_crs)
 # sampleframe_PR_transformed <- project(sampleframe_PR, common_crs)
 # sampleframe_DCRMP_transformed <- project(sampleframe_DCRMP, common_crs)
+
+
+# TESTING # STOPPING POINT - 4 Sep 2024
+# Example of adding a new ID field
+sampleframe_USVI$ID <- 1:nrow(sampleframe_USVI)  # Assign unique IDs, for example
+sample_frame_raster_USVI <- rasterize(sampleframe_USVI, bathy_merged_50m, field = "ID")
+
+sampleframe_PR = project(sampleframe_PR, crs(sampleframe_USVI)) #reproject PR sample frame to that of USVI (NAD83 / UTM zone 20N)
+sampleframe_PR$ID <- 1:nrow(sampleframe_PR)  # Assign unique IDs, for example
+sample_frame_raster_PR <- rasterize(sampleframe_PR, bathy_merged, field = "ID")
+
+# Compute zonal statistics
+bathy_stats_USVI <- zonal(bathy_merged, sampleframe_USVI, fun = c("mean", "sd"), na.rm = TRUE)
+
+# Print results
+print(bathy_stats)
+
+
+
+
+# STOPPING POINT - 4 Sept 2024
 
 # NOTE
 #   - I need to consider what I want to accomplish. Merging these sampleframes (below is attempt) probably isn't going to cut it, from what

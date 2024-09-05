@@ -61,26 +61,18 @@ bathy_PR_North_agg <- aggregate(bathy_PR_North, fact = agg_factor, fun = mean, n
 # saveRDS(bathy_PR_West_agg, here("output", "bathy_PR_West_agg.rds"))
 # saveRDS(bathy_PR_North_agg, here("output", "bathy_PR_North_agg.rds"))
 
-# Call the function
-save_spat_objects()
-
 # # Merge the aggregated rasters. merge is quicker but maybe mosaic is better?
 # agg_rasters <- c(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
 # bathy_merged <- mosaic(agg_rasters, fun = mean, na.rm = TRUE)
-bathy_merged = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
-# writeRaster(bathy_merged, here("output", "bathy_50m.tif"), overwrite = TRUE)
-saveRDS(bathy_merged, here("output", "bathy_50m.rds"))
+bathy_merged_50m = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
+# bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
 
-# # Save all relevant objects to an .RData file in the output directory
-# save(
-#   cover_site_STTSTJ, cover_spp_STTSTJ,
-#   cover_site_PR, cover_spp_PR,
-#   cover_site_STX, cover_spp_STX,
-#   sampleframe_USVI_transformed, sampleframe_PR_transformed, sampleframe_DCRMP_transformed,
-#   bathy_STTSTJ_agg, bathy_STX_agg,
-#   bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg,
-#   file = here("output", "aggregated_data.RData")
-# )
-
-# Save all objects in the current R session to an .RData file in the output directory
+#save terra objects and then workspace for use in subsequent scripts
+save_spat_objects()
 save.image(file = here("output", "workspace.RData"))
+
+# #save the merged 2 m raster separately as a .tif to assist R with handling the very large file across scripts
+# bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX) #, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
+# writeRaster(bathy_merged_2m, here("output", "bathy_merged_2m.tif"), overwrite = TRUE)
+
+
