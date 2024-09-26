@@ -1,6 +1,24 @@
 
 # .rs.restartR(clean = TRUE)
 
+# # all various things I tried to get things working. not currently required on my M1 Macbook, newly updated
+# install.packages("sf", dependencies = TRUE) #this may be required after updating to Sequoia (I reinstalled R via homebrew due to issues with Sequoia and it broke some more things)
+# tools::package_dependencies(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), recursive = TRUE) #check all dependencies for below packages
+# install.packages(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), dependencies = TRUE) #more dependency installs, if required
+# Sys.getenv("LD_LIBRARY_PATH")
+# Sys.setenv(LD_LIBRARY_PATH = "/opt/homebrew/lib:/opt/homebrew/include:/opt/homebrew/share") #this may also be required, followed by possibly installing sf and terra from source (below)
+# Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj") #this was temporarily needed after updating M1 Macbook to Sequoia OS
+# Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
+
+# # What I had to do to get R spatial stuff working after updating to Sequoia was:
+# #   1.) Tried uninstalling everything macports, which was probably dumb because now QGIS has to be entirely reinstalled (and may
+# #       may not work now anyways through macports yet because of delays in dependency updates after Sequoia - we shall see)
+# #   2.) Tried installing R through homebrew, this was a cluster and most things installed poorly or not at all
+# #   3.) Tried installing R again through regular Mac ARM, and then installing spatial packages from source as below. this seems to work
+# # Install from source, forcing R to use the latest versions
+# install.packages("sf", type = "source") #this might not work yet for Sequoia? also maybe doesn't matter if the code runs I guess. for now
+# install.packages("terra", type = "source")
+
 library(sf)
 library(here)
 library(terra) 
@@ -13,7 +31,7 @@ library(RColorBrewer)
 source(here("src/functions.R"))
 
 load(here("output", "workspace.RData")) #depending how scripts have to be staged in sequence, 'workspace' name may need to change?
-load_spat_objects(directory = here("output"))
+load_spat_objects(directory = here("output")) #call function
 
 # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
 # bathy_merged = rast(here("output", "bathy_50m.tif"))

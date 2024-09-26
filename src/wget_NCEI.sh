@@ -1,3 +1,6 @@
+
+#useful for reading in all files from somewhere like the NCRMP NCEI page
+
 #wget -r -np -nH --cut-dirs=8 -R "index.html*" -P /Volumes/dissertation_Box_backup/sample_frames/NCEI_inport/PR2021 https://www.ncei.noaa.gov/data/oceans/archive/arc0209/0272313/1.1/data/0-data/NCRMP_PR_2021_Benthics/Data_Sets/Sample_Frames/
 
 

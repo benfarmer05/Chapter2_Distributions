@@ -1,3 +1,6 @@
+
+% MATLAB script for pulling downloaded CARICOOS wave data and evaluating file size
+
 clear;clc
 
 

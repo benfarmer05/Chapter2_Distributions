@@ -9,7 +9,9 @@
 # .rs.restartR(clean = TRUE)
 
 library(here)
-library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see
+# Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj") #this was temporarily needed after updating M1 Macbook to Sequoia OS
+# Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
+library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see. lastly, install.packages("terra", type = "source") was required to get terra to work after Sequioa update
 source(here("src/functions.R"))
 
 # Determine a common CRS for the entire dataset
@@ -68,11 +70,9 @@ bathy_merged_50m = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bat
 # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
 
 #save terra objects and then workspace for use in subsequent scripts
-save_spat_objects()
+save_spat_objects() #call from functions.R
 save.image(file = here("output", "workspace.RData"))
 
 # #save the merged 2 m raster separately as a .tif to assist R with handling the very large file across scripts
 # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX) #, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
 # writeRaster(bathy_merged_2m, here("output", "bathy_merged_2m.tif"), overwrite = TRUE)
-
-

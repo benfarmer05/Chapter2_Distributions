@@ -1,3 +1,6 @@
+
+# attempt at merging rasters using python
+
 import os
 import rasterio
 from rasterio.merge import merge
