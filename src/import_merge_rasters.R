@@ -1,11 +1,4 @@
   
-  # NOTE - consider using glue package to insert dates for output files
-  #   https://stackoverflow.com/questions/73584505/how-to-write-a-file-into-a-specific-folder-using-here-package
-  
-  # potentially useful:
-  #https://www.benjaminbell.co.uk/2019/08/bathymetric-maps-in-r-colour-palettes.html
-  #https://stackoverflow.com/questions/20581746/increase-resolution-of-color-scale-for-values-close-to-zero
-  
   # .rs.restartR(clean = TRUE)
   
   library(here)
@@ -13,6 +6,15 @@
   # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
   library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see. lastly, install.packages("terra", type = "source") was required to get terra to work after Sequioa update
   source(here("src/functions.R"))
+  
+  # NOTE - consider using glue package to insert dates for output files
+  #   https://stackoverflow.com/questions/73584505/how-to-write-a-file-into-a-specific-folder-using-here-package
+  
+  # potentially useful:
+  #https://www.benjaminbell.co.uk/2019/08/bathymetric-maps-in-r-colour-palettes.html
+  #https://stackoverflow.com/questions/20581746/increase-resolution-of-color-scale-for-values-close-to-zero
+  
+  ################################## Set-up ##################################
   
   # Determine a common CRS for the entire dataset
   # common_crs <- st_crs(4326)  # WGS84. suitable for global use. geographic CRS
@@ -22,11 +24,14 @@
   # Specify the path to ESRI geodatabase provided by Jeremiah Blondeau
   gdb_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb"
   
+  ################################## Load geodatabase rasters ##################################
+  
   # List all raster layers within the geodatabase
   # Check sub-datasets
   describe(gdb_path, sds = TRUE)
   # raster_layers <- rast(gdb_path)
   # names(raster_layers)  # Print the names of the raster layers
+  
   # Load specific sub-datasets from the geodatabase
   bathy_STTSTJ = rast(gdb_path, subds = "STTSTJ_2m")
   bathy_STX <- rast(gdb_path, subds = "STX_2m")
@@ -40,6 +45,8 @@
   #
   # Define the aggregation factor
   agg_factor <- 25
+  
+  ################################## Bathymetry aggregation  ##################################
   
   # Aggregate mean of the bathymetry to 50 m resolution (this may change; was doing this for ease of use early on)
   bathy_STTSTJ_agg <- aggregate(bathy_STTSTJ, fact = agg_factor, fun = mean, na.rm = TRUE)
@@ -69,10 +76,12 @@
   bathy_merged_50m = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
   # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
   
-  #save terra objects and then workspace for use in downstream scripts
-  save_spat_objects() #call from functions.R
-  save.image(file = here("output", "import_merge_rasters_workspace.RData"))
+  ################################## Save objects/workspace  ##################################
   
-  # #save the merged 2 m raster separately as a .tif to assist R with handling the very large file across scripts
-  # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX) #, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
-  # writeRaster(bathy_merged_2m, here("output", "bathy_merged_2m.tif"), overwrite = TRUE)
+  # #save terra objects and then workspace for use in downstream scripts
+  # save_spat_objects() #call from functions.R
+  # save.image(file = here("output", "import_merge_rasters_workspace.RData"))
+  # 
+  # # #save the merged 2 m raster separately as a .tif to assist R with handling the very large file across scripts
+  # # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX) #, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
+  # # writeRaster(bathy_merged_2m, here("output", "bathy_merged_2m.tif"), overwrite = TRUE)

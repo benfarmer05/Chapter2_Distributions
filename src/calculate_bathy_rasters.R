@@ -1,6 +1,26 @@
   
   # .rs.restartR(clean = TRUE)
   
+  library(sf)
+  library(here)
+  library(terra) 
+  library(tidyterra)
+  library(ggplot2)
+  library(tmap)
+  library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
+  library(scico)
+  library(RColorBrewer)
+  source(here("src/functions.R"))
+  
+  # # Print GDAL, PROJ, and GEOS versions linked with sf
+  # sf::sf_extSoftVersion()
+  # 
+  # # Print GDAL version linked with terra
+  # terra::gdal()
+  
+  load(here("output/import_merge_rasters_workspace.RData")) #load workspace from upstream script
+  load_spat_objects(directory = here("output")) #call function
+  
   # # all various things I tried to get things working. not currently required on my M1 Macbook, newly updated
   # install.packages("sf", dependencies = TRUE) #this may be required after updating to Sequoia (I reinstalled R via homebrew due to issues with Sequoia and it broke some more things)
   # tools::package_dependencies(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), recursive = TRUE) #check all dependencies for below packages
@@ -19,20 +39,10 @@
   # # Install from source, forcing R to use the latest versions
   # install.packages("sf", type = "source") #this might not work yet for Sequoia? also maybe doesn't matter if the code runs I guess. for now
   # install.packages("terra", type = "source")
+  # #check current R version
+  # R.version.string
   
-  library(sf)
-  library(here)
-  library(terra) 
-  library(tidyterra)
-  library(ggplot2)
-  library(tmap)
-  library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
-  library(scico)
-  library(RColorBrewer)
-  source(here("src/functions.R"))
-  
-  load(here("output/import_merge_rasters_workspace.RData")) #load workspace from upstream script
-  load_spat_objects(directory = here("output")) #call function
+  ################################## Set-up ##################################
   
   # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
   # bathy_merged = rast(here("output", "bathy_50m.tif"))
@@ -100,164 +110,162 @@
   #      main = "Binary Mask for Depths Deeper Than 50 Meters",
   #      legend = FALSE)  # No legend for binary mask
   
-  # ##############################################################################################################################
-  # # MORE PLOTTING
-  # #
-  # # color_palette <- scico(100, palette = "hawaii", direction = -1) #scico pallete
-  # color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100) #YlGnBu palette, as used by me in QGIS. color ramp reversed, and continuous colors interpolated
-  # 
-  # # Plot the raster
-  # plot(bathy_merged_50m,
-  #      col = color_palette,
-  #      # zlim = c(-50, 0),
-  #      main = "Bathymetry (50m Resolution)",
-  #      legend = TRUE)
-  # 
-  # # Reproject to NAD83 (geographic)
-  # bathy_merged_geo <- project(bathy_merged_50m, common_crs)
-  # 
-  # #note the slight shift in orientation
-  # plot(bathy_merged_geo,
-  #      col = color_palette,
-  #      # zlim = c(-50, 0), #redundant
-  #      main = "Bathymetry (50m Resolution)",
-  #      legend = TRUE)
-  # 
-  # #plot just north of STT to verify clamping function above worked correctly
-  # #
-  # # Define the extent for the region north of St. Thomas up to latitude 19°
-  # extent_area <- ext(c(-65.1, -64.75, 18.25, 18.6))
-  # 
-  # # Crop the raster to the defined extent
-  # bathy_cropped <- crop(bathy_merged_geo, extent_area)
-  # 
-  # # Define a color palette for the plot
-  # color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100)
-  # 
-  # # Plot the cropped raster
-  # plot(bathy_cropped,
-  #      col = color_palette,
-  #      main = "Bathymetry North of St. Thomas Up to Latitude 19°",
-  #      legend = TRUE)
-  # 
-  # #verify that the clamp worked and introduced NAs
-  # values <- values(bathy_cropped)
-  # deeper_than_50m <- any(values < -50, na.rm = TRUE)
-  # 
-  # if (deeper_than_50m) {
-  #   cat("There are values deeper than 50 meters in the raster.")
-  # } else {
-  #   cat("All values are within the specified range (i.e., shallower than 50 meters).")
-  # }
-  # 
-  # na_values <- any(is.na(values))
-  # if (na_values) {
-  #   cat("There are NA values in the raster.")
-  # } else {
-  #   cat("There are no NA values in the raster.")
-  # }
-  # 
-  # # Create a mask raster where NA values are set to 1 and all other values are set to 0
-  # na_mask <- is.na(bathy_cropped)
-  # 
-  # # Define a color palette for the mask
-  # mask_palette <- c("transparent", "red")  # Transparent for non-NA, red for NA
-  # 
-  # # Plot the NA mask raster
-  # plot(na_mask,
-  #      col = mask_palette,
-  #      main = "NA Mask of Bathymetry Raster",
-  #      legend = FALSE)  # No legend for binary mask
-  # 
-  # # Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
-  # deep_mask <- bathy_cropped
-  # deep_mask[] <- ifelse(values(bathy_cropped) < -50, 1, 0)
-  # 
-  # # Define a color palette for the binary raster
-  # deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas. NOTE - maybe reverse?
-  # 
-  # # Plot the binary raster for values deeper than 50 meters
-  # plot(deep_mask,
-  #      col = deep_palette,
-  #      main = "Binary Mask for Depths Deeper Than 50 Meters",
-  #      legend = FALSE)  # No legend for binary mask
-  # 
-  # bathy_value <- extract(bathy_cropped, cbind(-64.95, 18.45))
-  # 
-  # # #ggplot method, with tidyterra. this maybe didn't work because of the size of the rasters, so I went with tmap & rayshader below
-  # # 
-  # # # # Convert raster to a data frame for ggplot2
-  # # # bathy_raster <- rast(here("output", "bathy_50m.tif"))
-  # # # bathy_df <- as_tibble(bathy_raster, xy = TRUE)
-  # # bathy_df <- as_tibble(merged_bathy, xy = TRUE)
-  # # 
-  # # # Plot raster data
-  # # ggplot(bathy_df) +
-  # #   geom_raster(aes(x = x, y = y, fill = layer)) +
-  # #   scale_fill_viridis_c(option = "D", limits = c(-50, 0)) + # Adjust limits to desired depth range
-  # #   labs(
-  # #     title = "Bathymetry",
-  # #     fill = "Depth (meters)"
-  # #   ) +
-  # #   coord_fixed() + # Fix aspect ratio to make sure x and y are scaled equally
-  # #   theme_minimal() +
-  # #   theme(
-  # #     axis.title = element_blank(),
-  # #     axis.text = element_text(size = 8),
-  # #     legend.title = element_text(size = 10),
-  # #     legend.text = element_text(size = 8)
-  # #   )
-  # # 
-  # # ggplot(bathy_df) +
-  # #   geom_raster(aes(x = x, y = y))
-  # 
-  # #tmap method
-  # tm_shape(bathy_merged_50m) +
-  #   tm_raster(style = 'cont', palette = color_palette) #this is outdated as of tmap v4, but works for continuous gradient
-  # # tm_shape(bathy_merged_50m) +
-  # #   tm_raster() +
-  # #   tm_scale_continuous(values = color_palette) #this doesn't seem right, but makes a discrete contoured depth gradient
-  # 
-  # # bathy_map = tm_shape(merged_bathy) +
-  # #   tm_raster(style = 'cont')
-  # 
-  # # output_file = file.path(here('output'), "bathy_50m.svg")
-  # # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
-  # # output_file = file.path(here('output'), "bathy_50m.pdf")
-  # # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
-  # # output_file = file.path(here('output'), "bathy_50m.jpeg")
-  # # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
-  # # output_file = file.path(here('output'), "bathy_50m.tiff")
-  # # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
-  # 
-  # # # Save the merged raster
-  # # output_dir <- here("output")
-  # # output_file <- file.path(output_dir, "bathy_50m.tif")
-  # # writeRaster(merged_bathy, filename = output_file, overwrite = TRUE)
-  # 
-  # #rayshader method
-  # # in 2D
-  # # elmat = raster_to_matrix(merged_bathy)
-  # # elmat %>%
-  # #   sphere_shade(texture = "desert") %>%
-  # #   plot_map()
-  # raster_to_matrix(bathy_merged_50m) |> height_shade() |> plot_map()
-  # 
-  # # # in 3D
-  # # elmat %>%
-  # #   # sphere_shade(texture = "desert") %>%
-  # #   # add_water(detect_water(elmat), color = "desert") %>%
-  # #   # add_shadow(ray_shade(elmat, zscale = 3), 0.5) %>%
-  # #   add_shadow(ambient_shade(elmat), 0) %>%
-  # #   plot_3d(elmat, zscale = 10, fov = 0, theta = 135, zoom = 0.75, phi = 45, windowsize = c(1000, 800))
-  # # Sys.sleep(0.2)
-  # # render_snapshot()
-  # #
-  # # MORE PLOTTING
-  # ##############################################################################################################################
+  ################################## Plotting ##################################
   
-  ##############################################################################################################################
-  # TESTING THE EFFECT OF RESOLUTION & ASSOCIATED ARTIFACTS ON DERIVED BATHYMETRY PRODUCTS
+  # color_palette <- scico(100, palette = "hawaii", direction = -1) #scico pallete
+  color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100) #YlGnBu palette, as used by me in QGIS. color ramp reversed, and continuous colors interpolated
+
+  # Plot the raster
+  plot(bathy_merged_50m,
+       col = color_palette,
+       # zlim = c(-50, 0),
+       main = "Bathymetry (50m Resolution)",
+       legend = TRUE)
+  
+  # Reproject to NAD83 (geographic)
+  bathy_merged_geo <- project(bathy_merged_50m, common_crs)
+  
+  #note the slight shift in orientation
+  plot(bathy_merged_geo,
+       col = color_palette,
+       # zlim = c(-50, 0), #redundant
+       main = "Bathymetry (50m Resolution)",
+       legend = TRUE)
+
+  #plot just north of STT to verify clamping function above worked correctly
+  #
+  # Define the extent for the region north of St. Thomas up to latitude 19°
+  extent_area <- ext(c(-65.1, -64.75, 18.25, 18.6))
+
+  # Crop the raster to the defined extent
+  bathy_cropped <- crop(bathy_merged_geo, extent_area)
+
+  # Define a color palette for the plot
+  color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100)
+
+  # Plot the cropped raster
+  plot(bathy_cropped,
+       col = color_palette,
+       main = "Bathymetry North of St. Thomas Up to Latitude 19°",
+       legend = TRUE)
+
+  #verify that the clamp worked and introduced NAs
+  values <- values(bathy_cropped)
+  deeper_than_50m <- any(values < -50, na.rm = TRUE)
+
+  if (deeper_than_50m) {
+    cat("There are values deeper than 50 meters in the raster.")
+  } else {
+    cat("All values are within the specified range (i.e., shallower than 50 meters).")
+  }
+
+  na_values <- any(is.na(values))
+  if (na_values) {
+    cat("There are NA values in the raster.")
+  } else {
+    cat("There are no NA values in the raster.")
+  }
+
+  # Create a mask raster where NA values are set to 1 and all other values are set to 0
+  na_mask <- is.na(bathy_cropped)
+
+  # Define a color palette for the mask
+  mask_palette <- c("transparent", "red")  # Transparent for non-NA, red for NA
+
+  # Plot the NA mask raster
+  plot(na_mask,
+       col = mask_palette,
+       main = "NA Mask of Bathymetry Raster",
+       legend = FALSE)  # No legend for binary mask
+
+  # Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
+  deep_mask <- bathy_cropped
+  deep_mask[] <- ifelse(values(bathy_cropped) < -50, 1, 0)
+
+  # Define a color palette for the binary raster
+  deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas. NOTE - maybe reverse?
+
+  # Plot the binary raster for values deeper than 50 meters
+  plot(deep_mask,
+       col = deep_palette,
+       main = "Binary Mask for Depths Deeper Than 50 Meters",
+       legend = FALSE)  # No legend for binary mask
+
+  bathy_value <- extract(bathy_cropped, cbind(-64.95, 18.45))
+
+  # #ggplot method, with tidyterra. this maybe didn't work because of the size of the rasters, so I went with tmap & rayshader below
+  #
+  # # # Convert raster to a data frame for ggplot2
+  # # bathy_raster <- rast(here("output", "bathy_50m.tif"))
+  # # bathy_df <- as_tibble(bathy_raster, xy = TRUE)
+  # bathy_df <- as_tibble(merged_bathy, xy = TRUE)
+  #
+  # # Plot raster data
+  # ggplot(bathy_df) +
+  #   geom_raster(aes(x = x, y = y, fill = layer)) +
+  #   scale_fill_viridis_c(option = "D", limits = c(-50, 0)) + # Adjust limits to desired depth range
+  #   labs(
+  #     title = "Bathymetry",
+  #     fill = "Depth (meters)"
+  #   ) +
+  #   coord_fixed() + # Fix aspect ratio to make sure x and y are scaled equally
+  #   theme_minimal() +
+  #   theme(
+  #     axis.title = element_blank(),
+  #     axis.text = element_text(size = 8),
+  #     legend.title = element_text(size = 10),
+  #     legend.text = element_text(size = 8)
+  #   )
+  #
+  # ggplot(bathy_df) +
+  #   geom_raster(aes(x = x, y = y))
+
+  #tmap method
+  tm_shape(bathy_merged_50m) +
+    tm_raster(style = 'cont', palette = color_palette) #this is outdated as of tmap v4, but works for continuous gradient
+  # tm_shape(bathy_merged_50m) +
+  #   tm_raster() +
+  #   tm_scale_continuous(values = color_palette) #this doesn't seem right, but makes a discrete contoured depth gradient
+
+  # bathy_map = tm_shape(merged_bathy) +
+  #   tm_raster(style = 'cont')
+
+  # output_file = file.path(here('output'), "bathy_50m.svg")
+  # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+  # output_file = file.path(here('output'), "bathy_50m.pdf")
+  # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+  # output_file = file.path(here('output'), "bathy_50m.jpeg")
+  # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+  # output_file = file.path(here('output'), "bathy_50m.tiff")
+  # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
+
+  # # Save the merged raster
+  # output_dir <- here("output")
+  # output_file <- file.path(output_dir, "bathy_50m.tif")
+  # writeRaster(merged_bathy, filename = output_file, overwrite = TRUE)
+
+  #rayshader method
+  # in 2D
+  # elmat = raster_to_matrix(merged_bathy)
+  # elmat %>%
+  #   sphere_shade(texture = "desert") %>%
+  #   plot_map()
+  raster_to_matrix(bathy_merged_50m) |> height_shade() |> plot_map()
+
+  # # in 3D
+  # elmat %>%
+  #   # sphere_shade(texture = "desert") %>%
+  #   # add_water(detect_water(elmat), color = "desert") %>%
+  #   # add_shadow(ray_shade(elmat, zscale = 3), 0.5) %>%
+  #   add_shadow(ambient_shade(elmat), 0) %>%
+  #   plot_3d(elmat, zscale = 10, fov = 0, theta = 135, zoom = 0.75, phi = 45, windowsize = c(1000, 800))
+  # Sys.sleep(0.2)
+  # render_snapshot()
+  #
+  # MORE PLOTTING
+
+  
+  ################################## Test resolution/artifacts ##################################
   
   # STOPPING POINT - 17 Oct 2024
   #   - A few issues
@@ -361,7 +369,7 @@
     ylim(18.15, 18.45)
   
   
-  ### playing with local and global CRS ###
+  ### testing local and global CRS ###
   # NOTE: 8 NOV 2022: Need to repeat the below with all 2021 grids (that come from NCRMP package) in order to get all grids in the correct local CRS.
   STTSTJ_grid_2019 = readOGR(dsn = ".", layer = "STTSTJ_2019_sampleframe_localCRS-forR")
   crs(STTSTJ_grid_2019)
@@ -371,9 +379,10 @@
   STTSTJ_grid_2021_localCRS = spTransform(STTSTJ_grid, crs(STTSTJ_grid_2019))
   shapefile(x = STTSTJ_grid_2021_localCRS, file = "/Users/benja/Documents/Carib_Habitat/Carib_Habitat_QGIS/Sampleframes/STTSTJ_grid_2021_localCRS.shp")
   
-  ### playing with local and global CRS ###
+  ### testing local and global CRS ###
   
-  ### AGGREGATING RASTER DATA ###
+  ################################## Aggregate raster data ##################################
+  
   # aggregate raster data to polygon data
   #https://deepnote.com/@siew-sook-yan/R-Aggregate-raster-to-polygon-data-10a3150c-e88d-4776-bae1-4b6dcb9e3916
   #https://stackoverflow.com/questions/56110728/how-to-calculate-slope-and-aspect-ratio-values-by-giving-latitude-longitude-and
@@ -493,15 +502,13 @@
   #https://link.springer.com/referenceworkentry/10.1007/978-90-481-2639-2_141#:~:text=Rugosity%20is%20an%20estimate%20of,textural%20characteristics%20of%20a%20surface.
   #https://dusk.geo.orst.edu/djl/samoa/BTM_Exercise.pdf
   
-  #a little test to see how R would perform doing the above with 50 m res (ongoing)
+  #test to see how R would perform doing the above with 50 m res (ongoing)
   st.grid_50m = st_as_sf(STTSTJ_grid) #'st_geometry' requires 'sf' package
   st.grid_650m = st.grid_50m
   #then run the above again
   
-  ### AGGREGATING RASTER DATA ###
+  ################################## Test response variable data ##################################
   
-  
-  ### playing with the response variable data ###
   STTSTJ_field_species$LAT_DEGREES = as.numeric(STTSTJ_field_species$LAT_DEGREES)
   STTSTJ_field_species$LON_DEGREES = as.numeric(STTSTJ_field_species$LON_DEGREES)
   
@@ -555,6 +562,8 @@
   #      - How to move cover raster (or vector) over to GIS?
   #      - Pool the grid at different resolutions for testing (e.g., 350 m; 650 m). Might require GIS
   #      - See how many "repeated measurements" occur after broadening the grid. May *want* these repeats
+  
+  ################################## Save objects/workspace ##################################
   
   # #save terra objects and then workspace for use in downstream scripts
   # save_spat_objects() #call from functions.R
