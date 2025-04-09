@@ -42,6 +42,109 @@
   # #check current R version
   # R.version.string
   
+  ################################## Test simple crm-usvi ##################################
+  
+  
+  
+  # STOPPING POINT - 8 April 2025
+  #   - okay new plan!! this might work!!
+  #       - PR comes from crm_USVI which I pulled off NOAA servers in 2024
+  #       - STT/STJ/STX come from crm_USVI which Dan pulled off NOAA servers in (?? 2019?)
+  #       - Chose this because these are the best combination of resolution, no major artifacts, and extent
+  #       - Will just have to figure out how to properly merge them together. this will involve clipping the 2024 crm at the PR/STT edge
+  #
+  #   - okay, end of day update and it's actually even more complicated than I thought
+  #       - this dataviewer (https://www.ncei.noaa.gov/maps/bathymetry/?layers=nos_hydro&minx=-65.5684&maxx=-64.4215&miny=17.8471&maxy=18.906)
+  #           shows CUDEM vs CRM, 3, 10, 30, and 90 m resolutions.
+  #       - 30 m and 90 m res CRM are very solid, and also comprehensive (other than Anegada). I would simply use them for the entire
+  #           domain, except for some slight problems:
+  #         - Dan's crm (where/when did it come from ???) actually has much better resolution, and less artifacts, in the MCD & north drop
+  #         - BUT, the recent 30 m crm has a bit better res south of STJ - sort of? toss up there
+  #         - but DEFINITELY, the recent 30 m crm has far better resolution in Coral Bay & Haulover (STJ). also east end bay Tortola. but mosaicing artifacts introduced at east end
+  #           - question is - is that resolution at Coral Bay / Haulover / East End Bay worth it?? would mean stitching crm-2024 for PR to MCD, with crm-2019 for MCD to Coral Bay, with crm-2024 for Coral Bay to Anegada
+  #           - is that 3-part stitch even possible? maybe after merging and comprehensive resampling?
+  #           - try it! if that seems impossible though, simply stitch crm-2024 for PR with crm-2019 for USVI
+  #           - and worst case, even that doesn't work well, so I just straight up use crm-2024 for everything (artifacts and all). maybe just with Anegada tacked on with crm-2019
+  #           - remember that, absolute worst case, I can always through out "training" points at NCRMP / DCRMP points that are over problematic sections of bathymetry
+  
+  
+  #pull NOAA crm, produced in ~2019 (maybe ? from Dan Holstein) from presumably NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
+  # - CRS: 26920 (NAD83 / UTM zone 20N)
+  # - max 30 m resolution
+  # This will be used for USVI, since it has nice resolution generally, less artifacts than the crm below, and full extent across Anegada
+  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Holstein_VI_Shapes/VI_Shapes/Bathy/crm_usvi.tif"
+  describe(crm_path)
+  bathy_crm_2019 = rast(crm_path)
+  res(bathy_crm_2019)
+  crs(bathy_crm_2019)
+  crs(bathy_PR_East)
+  crs(bathy_STTSTJ)
+  
+  #pull NOAA 1 arc-second crm, downloaded in 2024 from NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
+  # - CRS: 4326 (WGS 84; requires reprojection)
+  # - max 90 m resolution
+  # This will be used for PR, because it has seamless projection with the above when crossing from STT to Culebra/Vieques.
+  #   - Would simply use this for entire PR/USVI domain extent, but above crm happens to be a bit better for our use case in the USVI
+  #       side. Not sure how to reproduce the crm above unfortunately, but data is available
+  # - Extents:
+  #   -	North: 19.032
+  #   -	South: 16.988
+  #   -	East: -64.246
+  #   -	West: -68.022
+  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/exportImage.tiff"
+  describe(crm_path)
+  bathy_crm_2024 = rast(crm_path)
+  res(bathy_crm_2024)
+  # projected_crs <- st_crs(32620)  # WGS 84 / UTM zone 20N (suitable for Puerto Rico and the Virgin Islands). projected CRS
+  # projected_crs <- st_crs(26920)  # NAD83 / UTM Zone 20N (suitable for Puerto Rico and the Virgin Islands). projected CRS
+  projected_crs <- "EPSG:26920"  # NAD83 / UTM Zone 20N
+  bathy_crm_2024 <- project(bathy_crm_2024, projected_crs)
+  crs(bathy_crm_2024)
+  crs(bathy_crm_2019)
+  res(bathy_crm_2019)
+  res(bathy_crm_2024)
+  
+  #read the polygon release grid (substrate for downstream hydrodynamic connectivity simulations) shapefile. CRS: 26920 (NAD83 / UTM zone 20N)
+  # reef_polys <- st_read("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
+  reef_polys = vect("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
+  
+  #clip crm bathymetry to the extent of release grid
+  # NOTE - will also need to clip out overlap with STTSTJ raster - otherwise, weird artifacts over MCD are brought over in the merge
+  # bathy_PR_East_clipped <- crop(bathy_PR_East, reef_polys)
+  # bathy_PR_east_agg_clipped <- crop(bathy_PR_East_agg, reef_polys)
+  bathy_crm_2024_clipped <- crop(bathy_crm_2024, reef_polys)
+  
+  #retrieve and apply crm raster extents to fresh raster template, then resample to 50 m resolution using template  # NOTE -
+  # NOTE - should resampling be done before or after merging with PR East?
+  #      - should I actually be aggregating to a masked / cookie-cutter'd grid which is flush with the 50-m NCRMP sampling grid?
+  #         - answer: I think no, since the Puerto Rico grid is a different projection and the different grids would never all align anyways
+  e_crm <- ext(bathy_crm)
+  e_pr <- ext(bathy_PR_East_clipped)
+  xmin_combined <- min(e_crm$xmin, e_pr$xmin)
+  xmax_combined <- max(e_crm$xmax, e_pr$xmax)
+  ymin_combined <- min(e_crm$ymin, e_pr$ymin)
+  ymax_combined <- max(e_crm$ymax, e_pr$ymax)
+  xmin <- floor(xmin_combined / 50) * 50
+  # xmax <- ceiling(xmax_combined / 50) * 50
+  xmax = 385000 #380000 #manual edit to greatly cut down the size of the raster over deep ocean
+  # ymin <- floor(ymin_combined / 50) * 50
+  # ymax <- ceiling(ymax_combined / 50) * 50
+  ymin = 1945000 #1940000 #manual edit to greatly cut down the size of the raster over deep ocean
+  ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
+  new_ext <- ext(xmin, xmax, ymin, ymax)
+  template_raster <- rast(new_ext, resolution = 50, crs = crs(bathy_crm))
+  bathy_crm_agg <- resample(bathy_crm, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
+  bathy_PR_East_agg <- resample(bathy_PR_East_clipped, template_raster, method = "average")
+  
+  res(bathy_crm_agg)  # Should be exactly [1] 50 50
+  res(bathy_PR_East_agg)  # Should be exactly [1] 50 50
+  
+  #merge PR east with crm bathy - see how it looks
+  # bathy_merged_crm = merge(bathy_PR_East, bathy_crm)
+  bathy_merged_crm = merge(bathy_PR_East_agg, bathy_crm_agg)
+  
+  # NOTE - PR bathy instead has to come from Dan's 'VI_shapes' from 2019/2020 - it has less artifacts which would cause a lot of issues if introduced
+  
   ################################## Set-up ##################################
   
   # After loading the workspace, re-write the SpatRasters from .tif (required because of the way terra works with R objects, I think)
@@ -62,14 +165,33 @@
   
   res(bathy_STTSTJ)
   res(bathy_merged_50m)
+  res(bathy_crm)
+  res(bathy_merged_crm)
   
   # Clip the raster to include only depths of 50 meters and shallower (this '50' is independent of the resolution of the bathy raster,
   #   which just happens to be 50 m horizontal)
   # bathy_merged <- clamp(bathy_merged, lower = -50, upper = 0, values = TRUE) #clamp does not introduce NAs, rather fills in -50's
   bathy_merged_50m <- ifel(bathy_merged_50m < -50, NA, bathy_merged_50m)
+  bathy_merged_crm = ifel(bathy_merged_crm < -50 | bathy_merged_crm > 0, NA, bathy_merged_crm) #also set land as NA, since this isn't done by default (land is positive elevation DEM here)
   
   #verify that the above worked and introduced NAs
   values <- values(bathy_merged_50m)
+  deeper_than_50m <- any(values < -50, na.rm = TRUE)
+  
+  if (deeper_than_50m) {
+    cat("There are values deeper than 50 meters in the raster.")
+  } else {
+    cat("All values are within the specified range (i.e., shallower than 50 meters).")
+  }
+  
+  na_values <- any(is.na(values))
+  if (na_values) {
+    cat("There are NA values in the raster.")
+  } else {
+    cat("There are no NA values in the raster.")
+  }
+  
+  values <- values(bathy_merged_crm)
   deeper_than_50m <- any(values < -50, na.rm = TRUE)
   
   if (deeper_than_50m) {
@@ -100,15 +222,21 @@
   # Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
   deep_mask <- bathy_merged_50m
   deep_mask[] <- ifelse(values(bathy_merged_50m) > -50, 1, 0)
-  
+  deep_mask_crm <- bathy_merged_crm
+  deep_mask_crm[] <- ifelse(values(bathy_merged_crm) > -50, 1, 0)
+
   # Define a color palette for the binary raster
   deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas. NOTE - I think? wait maybe reverse
   
-  # # Plot the binary raster for values deeper than 50 meters
-  # plot(deep_mask,
-  #      col = deep_palette,
-  #      main = "Binary Mask for Depths Deeper Than 50 Meters",
-  #      legend = FALSE)  # No legend for binary mask
+  # Plot the binary raster for values deeper than 50 meters
+  plot(deep_mask,
+       col = deep_palette,
+       main = "Binary Mask for Depths Deeper Than 50 Meters",
+       legend = FALSE)  # No legend for binary mask
+  plot(deep_mask_crm,
+       col = deep_palette,
+       main = "Binary Mask for Depths Deeper Than 50 Meters",
+       legend = FALSE)  # No legend for binary mask
   
   ################################## Plotting ##################################
   
@@ -261,9 +389,8 @@
   #   plot_3d(elmat, zscale = 10, fov = 0, theta = 135, zoom = 0.75, phi = 45, windowsize = c(1000, 800))
   # Sys.sleep(0.2)
   # render_snapshot()
-  #
-  # MORE PLOTTING
-
+  
+  
   
   ################################## Test resolution/artifacts ##################################
   

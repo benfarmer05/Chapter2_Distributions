@@ -1,6 +1,7 @@
 # Chain sequence for running scripts:
-#   - ....R
-#   - .....R
+#   - import_merge_rasters.R
+#   - calculate_bathy_rasters.R
+
 
 #           Consider:
 
