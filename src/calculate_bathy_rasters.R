@@ -44,8 +44,6 @@
   
   ################################## Test simple crm-usvi ##################################
   
-  
-  
   # STOPPING POINT - 8 April 2025
   #   - okay new plan!! this might work!!
   #       - PR comes from crm_USVI which I pulled off NOAA servers in 2024
@@ -59,14 +57,13 @@
   #       - 30 m and 90 m res CRM are very solid, and also comprehensive (other than Anegada). I would simply use them for the entire
   #           domain, except for some slight problems:
   #         - Dan's crm (where/when did it come from ???) actually has much better resolution, and less artifacts, in the MCD & north drop
-  #         - BUT, the recent 30 m crm has a bit better res south of STJ - sort of? toss up there
+  #         - BUT, the recent 30 m crm has a bit better res south of STJ - sort of? it's a toss up there
   #         - but DEFINITELY, the recent 30 m crm has far better resolution in Coral Bay & Haulover (STJ). also east end bay Tortola. but mosaicing artifacts introduced at east end
-  #           - question is - is that resolution at Coral Bay / Haulover / East End Bay worth it?? would mean stitching crm-2024 for PR to MCD, with crm-2019 for MCD to Coral Bay, with crm-2024 for Coral Bay to Anegada
+  #           - question is - is that resolution at Coral Bay / Haulover / East End Bay worth it?? would mean stitching crm-2024 for PR to MCD, with crm-2019 for MCD to Coral Bay, with crm-2024 again for Coral Bay to Anegada
   #           - is that 3-part stitch even possible? maybe after merging and comprehensive resampling?
   #           - try it! if that seems impossible though, simply stitch crm-2024 for PR with crm-2019 for USVI
   #           - and worst case, even that doesn't work well, so I just straight up use crm-2024 for everything (artifacts and all). maybe just with Anegada tacked on with crm-2019
-  #           - remember that, absolute worst case, I can always through out "training" points at NCRMP / DCRMP points that are over problematic sections of bathymetry
-  
+  #           - remember that, absolute worst case, I can always throw out "training" data at NCRMP / DCRMP points that exist over problematic sections of bathymetry
   
   #pull NOAA crm, produced in ~2019 (maybe ? from Dan Holstein) from presumably NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
   # - CRS: 26920 (NAD83 / UTM zone 20N)
@@ -108,42 +105,126 @@
   # reef_polys <- st_read("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
   reef_polys = vect("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
   
-  #clip crm bathymetry to the extent of release grid
+  #clip crm bathymetry to the extent of release grid; reduces processing time of next step
   # NOTE - will also need to clip out overlap with STTSTJ raster - otherwise, weird artifacts over MCD are brought over in the merge
-  # bathy_PR_East_clipped <- crop(bathy_PR_East, reef_polys)
+  bathy_PR_East_clipped <- crop(bathy_PR_East, reef_polys)
   # bathy_PR_east_agg_clipped <- crop(bathy_PR_East_agg, reef_polys)
   bathy_crm_2024_clipped <- crop(bathy_crm_2024, reef_polys)
+  bathy_crm_2019_clipped = crop(bathy_crm_2019, reef_polys)
   
   #retrieve and apply crm raster extents to fresh raster template, then resample to 50 m resolution using template  # NOTE -
   # NOTE - should resampling be done before or after merging with PR East?
   #      - should I actually be aggregating to a masked / cookie-cutter'd grid which is flush with the 50-m NCRMP sampling grid?
   #         - answer: I think no, since the Puerto Rico grid is a different projection and the different grids would never all align anyways
-  e_crm <- ext(bathy_crm)
+  e_crm <- ext(bathy_crm_2019_clipped)
   e_pr <- ext(bathy_PR_East_clipped)
   xmin_combined <- min(e_crm$xmin, e_pr$xmin)
   xmax_combined <- max(e_crm$xmax, e_pr$xmax)
   ymin_combined <- min(e_crm$ymin, e_pr$ymin)
   ymax_combined <- max(e_crm$ymax, e_pr$ymax)
   xmin <- floor(xmin_combined / 50) * 50
-  # xmax <- ceiling(xmax_combined / 50) * 50
-  xmax = 385000 #380000 #manual edit to greatly cut down the size of the raster over deep ocean
-  # ymin <- floor(ymin_combined / 50) * 50
-  # ymax <- ceiling(ymax_combined / 50) * 50
-  ymin = 1945000 #1940000 #manual edit to greatly cut down the size of the raster over deep ocean
-  ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
+  xmax <- ceiling(xmax_combined / 50) * 50
+  ymin <- floor(ymin_combined / 50) * 50
+  ymax <- ceiling(ymax_combined / 50) * 50
+  # xmin = 233900 #manual edit to greatly cut down the size of the raster over deep ocean
+  # xmax = 385000 #380000 #manual edit to greatly cut down the size of the raster over deep ocean
+  # ymin = 1945000 #1940000 #manual edit to greatly cut down the size of the raster over deep ocean
+  # ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
   new_ext <- ext(xmin, xmax, ymin, ymax)
-  template_raster <- rast(new_ext, resolution = 50, crs = crs(bathy_crm))
-  bathy_crm_agg <- resample(bathy_crm, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
+  template_raster <- rast(new_ext, resolution = 50, crs = crs(bathy_crm_2024_clipped))
+  bathy_crm_2024_agg <- resample(bathy_crm_2024_clipped, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
   bathy_PR_East_agg <- resample(bathy_PR_East_clipped, template_raster, method = "average")
+  bathy_crm_2019_agg = resample(bathy_crm_2019_clipped, template_raster, method = 'average')
   
-  res(bathy_crm_agg)  # Should be exactly [1] 50 50
+  #plot briefly
+  bathy_crm_2024_agg_reefdepth <- clamp(bathy_crm_2024_agg, lower=-50, upper=0, values=TRUE) #limit depth to 0 m; eliminate land elevation
+  bathy_PR_East_agg_reefdepth = clamp(bathy_PR_East_agg, lower = -50, upper = 0, values = TRUE)
+  bathy_crm_2019_agg_reefdepth = clamp(bathy_crm_2019_agg, lower = -50, upper = 0, values = TRUE)
+  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  # plot_extents = ext(xmin, xmax, ymin, ymax)
+  plot(bathy_crm_2024_agg_reefdepth, 
+       main="CRM 2024",
+       # col=hcl.colors(50, "Blues", rev=TRUE),
+       # ext = e_pr, #e_crm,
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
+  plot(bathy_PR_East_agg_reefdepth,
+       main = 'Blondeau',
+       # ext = e_pr,
+       ext = plot_extents, #e_crm,
+       legend = TRUE)
+  plot(bathy_crm_2019_agg_reefdepth, #this shows that the 2019 crm is the clear winner, for MCD
+       main = 'CRM 2019',
+       # ext = e_pr,
+       ext = plot_extents, #e_crm,
+       legend = TRUE)
+  
+  
+  res(bathy_crm_2024_agg)  # Should be exactly [1] 50 50
   res(bathy_PR_East_agg)  # Should be exactly [1] 50 50
+  res(bathy_crm_2019_agg)  # Should be exactly [1] 50 50
   
-  #merge PR east with crm bathy - see how it looks
-  # bathy_merged_crm = merge(bathy_PR_East, bathy_crm)
-  bathy_merged_crm = merge(bathy_PR_East_agg, bathy_crm_agg)
+  ################################## Merge #1 ##################################
   
-  # NOTE - PR bathy instead has to come from Dan's 'VI_shapes' from 2019/2020 - it has less artifacts which would cause a lot of issues if introduced
+  #merging the below (see above for details on why):
+  # 1.) 2024 CRM for PR
+  # 2.) 2019 CRM for MCD to STJ-ish
+  # 3.) 2024 CRM for STJ-ish to Anegada
+  #
+  # - will start with a simpler approach of just #1 and #2, and later address the trickier aspects from STJ -> Anegada
+  
+  #test
+  #   STOPPING POINT - 11 April 2025
+  #     - seeing how the merge goes, whether this resampling should actually be done after merge or not
+  
+  #eliminate fill values at edge of MCD
+  bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
+  
+  bathy_merge1_crm = merge(bathy_crm_2019_agg_nofill, bathy_crm_2024_agg)
+
+  #plot briefly
+  bathy_merged_crm_reefdepth <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
+  plot_extents = ext(xmin, xmax, ymin, ymax)
+  plot(bathy_merged_crm_reefdepth, 
+       main="Merge #1",
+       # col=hcl.colors(50, "Blues", rev=TRUE),
+       # ext = e_pr, #e_crm,
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
+
+  ################################## Merge #2 ##################################
+  
+  #merging the below (see above for details on why):
+  # 1.) 2024 CRM for PR
+  # 2.) 2019 CRM for MCD to STJ-ish
+  # 3.) 2024 CRM for STJ-ish to Anegada
+  #
+  # - Now merging the product of #1 and #2, with #3
+  
+  # NOTE / STOPPING POINT, 11 April 2025
+  #         - may need to actually do a third merge, where STX is added in last. Should be fairly easy
+  #         - also, all this may need to be done before resampling
+  #         - and possibly also before projecting. but should be easy to re-organize the pipeline!
+  
+  #eliminate between Tektite Bay and the Anegada break
+  #
+  # - thoughts: around 318000 on x-axis is I think where Tektite Bay is
+  # - and the 2024 CRM definitely ends at 368780.344114729 (which is where 2019 CRM should be spliced back in)
+  # bathy_crm_2019_agg_nofill_nocoralbay <- ifel(bathy_crm_2019_agg_nofill ???, NA, bathy_crm_2019_agg_nofill)
+  
+  bathy_merge2_crm = merge(bathy_crm_2019_agg_nofill_nocoralbay, bathy_crm_2024_agg)
+  
+  #plot briefly
+  bathy_merged_crm_reefdepth <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
+  plot_extents = ext(xmin, xmax, ymin, ymax)
+  plot(bathy_merged_crm_reefdepth, 
+       main="Merge #1",
+       # col=hcl.colors(50, "Blues", rev=TRUE),
+       # ext = e_pr, #e_crm,
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
+  
   
   ################################## Set-up ##################################
   
@@ -416,6 +497,15 @@
   roughness = terrain(bathy_merged_50m, v = "roughness")
   TPI = terrain(bathy_merged_50m, v = 'TRI') #Wilson 2007 bathymetric-friendly method
   TRI = terrain(bathy_merged_50m, v = 'TPI')
+  
+  #TEST
+  bathy_merged_crm_forslopes <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE)
+  # slope_merge1 = terrain(bathy_merge1_crm, v = "slope", unit = 'degrees') # THIS LOOKS CRAZY
+  slope_merge1 = terrain(bathy_merged_crm_forslopes, v = "slope", unit = 'degrees')
+  slopeofslope_merge1 = terrain(slope_merge1, v = "slope", unit = 'degrees')
+  plot(slope_merge1, col = color_palette, main = "Slope (degrees)", legend = TRUE)
+  plot(slopeofslope_merge1, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
+  #TEST
   
   #derive bathymetry products from original resolution (2 m) raster. clipped to just STTSTJ since even that takes a long time
   slope_STTSTJ = terrain(bathy_STTSTJ, v = "slope", unit = 'degrees')

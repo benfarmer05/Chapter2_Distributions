@@ -1,15 +1,8 @@
   
   # .rs.restartR(clean = TRUE)
   
-  # library(sf)
   library(here)
   library(terra)
-  # library(tidyterra)
-  # library(ggplot2)
-  # library(tmap)
-  # library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
-  # library(scico)
-  # library(RColorBrewer)
   
   #import objects from from import_merge_rasters.R
   load(here("output/import_merge_rasters_workspace.RData"))
@@ -86,20 +79,93 @@
   # sampleframe_DCRMP_transformed <- project(sampleframe_DCRMP, common_crs)
   
   
-  # TESTING # STOPPING POINT - 4 SEP 2024
-  # Example of adding a new ID field
-  sampleframe_USVI$ID <- 1:nrow(sampleframe_USVI)  # Assign unique IDs, for example
+  
+  # # TESTING # STOPPING POINT - 4 SEP 2024
+  # # Example of adding a new ID field
+  # sampleframe_USVI$ID <- 1:nrow(sampleframe_USVI)  # Assign unique IDs, for example
+  # frame_USVI_extent <- ext(sampleframe_USVI)
+  # bathy_cropped_frame_USVI <- crop(bathy_merged_50m, frame_USVI_extent)
+  # # bathy_hires_cropped_frame_USVI = crop(bathy_STTSTJ, frame_USVI_extent)
+  # plot(bathy_cropped_frame_USVI)
+  # # plot(bathy_hires_cropped_frame_USVI)
+  # 
+  # sample_frame_raster_USVI <- rasterize(sampleframe_USVI, bathy_cropped_frame_USVI, field = "ID")
+  # plot(sampleframe_USVI)
+  # plot(sample_frame_raster_USVI)
+  # 
+  # sampleframe_PR = project(sampleframe_PR, crs(sampleframe_USVI)) #reproject PR sample frame to that of USVI (NAD83 / UTM zone 20N)
+  # sampleframe_PR$ID <- 1:nrow(sampleframe_PR)  # Assign unique IDs, for example
+  # sample_frame_raster_PR <- rasterize(sampleframe_PR, bathy_merged_50m, field = "ID")
+  # 
+  # # Compute zonal statistics
+  # bathy_stats_USVI <- zonal(bathy_merged_50m, sampleframe_USVI, fun = c("mean", "sd"), na.rm = TRUE)
+  # 
+  # # Print results
+  # print(bathy_stats_USVI)
+  
+  
+  # First, make sure your sample frame is properly prepared with unique IDs
+  sampleframe_USVI$ID <- 1:nrow(sampleframe_USVI)
+  
+  # Create a raster representation of your sample frame
   sample_frame_raster_USVI <- rasterize(sampleframe_USVI, bathy_merged_50m, field = "ID")
   
-  sampleframe_PR = project(sampleframe_PR, crs(sampleframe_USVI)) #reproject PR sample frame to that of USVI (NAD83 / UTM zone 20N)
-  sampleframe_PR$ID <- 1:nrow(sampleframe_PR)  # Assign unique IDs, for example
-  sample_frame_raster_PR <- rasterize(sampleframe_PR, bathy_merged_50m, field = "ID")
+  # Calculate mean bathymetry within each sample frame grid cell
+  mean_bathy_by_cell <- zonal(bathy_merged_50m, sample_frame_raster_USVI, fun = "mean", na.rm = TRUE)
   
-  # Compute zonal statistics
-  bathy_stats_USVI <- zonal(bathy_merged_50m, sampleframe_USVI, fun = c("mean", "sd"), na.rm = TRUE)
+  # Check the structure of the zonal statistics result
+  print(names(mean_bathy_by_cell))
   
-  # Print results
-  print(bathy_stats_USVI)
+  # Let's assume the correct column names are determined from the above step
+  # The first column typically contains zone IDs, and the second contains the calculated statistic
+  
+  # Rename columns for clarity if needed
+  names(mean_bathy_by_cell)[1] <- "zone_id"  # First column with zone identifiers
+  names(mean_bathy_by_cell)[2] <- "mean_depth"  # Second column with mean values
+  
+  # Merge with correct column names
+  sampleframe_with_bathy <- merge(sampleframe_USVI, mean_bathy_by_cell, 
+                                  by.x = "ID", by.y = "zone_id")
+  
+  #set extent
+  st_thomas_extent <- ext(280000, 295000, 2025000, 2040000)
+  
+  coastline = as.contour(bathy_merged_50m, level = -10)
+  
+  # Now plot the results
+  plot(sampleframe_with_bathy, "mean_depth", 
+       main = "Mean Bathymetry by Sample Frame Cell", 
+       col = terrain.colors(100),
+       ext = st_thomas_extent)
+  
+  plot(sampleframe_USVI,  
+       main = "Mean Bathymetry by Sample Frame Cell", 
+       ext = st_thomas_extent)
+  
+  
+  # # Add coastlines on top
+  # lines(coastline, col="black", lwd=1.5)
+  
+  # #interesting overlay of bathymetry and sampleframe
+  # bathy_st_thomas <- crop(bathy_merged_50m, st_thomas_extent)
+  # 
+  # plot(bathy_st_thomas, 
+  #      main = "St. Thomas - Bathymetry with Sample Frame Overlay",
+  #      # col = blues9, # Or another color palette good for bathymetry
+  #      ext = st_thomas_extent)
+  # plot(sampleframe_with_bathy, "mean_depth", 
+  #      col = terrain.colors(100, alpha=0.7), # Adding transparency
+  #      add = TRUE)
+  # legend("topright", title="Mean Depth (m)", 
+  #        legend=round(seq(min(sampleframe_with_bathy$mean_depth, na.rm=TRUE), 
+  #                         max(sampleframe_with_bathy$mean_depth, na.rm=TRUE), length.out=5), 1),
+  #        fill=terrain.colors(5), bty="n")
+  
+  
+  
+  
+  
+  
   
   
   
