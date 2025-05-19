@@ -10,6 +10,8 @@
   library(rayshader) #this requires installation of XQuartz on MacOS, and possibly OpenGL if it isn't installed
   library(scico)
   library(RColorBrewer)
+  library(progress)
+  
   source(here("src/functions.R"))
   
   # # Print GDAL, PROJ, and GEOS versions linked with sf
@@ -244,11 +246,11 @@
   bathy_merged3_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
   plot_extents = ext(xmin, xmax, ymin, ymax)
   plot(bathy_merged3_crm_reefdepth, 
-       main="Merge #2",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
+     main="Merge #2",
+     # col=hcl.colors(50, "Blues", rev=TRUE),
+     # ext = e_pr, #e_crm,
+     ext = plot_extents, #e_crm,
+     legend=TRUE)
   
   # #compare with 2019 bathy
   # bathy_crm_2019_agg_reefdepth_nofill = ifel(bathy_crm_2019_agg_reefdepth == 0, NA, bathy_crm_2019_agg_reefdepth)
@@ -258,32 +260,265 @@
   #      ext = plot_extents, #e_crm,
   #      legend = TRUE)
   
-  ################################## Create binary mask <50 m ##################################
+  ################################## Create mask <50 m ##################################
   
-  # Create a mask raster where NA values are set to 1 and all other values are set to 0
-  na_mask <- is.na(bathy_merged3_crm_reefdepth)
+  seamask <- app(bathy_merged3_crm_reefdepth, fun = function(x) {
+    ifelse(x < 0 & x > -50, 0, 1)
+  })
   
-  # Define a color palette for the mask
-  mask_palette <- c("transparent", "red")  # Transparent for non-NA, red for NA
-  
-  # # Plot the NA mask raster
-  # plot(na_mask,
-  #      col = mask_palette,
-  #      main = "NA Mask of Bathymetry Raster",
-  #      legend = FALSE)  # No legend for binary mask
-  
-  # Create a binary raster where values shallower than 50 meters are set to 1 and others are set to 0
-  deep_mask <- bathy_merged3_crm_reefdepth
-  deep_mask[] <- ifelse(values(bathy_merged3_crm_reefdepth) > -50, 1, 0)
+  unique(values(seamask)) #0 is reefy depths, 1 is deep ocean, white is land
 
-  # Define a color palette for the binary raster
-  deep_palette <- c("transparent", "blue")  # Transparent for shallow areas, blue for deep areas. NOTE - I think? wait maybe reverse
+  plot(seamask, 
+       main="Merge #2",
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
   
-  # Plot the binary raster for values deeper than 50 meters
-  plot(deep_mask,
-       col = deep_palette,
-       main = "Binary Mask for Depths Deeper Than 50 Meters",
-       legend = FALSE)  # No legend for binary mask
+  ################################## Create habitat grid ##################################
+  
+  # NOTE - somewhere here near grid creation, could choose to also "snap" to existing operational 650-m grid 
+  #         (and/or the actual NCRMP grid). Could even get creative and produce a second snap to the PR NCRMP
+  #         grid and then make an intersection area (with polygon slivers)at the MCD where PR & USVI NCRMP grids
+  #         meet. but that might just not be super necessary
+  
+  # Create a 650 x 650 m grid that spans the extent of seamask
+  # First, get the extent of the seamask
+  ext_seamask <- ext(seamask)
+  
+  # Define the grid resolution (650 m)
+  grid_res <- 650
+  
+  # Calculate the number of cells needed
+  ncol_grid <- ceiling((ext_seamask$xmax - ext_seamask$xmin) / grid_res)
+  nrow_grid <- ceiling((ext_seamask$ymax - ext_seamask$ymin) / grid_res)
+  
+  # Create a new raster with the desired resolution
+  grid_rast <- rast(ext_seamask, ncol=ncol_grid, nrow=nrow_grid)
+  
+  # Assign cell numbers (or 1) to create a grid
+  values(grid_rast) <- 1:ncell(grid_rast)  # or simply values(grid_rast) <- 1
+  
+  # Make sure the grid and seamask have the same CRS
+  #   NOTE - will need to decide on a universal CRS that is compatible with global coordinates in USCROMS hydro
+  crs(grid_rast) <- crs(seamask)
+  
+  # Convert grid raster to vector (polygons)
+  grid_poly <- as.polygons(grid_rast)
+  
+  #assign unique IDs (NOTE - SUPER IMPORTANT)
+  names(grid_poly)  # See existing field names
+  names(grid_poly)[names(grid_poly) == "lyr.1"] <- "unique_ID" #rename
+  any(duplicated(grid_poly$unique_ID))  # Should return FALSE if IDs are unique (which is good!)
+  
+  # Now clip the grid to only include the reefy depths present in seamask
+  # First, identify reefy depths in the seamask (assuming these are specific values)
+  # For example, if reefy depths are between -30 and 0 meters:
+  reefy_mask <- seamask
+  reefy_mask[!(seamask >= -30 & seamask <= 0)] <- NA  # Adjust these values as needed
+  
+  # Convert the reefy areas to polygons
+  reefy_poly <- as.polygons(reefy_mask, dissolve=TRUE)
+  
+  # # NOTE - USE THE BELOW ONLY IF YOU WANT A COOKIE-CUTTER GRID
+  # # Clip the grid to include only cells that intersect with reefy areas
+  # # Using intersect to keep only grid cells that overlap with reefy areas
+  # grid_reefy <- intersect(grid_poly, reefy_poly)
+  
+  # Alternatively, you could select grid cells based on the center point
+  grid_reefy <- grid_poly[reefy_poly]
+  
+  #check #/polygon squares
+  nrow(grid_reefy)
+  
+  # Plot to check results
+  plot(grid_poly, main="Full Grid (650m)", border="lightgray")
+  plot(reefy_poly, col="lightblue", add=TRUE, main="Reefy Areas")
+  plot(grid_reefy, col="lightgreen", border="red", add=TRUE)
+  
+  # Create a standalone plot of just the final clipped grid
+  plot(grid_reefy, col="lightgreen", border="red", main="650m Grid Clipped to Reefy Depths")
+  
+  # compare with April 2025 operational 650-m resolution grid from QGIS
+  polys_apr2025_operational <- vect(here("output", "polys_apr2025_operational.shp"))
+
+  #check #/polygon squares
+  nrow(polys_apr2025_operational)
+  
+  # Make sure the CRS matches your other spatial objects
+  if (crs(polys_apr2025_operational) != crs(grid_reefy)) {
+    polys_apr2025_operational <- project(polys_apr2025_operational, crs(grid_reefy))
+    cat("Projections were different - reprojected reef polygons to match grid_reefy\n")
+  }
+  
+  # Convert terra SpatVector objects to sf for plotting
+  reefy_poly_sf <- st_as_sf(reefy_poly)
+  grid_reefy_sf <- st_as_sf(grid_reefy)
+  polys_apr2025_operational_sf <- st_as_sf(polys_apr2025_operational)
+  
+  ggplot() +
+    geom_sf(data = reefy_poly_sf, fill = "lightblue", color = NA, alpha = 0.8) +
+    geom_sf(data = grid_reefy_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
+    # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
+    scale_fill_identity() +
+    scale_color_identity() +
+    labs(
+      title = "Reef and Grid Overlay",
+      caption = "Source: Spatial data in terra SpatVector format"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank()
+    )
+  
+  
+  ################################## Shave off points completely on land ##################################
+  
+  # NOTE - may need to construct landmask (from MATLAB script using not just vigrid.nc, but ALSO
+  #         the sigma-to-z converted hydro files that are running the actual model. because of 
+  #         slight spatial transformations that happen during sigma-to-z)
+  
+  # compare with April 2025 operational 650-m resolution grid from QGIS
+  landmask <- vect(here("output", "landmask_dissolved.shp"))
+  
+  # Ensure CRS matches
+  #  NOTE - come back to this if projection issues are suspected
+  if (crs(landmask) != crs(grid_reefy)) {
+    landmask <- project(landmask, crs(grid_reefy))
+    cat("Reprojected landmask to match CRS of grid_reefy\n")
+  }
+  
+  # Convert terra SpatVector objects to sf for plotting
+  landmask_sf <- st_as_sf(landmask)
+  
+  ggplot() +
+    geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
+    geom_sf(data = grid_reefy_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
+    # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
+    scale_fill_identity() +
+    scale_color_identity() +
+    labs(
+      title = "Reef and Grid Overlay",
+      caption = "Source: Spatial data in terra SpatVector format"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank()
+    )
+  
+  # Keep only grid cells NOT completely within the landmask
+  inside_land <- relate(grid_reefy, landmask, "within")  # returns logical vector
+  grid_reefy_no_land <- grid_reefy[!inside_land]
+  plot(grid_reefy)
+  plot(grid_reefy_no_land)
+  
+  # Convert terra SpatVector objects to sf for plotting
+  grid_reefy_no_land_sf <- st_as_sf(grid_reefy_no_land)
+  
+  ggplot() +
+    geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
+    geom_sf(data = grid_reefy_no_land_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
+    # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
+    scale_fill_identity() +
+    scale_color_identity() +
+    labs(
+      title = "Reef and Grid Overlay",
+      caption = "Source: Spatial data in terra SpatVector format"
+    ) +
+    # coord_sf(xlim = x_limits, ylim = y_limits, expand = FALSE) +   # zoom in here!
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      panel.grid = element_blank()
+    )
+  
+  ################################## Place habitat centroids ##################################
+  
+  # inspect attribute tables
+  names(grid_poly)  # See existing field names
+  head(values(grid_poly))
+  head(values(grid_reefy))
+  head(values(grid_reefy_no_land))
+  
+  #inspect polygon counts
+  nrow(grid_poly)
+  nrow(grid_reefy)
+  nrow(grid_reefy_no_land)
+  
+  #create centroids
+  centroids <- centroids(grid_reefy_no_land)
+  
+  # Convert both to sf for ggplot
+  centroids_sf <- st_as_sf(centroids)
+  
+  #plot centroids
+  ggplot() +
+    geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
+    # geom_sf(data = grid_reefy_no_land_sf, fill = NA, color = "gray30", size = 0.3) +
+    geom_sf(data = centroids_sf, color = "red", size = 0.3, alpha = 0.5) +  # small dots
+    theme_minimal() +
+    labs(title = "Habitat Grid with Centroids")  
+  
+  ################################## Push centroids away from land ##################################
+  
+  # NOTE - need to update "push" function so that points that started on land don't sometimes get
+  #         pushed INTO land. they need to get pushed out to sea
+  
+  # Step 1: Identify grid cells that touch land
+  touches_land <- relate(grid_reefy, landmask, relation = "intersects") #|> lengths() > 0
+
+  # Step 2: Split grid into touching and non-touching
+  grid_touching <- grid_reefy[touches_land]
+  grid_notouching <- grid_reefy[!touches_land]
+  plot(grid_reefy)
+  plot(grid_reefy_no_land)
+  plot(grid_notouching)
+  
+  # Step 3: Function to compute farthest point from land within a polygon
+  farthest_from_land <- function(polygon, land, n = 500) {
+    # Generate many random points within the polygon
+    candidates <- spatSample(polygon, size = n, method = "random")
+    
+    # Compute distance to landmask
+    dists <- distance(candidates, land)
+    
+    # Choose the point with the max distance
+    farthest_point <- candidates[which.max(dists), ]
+    return(farthest_point)
+  }
+  
+  # Step 4: Apply function to all touching grid squares
+  pb <- progress_bar$new( #initialize progress bar
+    format = "Processing [:bar] :percent in :elapsed",
+    total = nrow(grid_touching), clear = FALSE, width = 60
+  )
+  
+  #apply function with progress
+  centroids_touching <- lapply(1:nrow(grid_touching), function(i) {
+    pb$tick()
+    farthest_from_land(grid_touching[i], landmask)
+  }) |> do.call(what = rbind)
+  
+  # # Add IDs back
+  # centroids_touching$grid_reefy_no_land <- grid_touching$grid_reefy_no_land
+  
+  # Step 5: For non-touching polygons, use regular centroid
+  centroids_nontouching <- centroids(grid_notouching)
+  centroids_nontouching$grid_reefy_no_land <- grid_notouching$grid_reefy_no_land
+  
+  # Step 6: Combine both
+  centroids_all <- rbind(centroids_touching, centroids_nontouching)
+  
+  # Optional: convert to sf and plot
+  centroids_sf <- st_as_sf(centroids_all)
+  
+  ggplot() +
+    geom_sf(data = landmask_sf, fill = "tan", color = NA, alpha = 0.5) +
+    geom_sf(data = grid_reefy_no_land_sf, fill = NA, color = "gray70", alpha = 0.5) +
+    geom_sf(data = centroids_sf, color = "red", size = 0.3, alpha = 0.5) +
+    theme_minimal() +
+    labs(title = "Repositioned Centroids Away from Land")
+  
   
   ################################## Pretty bathy plot ##################################
   
@@ -766,6 +1001,7 @@
   # #      - Pool the grid at different resolutions for testing (e.g., 350 m; 650 m). Might require GIS
   # #      - See how many "repeated measurements" occur after broadening the grid. May *want* these repeats
   # 
+  
   ################################## Save objects/workspace ##################################
   
   # #save terra objects and then workspace for use in downstream scripts
