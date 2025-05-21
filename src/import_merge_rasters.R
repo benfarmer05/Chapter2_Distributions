@@ -2,10 +2,12 @@
   # .rs.restartR(clean = TRUE)
   
   library(here)
-  # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj") #this was temporarily needed after updating M1 Macbook to Sequoia OS
-  # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
   library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see. lastly, install.packages("terra", type = "source") was required to get terra to work after Sequioa update
   library(sf)
+  
+  #this was temporarily needed after updating M1 Macbook to Sequoia OS. not currently needed
+  # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj")
+  # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal")
   
   source(here("src/functions.R"))
   
@@ -139,6 +141,13 @@
   bathy_crm_2024_clipped <- mask(bathy_crm_2024_clipped, hydro_extent_proj)
   bathy_crm_2019_clipped <- mask(bathy_crm_2019_clipped, hydro_extent_proj)
   
+  # # plot to verify proper crop
+  # plot(hydro_extent_proj, main = "Sea Mask with Hydrological Extent Overlay",
+  #      col=c("white", "lightblue"), legend = FALSE)
+  # plot(bathy_PR_East_clipped, add = TRUE, border = 'darkblue', lwd = 2)
+  # plot(bathy_crm_2024_clipped, add = TRUE, border = 'darkblue', lwd = 2)
+  # plot(bathy_crm_2019_clipped, add = TRUE, border = 'darkblue', lwd = 2)
+  
   #retrieve and apply crm raster extents to fresh raster template, then resample to 50 m resolution using template  # NOTE -
   # NOTE - should resampling be done before or after merging with PR East?
   #      - should I actually be aggregating to a masked / cookie-cutter'd grid which is flush with the 50-m NCRMP sampling grid?
@@ -158,7 +167,7 @@
   # ymin = 1945000 #1940000 #manual edit to greatly cut down the size of the raster over deep ocean
   # ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
   new_ext <- ext(xmin, xmax, ymin, ymax)
-  template_raster <- rast(new_ext, resolution = 50, crs = crs(bathy_crm_2024_clipped))
+  template_raster <- rast(new_ext, resolution = 50, crs = crs(projected_crs))
   bathy_crm_2024_agg <- resample(bathy_crm_2024_clipped, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
   bathy_PR_East_agg <- resample(bathy_PR_East_clipped, template_raster, method = "average")
   bathy_crm_2019_agg = resample(bathy_crm_2019_clipped, template_raster, method = 'average')
@@ -286,9 +295,6 @@
   ################################## Save objects/workspace  ##################################
   
   # #save terra objects and then workspace for use in downstream scripts
-  # save_spat_objects() #call from functions.R
-  # save.image(file = here("output", "import_merge_rasters_workspace.RData"))
-  # 
-  # # #save the merged 2 m raster separately as a .tif to assist R with handling the very large file across scripts
-  # # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX) #, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
-  # # writeRaster(bathy_merged_2m, here("output", "bathy_merged_2m.tif"), overwrite = TRUE)
+  # save_spat_objects(output_dir = 'output/output_import_merge_rasters/') #call from functions.R
+  # save.image(file = here("output", 'output_import_merge_rasters/import_merge_rasters_workspace.RData'))
+  
