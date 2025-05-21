@@ -69,197 +69,6 @@
   #           - and worst case, even that doesn't work well, so I just straight up use crm-2024 for everything (artifacts and all). maybe just with Anegada tacked on with crm-2019
   #           - remember that, absolute worst case, I can always throw out "training" data at NCRMP / DCRMP points that exist over problematic sections of bathymetry
   
-  #pull NOAA crm, produced in ~2019 (maybe ? from Dan Holstein) from presumably NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
-  # - CRS: 26920 (NAD83 / UTM zone 20N)
-  # - max 30 m resolution
-  # This will be used for USVI, since it has nice resolution generally, less artifacts than the crm below, and full extent across Anegada
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Holstein_VI_Shapes/VI_Shapes/Bathy/crm_usvi.tif"
-  describe(crm_path)
-  bathy_crm_2019 = rast(crm_path)
-  res(bathy_crm_2019)
-  crs(bathy_crm_2019)
-  crs(bathy_PR_East)
-  crs(bathy_STTSTJ)
-  
-  #pull NOAA 1 arc-second crm, downloaded in 2024 from NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
-  # - CRS: 4326 (WGS 84; requires reprojection)
-  # - max 90 m resolution
-  # This will be used for PR, because it has seamless projection with the above when crossing from STT to Culebra/Vieques.
-  #   - Would simply use this for entire PR/USVI domain extent, but above crm happens to be a bit better for our use case in the USVI
-  #       side. Not sure how to reproduce the crm above unfortunately, but data is available
-  # - Extents:
-  #   -	North: 19.032
-  #   -	South: 16.988
-  #   -	East: -64.246
-  #   -	West: -68.022
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/exportImage.tiff"
-  describe(crm_path)
-  bathy_crm_2024 = rast(crm_path)
-  res(bathy_crm_2024)
-  # projected_crs <- st_crs(32620)  # WGS 84 / UTM zone 20N (suitable for Puerto Rico and the Virgin Islands). projected CRS
-  # projected_crs <- st_crs(26920)  # NAD83 / UTM Zone 20N (suitable for Puerto Rico and the Virgin Islands). projected CRS
-  projected_crs <- "EPSG:26920"  # NAD83 / UTM Zone 20N
-  bathy_crm_2024 <- project(bathy_crm_2024, projected_crs)
-  crs(bathy_crm_2024)
-  crs(bathy_crm_2019)
-  res(bathy_crm_2019)
-  res(bathy_crm_2024)
-  
-  #read the polygon release grid (substrate for downstream hydrodynamic connectivity simulations) shapefile. CRS: 26920 (NAD83 / UTM zone 20N)
-  # reef_polys <- st_read("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
-  reef_polys = vect("/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/output/Habitat_Grid/Reef_Polygons/polys_apr2025_operational.shp")
-  
-  #clip crm bathymetry to the extent of release grid; reduces processing time of next step
-  # NOTE - will also need to clip out overlap with STTSTJ raster - otherwise, weird artifacts over MCD are brought over in the merge
-  bathy_PR_East_clipped <- crop(bathy_PR_East, reef_polys)
-  # bathy_PR_east_agg_clipped <- crop(bathy_PR_East_agg, reef_polys)
-  bathy_crm_2024_clipped <- crop(bathy_crm_2024, reef_polys)
-  bathy_crm_2019_clipped = crop(bathy_crm_2019, reef_polys)
-  
-  #retrieve and apply crm raster extents to fresh raster template, then resample to 50 m resolution using template  # NOTE -
-  # NOTE - should resampling be done before or after merging with PR East?
-  #      - should I actually be aggregating to a masked / cookie-cutter'd grid which is flush with the 50-m NCRMP sampling grid?
-  #         - answer: I think no, since the Puerto Rico grid is a different projection and the different grids would never all align anyways
-  e_crm <- ext(bathy_crm_2019_clipped)
-  e_pr <- ext(bathy_PR_East_clipped)
-  xmin_combined <- min(e_crm$xmin, e_pr$xmin)
-  xmax_combined <- max(e_crm$xmax, e_pr$xmax)
-  ymin_combined <- min(e_crm$ymin, e_pr$ymin)
-  ymax_combined <- max(e_crm$ymax, e_pr$ymax)
-  xmin <- floor(xmin_combined / 50) * 50
-  xmax <- ceiling(xmax_combined / 50) * 50
-  ymin <- floor(ymin_combined / 50) * 50
-  ymax <- ceiling(ymax_combined / 50) * 50
-  # xmin = 233900 #manual edit to greatly cut down the size of the raster over deep ocean
-  # xmax = 385000 #380000 #manual edit to greatly cut down the size of the raster over deep ocean
-  # ymin = 1945000 #1940000 #manual edit to greatly cut down the size of the raster over deep ocean
-  # ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
-  new_ext <- ext(xmin, xmax, ymin, ymax)
-  template_raster <- rast(new_ext, resolution = 50, crs = crs(bathy_crm_2024_clipped))
-  bathy_crm_2024_agg <- resample(bathy_crm_2024_clipped, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
-  bathy_PR_East_agg <- resample(bathy_PR_East_clipped, template_raster, method = "average")
-  bathy_crm_2019_agg = resample(bathy_crm_2019_clipped, template_raster, method = 'average')
-  
-  #plot briefly
-  bathy_crm_2024_agg_reefdepth <- clamp(bathy_crm_2024_agg, lower=-50, upper=0, values=TRUE) #limit depth to 0 m; eliminate land elevation
-  bathy_PR_East_agg_reefdepth = clamp(bathy_PR_East_agg, lower = -50, upper = 0, values = TRUE)
-  bathy_crm_2019_agg_reefdepth = clamp(bathy_crm_2019_agg, lower = -50, upper = 0, values = TRUE)
-  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
-  # plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_crm_2024_agg_reefdepth, 
-       main="CRM 2024",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
-  plot(bathy_PR_East_agg_reefdepth,
-       main = 'Blondeau',
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
-  plot(bathy_crm_2019_agg_reefdepth, #this shows that the 2019 crm is the clear winner, for MCD
-       main = 'CRM 2019',
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
-  
-  res(bathy_crm_2024_agg)  # Should be exactly [1] 50 50
-  res(bathy_PR_East_agg)  # Should be exactly [1] 50 50
-  res(bathy_crm_2019_agg)  # Should be exactly [1] 50 50
-  
-  ################################## Merge 1: PR to MCD ##################################
-  
-  #eliminate fill values at edge of MCD
-  bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
-  
-  bathy_merge1_crm = merge(bathy_crm_2019_agg_nofill, bathy_crm_2024_agg)
-
-  #plot briefly
-  bathy_merged_crm_reefdepth <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged_crm_reefdepth, 
-       main="Merge #1",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
-
-  ################################## Merge 2: MCD to Coral Bay ##################################
-  
-  #eliminate fill values at edge of MCD
-  bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
-  
-  bathy_crm_2024_agg_reefdepth_nofill <- ifel(bathy_crm_2024_agg_reefdepth == 0, NA, bathy_crm_2024_agg_reefdepth)
-  
-  kiddel_point_lon = -64.71987
-  kiddel_point_lat = 18.30761
-  point_wgs84 <- st_sfc(st_point(c(kiddel_point_lon, kiddel_point_lat)), crs = 4326)
-  point_utm <- st_transform(point_wgs84, 26920)
-  kiddel_point_east_x <- st_coordinates(point_utm)[1]
-  cat("Converted longitude", kiddel_point_lon, "to UTM x-coordinate:", kiddel_point_east_x, "\n")
-  
-  lon_rast <- init(bathy_crm_2024_agg_reefdepth_nofill, "x")
-  west_mask <- lon_rast >= kiddel_point_east_x
-  STJ_clip <- bathy_crm_2024_agg_reefdepth_nofill
-  STJ_clip[!west_mask] <- NA
-  
-  lon_rast <- init(STJ_clip, "x")
-  east_non_na <- max(values(lon_rast)[!is.na(values(STJ_clip))], na.rm = TRUE)
-  east_trim_limit <- east_non_na - 1000  # trim 1 km west of easternmost valid value
-  east_mask <- lon_rast <= east_trim_limit
-  STJ_clip[!east_mask] <- NA
-  
-  bathy_merge2_crm = merge(STJ_clip, bathy_merged_crm_reefdepth)
-  
-  bathy_merge2_crm_nofill = ifel(bathy_merge2_crm == 0, NA, bathy_merge2_crm)
-  
-  #plot briefly
-  bathy_merged2_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged2_crm_reefdepth, 
-       main="Merge #2",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
-  
-  ################################## Merge 3: STX ##################################
-  
-  VI_trough_lon = -64.767128
-  VI_trough_lat = 18.046230
-  point_wgs84 <- st_sfc(st_point(c(VI_trough_lon, VI_trough_lat)), crs = 4326)
-  point_utm <- st_transform(point_wgs84, 26920)
-  VI_trough_north_y <- st_coordinates(point_utm)[2]
-  cat("Converted latitude", VI_trough_lat, "to UTM y-coordinate:", VI_trough_north_y, "\n")
-  
-  lat_rast <- init(bathy_crm_2019_agg_reefdepth, "y")
-  south_mask <- lat_rast <= VI_trough_north_y
-  STX_clip <- bathy_crm_2019_agg_reefdepth
-  STX_clip[!south_mask] <- NA
-  
-  bathy_merge3_crm = merge(STX_clip, bathy_merged2_crm_reefdepth)
-  
-  bathy_merge2_crm_nofill = ifel(bathy_merge3_crm == 0, NA, bathy_merge3_crm)
-  
-  #plot briefly
-  bathy_merged3_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged3_crm_reefdepth, 
-     main="Merge #2",
-     # col=hcl.colors(50, "Blues", rev=TRUE),
-     # ext = e_pr, #e_crm,
-     ext = plot_extents, #e_crm,
-     legend=TRUE)
-  
-  # #compare with 2019 bathy
-  # bathy_crm_2019_agg_reefdepth_nofill = ifel(bathy_crm_2019_agg_reefdepth == 0, NA, bathy_crm_2019_agg_reefdepth)
-  # plot(bathy_crm_2019_agg_reefdepth_nofill, #this shows that the 2019 crm is the clear winner, for MCD
-  #      main = 'CRM 2019',
-  #      # ext = e_pr,
-  #      ext = plot_extents, #e_crm,
-  #      legend = TRUE)
-  
   ################################## Create mask <50 m ##################################
   
   seamask <- app(bathy_merged3_crm_reefdepth, fun = function(x) {
@@ -272,6 +81,66 @@
        main="Merge #2",
        ext = plot_extents, #e_crm,
        legend=TRUE)
+  
+  
+  ### TESTING ###
+  # # Plot the raster first
+  # plot(seamask, main="Sea Mask with Hydrological Extent Overlay",
+  #      col=c("white", "lightblue"), legend=FALSE)
+  # 
+  # # Add the polygon on top with borders only, no fill
+  # plot(hydro_extent_proj, add=TRUE, border="darkblue", lwd=2)
+  
+  # reverse
+  plot(hydro_extent_proj, main = "Sea Mask with Hydrological Extent Overlay",
+       col=c("white", "lightblue"), legend = FALSE)
+  # plot(seamask, add = TRUE, border = 'darkblue', lwd = 2)
+  # plot(bathy_PR_East_cropped, add = TRUE, border = 'darkblue', lwd = 2)
+  plot(bathy_PR_East_clipped, add = TRUE, border = 'darkblue', lwd = 2)
+  
+  # Add a legend
+  legend("topright", 
+         legend=c("Sea (value=1)", "Land (value=0)", "Hydro Extent"),
+         fill=c("lightblue", "white", NA),
+         border=c(NA, NA, "darkblue"),
+         lwd=c(NA, NA, 2))
+  
+  
+  
+
+  # Create a color palette for bathymetry - blues from light to dark
+  bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
+  
+  # Plot the bathymetry first
+  plot(bathy_merged3_crm_reefdepth, 
+       main="Bathymetry with Sea Mask and Hydrological Extent", 
+       col=bathy_colors,
+       legend=TRUE)
+  
+  # # Add the seamask with transparency
+  # plot(seamask, 
+  #      col=c(NA, rgb(0, 0, 1, 0.3)), # NA for 0 values, transparent blue for 1 values
+  #      legend=FALSE, 
+  #      add=TRUE)
+  
+  # Add the polygon outline on top
+  plot(hydro_extent_proj, 
+       add=TRUE, 
+       border="darkred", 
+       lwd=2)
+  
+  # # Add the landmask
+  # plot(landmask, 
+  #      add=TRUE, 
+  #      border="darkgreen", 
+  #      lwd=2)
+  
+  # Add a legend
+  legend("topright", 
+         legend=c("Bathymetry", "Sea Mask", "Hydro Extent"),
+         fill=c("deepskyblue", rgb(0, 0, 1, 0.3), NA),
+         border=c(NA, NA, "darkred"),
+         lwd=c(NA, NA, 2))
   
   ################################## Create habitat grid ##################################
   
@@ -311,9 +180,13 @@
   
   # Now clip the grid to only include the reefy depths present in seamask
   # First, identify reefy depths in the seamask (assuming these are specific values)
-  # For example, if reefy depths are between -30 and 0 meters:
+  # For example, if reefy depths are between -50 and 0 meters:
   reefy_mask <- seamask
-  reefy_mask[!(seamask >= -30 & seamask <= 0)] <- NA  # Adjust these values as needed
+  reefy_mask[!(seamask >= -50 & seamask <= 0)] <- NA  # Adjust these values as needed
+  
+  #eliminate artifacts introduced in the far north (if needed)
+  y_threshold <- 2090000  # Adjust this value as needed
+  reefy_mask[terra::yFromCell(reefy_mask, 1:terra::ncell(reefy_mask)) > y_threshold] <- NA
   
   # Convert the reefy areas to polygons
   reefy_poly <- as.polygons(reefy_mask, dissolve=TRUE)
@@ -370,14 +243,8 @@
       panel.grid = element_blank()
     )
   
-  
   ################################## Shave off points completely on land ##################################
   
-  # NOTE - may need to construct landmask (from MATLAB script using not just vigrid.nc, but ALSO
-  #         the sigma-to-z converted hydro files that are running the actual model. because of 
-  #         slight spatial transformations that happen during sigma-to-z)
-  
-  # compare with April 2025 operational 650-m resolution grid from QGIS
   landmask <- vect(here("output", "landmask_dissolved.shp"))
   
   # Ensure CRS matches
@@ -389,10 +256,22 @@
   
   # Convert terra SpatVector objects to sf for plotting
   landmask_sf <- st_as_sf(landmask)
+  hydro_extent_proj_sf = st_as_sf(hydro_extent_proj)
+  
+  
+  bathy_PR_East_clipped <- crop(bathy_PR_East, hydro_extent_proj)
+
+  bathy_PR_East_clipped_sf = st_as_sf(bathy_PR_East_clipped)
+  bathy_crm_2024_clipped_sf = st_as_sf(bathy_crm_2024_clipped)
+  bathy_crm_2019_clipped_sfst_as_sf(bathy_crm_2019_clipped)
+  
+  
   
   ggplot() +
+    geom_sf(data = reefy_poly_sf, fill = "purple", color = NA, alpha = 0.8) +
     geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
     geom_sf(data = grid_reefy_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
+    geom_sf(data = hydro_extent_proj_sf, fill = "lightpink", color = "red", size = 0.1, alpha = 0.1) +
     # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
     scale_fill_identity() +
     scale_color_identity() +
@@ -411,6 +290,8 @@
   grid_reefy_no_land <- grid_reefy[!inside_land]
   plot(grid_reefy)
   plot(grid_reefy_no_land)
+  
+  nrow(grid_reefy_no_land)
   
   # Convert terra SpatVector objects to sf for plotting
   grid_reefy_no_land_sf <- st_as_sf(grid_reefy_no_land)
