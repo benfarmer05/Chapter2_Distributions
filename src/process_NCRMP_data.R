@@ -1,18 +1,33 @@
   
   # .rs.restartR(clean = TRUE)
   rm(list=ls())
-
+  
   library(here)
   library(tidyverse)
-  
-  source(here("src/functions.R"))
+  library(readxl)
   
   ################################## setup ##################################
   
-  # load_spat_objects(directory = 'output/output_import_merge_rasters/') #call function
-  # load(here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData')) #load workspace from upstream script
+  # NOTE - in general, should I be including conditions (bleached, diseased, etc.) as "coral cover"?
+  #          - also will need to figure out how compatible each survey type is. some of these are
+  #             long-term monitoring rather than random, which could mean they artificially inflate
+  #             (or reduce the quality of output of) coral cover due to bias toward rich sites
+  #      - also, for LTR sites we need to consider that they have repeated measures. so, we may want
+  #           to average across observations?
   
-  ################################## load NCRMP data ##################################
+  # STOPPING POINT - 3 June 2025
+  # - add NODICE, SESAP, DeepLion demo subsets??
+  # - what about VINPS / CSUN data?
+  # - CSUN Pete Edmunds data is great, but a lot of it is pre-NCRMP. do we want to mix years like that?
+  #     - good bets might be 'Population Projections' or 'Landscape-scale' from:
+  #         https://coralreefs.csun.edu/data/data-catalogue/
+  #     - but in particular, species-level data 1987-present is located in first hit
+  #         (Virgin Islands National Park: Coral Reef: Population Dynamics: Scleractinian corals)
+  #         on that page
+  #     - consider though that the above does not include lat/lons. they should roughly match with
+  #         those found in:
+  #         'Coral cover at six sites on the south coast of St. John, USVI from 1992 to 2019', found in
+  #         https://www.bco-dmo.org/project/2272, though (from https://coralreefs.csun.edu/data/)
   
   load(here('data/USVI_2013_benthic_cover.rda'))
   load(here('data/USVI_2015_benthic_cover.rda'))
@@ -20,6 +35,222 @@
   load(here('data/USVI_2013_coral_demographics.rda'))
   load(here('data/USVI_2015_coral_demographics.rda'))
   load(here('data/USVI_2017_coral_demographics.rda'))
+  DCRMP = read_xlsx(here("data/DCRMP_Master_BenthicCover_Apr2022.xlsx"), sheet = 'BenthicData')
+  SESAP = read_xls(here("data/SESAP_Benthic MasterFINAL_toJMP_Zs_150122.xls"))
+  NODICE_45m = read_xlsx(here("data/NODICE_BenthicMaster_45m.xlsx"))
+  NODICE_60m = read_xlsx(here("data/NODICE_BenthicMaster_60m.xlsx"))
+  NODICE_100m = read_xlsx(here("data/NODICE_Benthic Master_100m.xlsx"))
+  DeepLion = read_xlsx(here("data/DeepLion_Master_BenthicCover_Jun2019.xlsx"), sheet = 'BenthicCover')
+  DeepLion_metadata = read_xlsx(here("data/DeepLion_Master_BenthicCover_Jun2019.xlsx"), sheet = 'SiteMetadata')
+  DeepLion_codes = read_xlsx(here("data/DeepLion_Master_BenthicCover_Jun2019.xlsx"), sheet = 'BenthicCodes')
+  CSUN_random = read.csv(here("data/CSUN_USVI_random_20241026.csv"))
+  CSUN_yawzi_tektite = read.csv(here("data/CSUN_USVI_yawzi_tektite_20241025.csv"))
+  
+  ################################## wrangle CSUN ##################################
+  
+  CSUN_random <- CSUN_random %>%
+    mutate(
+      across(-c(site, quadrat, year), as.numeric),
+      site = as.factor(site)
+    )
+  
+  ################################## wrangle DeepLion ##################################
+  
+  # Identify metadata columns (first 7 columns based on your preview)
+  metadata_cols <- c("SiteCode", "FilmDate", "MPA", "SampleZone", "NoPts", "AnalysisBy", "AnalysisDate")
+  
+  # Transform to long format
+  DeepLion_long <- DeepLion %>%
+    pivot_longer(
+      cols = -all_of(metadata_cols),
+      names_to = "species_code", 
+      values_to = "cover"
+    ) %>%
+    # Convert cover to numeric and filter out NA values
+    mutate(cover = as.numeric(cover)) %>%
+    filter(!is.na(cover))
+  
+  DeepLion_long <- DeepLion_long %>%
+    rename(
+      location_id = SiteCode,
+      date = FilmDate,
+      analysis_by = AnalysisBy,
+      analysis_date = AnalysisDate,
+      data_points = NoPts,
+      species = species_code
+    ) %>%
+    select(date, location_id, MPA, SampleZone, analysis_by, analysis_date, 
+           data_points, species, cover) %>%
+    arrange(location_id, species)
+  
+  #refactor locations and drop unnecessary variables
+  DeepLion_long <- DeepLion_long %>%
+    mutate(location_id = as.factor(location_id)) %>%
+    select(-MPA, -SampleZone, -analysis_by, -analysis_date, -data_points)
+  
+  #bring in lat/lons
+  DeepLion_long <- DeepLion_long %>%
+    left_join(DeepLion_metadata %>% select(SiteCode, Latitude, Longitude), 
+              by = c("location_id" = "SiteCode")) %>%
+    rename(lat = Latitude, lon = Longitude)
+  
+  #refactor species names and drop non-coral species
+  DeepLion_long <- DeepLion_long %>%
+    left_join(DeepLion_codes %>% select(Code, Meaning, Category), 
+              by = c("species" = "Code")) %>%
+    filter(Category == "Coral") %>%
+    rename(species_name = Meaning) %>%
+    select(-Category, -species)
+  
+  # Rename columns to lowercase to match NODICE format
+  DeepLion_long <- DeepLion_long %>%
+    rename_with(tolower) %>%
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(
+      PSU = location_id,
+      spp = species_name
+    )
+  
+  ################################## wrangle NODICE ##################################
+  
+  # Remove the extra 'Depth (f)' row from NODICE_60m to match format of other datasets
+  depth_f_row <- which(NODICE_60m[,1] == "Depth (f)")
+  if(length(depth_f_row) > 0) {
+    NODICE_60m <- NODICE_60m[-depth_f_row, ]
+  }
+  
+  #remove lat/lons with no data (assuming they were not surveyed)
+  date_filming_row <- 5  # NOTE - hard-coded; using NA in 'date of filming' for reference
+  cols_to_keep <- as.vector(!is.na(NODICE_100m[date_filming_row, ]))
+  cols_to_keep[1] <- TRUE  # Always keep the first column (species names)
+  NODICE_100m <- NODICE_100m[, cols_to_keep]
+  
+  # Function to transform each dataset
+  transform_nodice_dataset <- function(nodice_data) {
+    
+    metadata_rows <- c("Latitude", "Longitude", "Transect Number:", "Tape Number:", 
+                       "Date of Filming:", "Transect Type:", "Depth (m)", 
+                       "# of data points:", "Analysis by:", "Date of Analysis:", 
+                       "Transect Length:")
+    
+    species_start_row <- 13 #this should be dynamic ideally; reference if there are bugs
+    metadata_df <- nodice_data[1:(species_start_row-1), -1]  # Exclude first column for metadata
+    species_df <- nodice_data[species_start_row:nrow(nodice_data), ]
+    location_ids <- colnames(nodice_data)[-1]  # Exclude first column
+    
+    all_metadata <- data.frame()
+    for(location_id in location_ids) {
+      col_data <- metadata_df[[location_id]]
+      
+      # Extract key metadata - adjust row indices based on your actual data structure
+      location_metadata <- data.frame(
+        location_id = location_id,
+        lat = as.numeric(col_data[1]),  # Latitude row
+        lon = as.numeric(col_data[2]),  # Longitude row
+        date = col_data[5],             # Date of Filming row
+        depth_m = as.numeric(col_data[7]), # Depth row
+        transect_type = col_data[6],    # Transect Type row
+        analysis_date = col_data[10],   # Date of Analysis row
+        data_points = as.numeric(col_data[8]) # Number of data points
+      )
+      
+      all_metadata <- rbind(all_metadata, location_metadata)
+    }
+    
+    # Transform species data to long format
+    # Use the first column as species names, pivot the rest
+    species_long <- species_df %>%
+      # Create species column from first column, then select only location columns
+      mutate(species = species_df[,1]) %>%
+      select(-1) %>%  # Remove the first column since we saved it as 'species'
+      mutate(species = species) %>%  # Add species back as a column
+      pivot_longer(cols = -species, 
+                   names_to = "location_id", 
+                   values_to = "cover") %>%
+      # Convert cover to numeric (keep all values, including 0)
+      mutate(cover = as.numeric(cover)) %>%
+      # Only remove rows where cover is NA (missing data)
+      filter(!is.na(cover))
+    
+    # Join metadata with species data
+    nodice_transformed <- species_long %>%
+      left_join(all_metadata, by = "location_id") %>%
+      # Reorder columns to match USVI format
+      select(date, location_id, lat, lon, depth_m, transect_type, 
+             analysis_date, data_points, species, cover) %>%
+      # Sort by location and species
+      arrange(location_id, species)
+    
+    return(nodice_transformed)
+  }
+  
+  # Transform each dataset
+  NODICE_45m_transformed <- transform_nodice_dataset(NODICE_45m)
+  NODICE_60m_transformed <- transform_nodice_dataset(NODICE_60m)
+  NODICE_100m_transformed <- transform_nodice_dataset(NODICE_100m)
+  
+  # Combine all three datasets
+  NODICE_combined <- bind_rows(NODICE_45m_transformed, NODICE_60m_transformed, NODICE_100m_transformed)
+  
+  # Continue with the rest of the processing on the combined dataset
+  #keep only corals
+  NODICE_combined$species <- NODICE_combined$species$`Location:` #drop weird nested tibble
+  NODICE_combined <- NODICE_combined %>% filter(grepl("- coral", species))
+  
+  #refactor variables and remove unnecessary ones
+  NODICE_long = NODICE_combined %>%
+    mutate(location_id = as.factor(location_id)) %>%
+    select(-date, -transect_type, -analysis_date, -data_points) 
+  
+  #rename variables
+  NODICE_long <- NODICE_long %>%
+    rename_with(tolower) %>% #convert to lowercase
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(PSU = location_id)
+  
+  #refactor coral names
+  NODICE_long <- NODICE_long %>%
+    mutate(
+      spp = gsub("\\s*\\([^)]+\\)\\s*-.*$", "", species),
+      spp = trimws(spp)
+    ) %>%
+    select(-species)
+  
+  ################################## wrangle SESAP ##################################
+  
+  #convert from wide to long format
+  SESAP_long <- SESAP %>%
+    pivot_longer(
+      cols = -c(`Shelf Strata`, `Seaward Strata`, `Location:`, Latitude, Longitude, 
+                `Transect Number:`, `Tape Number:`, `Date of Filming:`, `Transect Type:`, 
+                `Depth (m)`, `# of data points:`, `Analysis by:`, `Date of Analysis:`, 
+                `Transect Length`),
+      names_to = "species_full_name", 
+      values_to = "cover"
+    ) %>%
+    filter(grepl("- coral$", species_full_name, ignore.case = TRUE)) %>% #keep only corals
+    mutate(
+      spp = gsub("\\s*\\([^)]+\\)\\s*-.*$", "", species_full_name),
+      spp = trimws(spp) #clean up species labels
+    )
+  
+  #refactor variables and remove unnecessary ones
+  SESAP_long = SESAP_long %>%
+    mutate(`Location:` = as.factor(`Location:`)) %>%
+    select(-`Seaward Strata`, -`Shelf Strata`, -`Transect Number:`, -`Tape Number:`, -`Transect Type:`,
+           -`# of data points:`, -`Analysis by:`, -species_full_name, -`Date of Filming:`,
+           -`Date of Analysis:`, -`Depth (m)`) 
+  
+  #rename variables
+  SESAP_long <- SESAP_long %>%
+    rename_with(tolower) %>% #convert to lowercase
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(
+      PSU = location,
+      lat = latitude,
+      lon = longitude,
+      meterscompleted = `transect length`
+    )
   
   ################################## summarize cover & SA ##################################
   
@@ -40,12 +271,12 @@
     mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
            -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
-           -METERS_COMPLETED, -MIN_DEPTH, -MAX_DEPTH)
+           -MIN_DEPTH, -MAX_DEPTH)
   USVI_demo = USVI_demo %>%
     mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
            -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
-           -METERS_COMPLETED, -MIN_DEPTH, -MAX_DEPTH, -N, -JUV, -BLEACH_CONDITION, -DISEASE)
+           -MIN_DEPTH, -MAX_DEPTH, -N, -JUV, -BLEACH_CONDITION, -DISEASE)
   
   #refactor date
   USVI_benthic_cover = USVI_benthic_cover %>%
@@ -232,7 +463,7 @@
   #   demo surveys, then will collate the demo & LPI surveys together, then append bathymetry & derived
   #   values to dataframe, then produce a simple test GAM. finally will need to figure out prediction
   #   onto a uniform grid which will "talk" to the habitat grid plugged into the CMS
-  
+
   
   # Updated summaries that include zero-cover PSU's
   cover_by_susc_complete <- USVI_benthic_cover %>%
