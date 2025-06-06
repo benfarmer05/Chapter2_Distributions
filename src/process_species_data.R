@@ -15,9 +15,19 @@
   #      - also, for LTR sites we need to consider that they have repeated measures. so, we may want
   #           to average across observations?
   
-  # STOPPING POINT - 3 June 2025
-  # - add NODICE, SESAP, DeepLion demo subsets??
-  # - what about VINPS / CSUN data?
+  # NOTE - need to add in PR NCRMP!
+  
+  # NOTE - 3 June 2025 - other datasets possibly to include:
+  #
+  # - NODICE demo
+  # - SESAP demo
+  # - DeepLion demo
+  # - VINPS / CSUN
+  # - PR FEMA (2018)
+  # - PR DNER (1999 to 2020)
+  # - NCCOS pre-NCRMP in VI/PR (2001 to 2012)
+  # - EPA for VI (2006 to 2009)
+  #
   # - CSUN Pete Edmunds data is great, but a lot of it is pre-NCRMP. do we want to mix years like that?
   #     - good bets might be 'Population Projections' or 'Landscape-scale' from:
   #         https://coralreefs.csun.edu/data/data-catalogue/
@@ -36,6 +46,8 @@
   load(here('data/USVI_2015_coral_demographics.rda'))
   load(here('data/USVI_2017_coral_demographics.rda'))
   DCRMP = read_xlsx(here("data/DCRMP_Master_BenthicCover_Apr2022.xlsx"), sheet = 'BenthicData')
+  DCRMP_metadata = read_xlsx(here("data/DCRMP_Master_BenthicCover_Apr2022.xlsx"), sheet = 'SiteMetadata')
+  DCRMP_codes = read_xlsx(here("data/DCRMP_Master_BenthicCover_Apr2022.xlsx"), sheet = 'BenthicCodes')
   SESAP = read_xls(here("data/SESAP_Benthic MasterFINAL_toJMP_Zs_150122.xls"))
   NODICE_45m = read_xlsx(here("data/NODICE_BenthicMaster_45m.xlsx"))
   NODICE_60m = read_xlsx(here("data/NODICE_BenthicMaster_60m.xlsx"))
@@ -45,6 +57,41 @@
   DeepLion_codes = read_xlsx(here("data/DeepLion_Master_BenthicCover_Jun2019.xlsx"), sheet = 'BenthicCodes')
   CSUN_random = read.csv(here("data/CSUN_USVI_random_20241026.csv"))
   CSUN_yawzi_tektite = read.csv(here("data/CSUN_USVI_yawzi_tektite_20241025.csv"))
+  TCRMP_benthic = read_xlsx(here("data/TCRMP_Master_Benthic_Cover_Feb2022.xlsx"), sheet = 'BenthicData')
+  TCRMP_benthic_metadata = read_xlsx(here("data/TCRMP_Master_Benthic_Cover_Feb2022.xlsx"), sheet = 'SiteMetadata')
+  TCRMP_benthic_codes = read_xlsx(here("data/TCRMP_Master_Benthic_Cover_Feb2022.xlsx"), sheet = 'BenthicCodes')
+  TCRMP_health_metadata = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'SiteMetadata')
+  TCRMP_health_codes = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'HealthCodes')
+  
+  #special case for TCRMP health data; both dates and the width variable are funny
+  # NOTE - since we don't have a sample day variable, just setting each 'day' to first of the month of
+  #         that year. coarse, but shouldn't really matter for our purposes
+  # NOTE - there is at least one site where the sample year does not match the sample date. for now,
+  #         just relying on the sample year variable
+  # NOTE - filtering by 2013 and later to match NCRMP time domain, but can choose another cut-off
+  col_types <- rep("guess", 69)  # All columns default to "guess"
+  col_types[12] <- "numeric"     # Force Width (column 12) to be numeric
+  col_types[68] <- "numeric"     # Force OldMort (column 68) to be numeric
+  col_types[69] <- "numeric"     # Force RecMort (column 69) to be numeric
+  TCRMP_health <- read_xlsx(
+    here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), 
+    sheet = 'HealthDataRaw',
+    col_types = col_types,
+    range = cell_cols("A:BQ")  # A through BQ = 69 columns
+  ) %>%
+    select(Location:Height, OldMort, RecMort, SampleYear, SampleMonth) %>%  # Include the year/month columns
+    mutate(
+      # Create date as first day of the month using SampleYear and SampleMonth
+      date = as.POSIXct(paste(SampleYear, SampleMonth, "01", sep = "-"), format = "%Y-%m-%d")
+    ) %>%
+    # # Remove the original year and month columns since we now have date
+    # select(-SampleYear, -SampleMonth) %>%
+    # Move date to the beginning
+    relocate(date, .before = everything()) %>%
+    # Filter for 2013 and onward
+    filter(year(date) >= 2013)
+  
+  
   
   ################################## wrangle CSUN ##################################
   
@@ -252,43 +299,188 @@
       meterscompleted = `transect length`
     )
   
-  ################################## summarize cover & SA ##################################
+  ################################## wrangle DCRMP ##################################
   
-  USVI_benthic_cover = bind_rows(
+  # Identify metadata columns (first 6 columns based on your preview)
+  metadata_cols <- c("SiteCode", "SampleYear", "SurveyDate", "NoPts", "AnalysisBy", "AnalysisDate")
+  
+  # Transform to long format
+  DCRMP_long <- DCRMP %>%
+    pivot_longer(
+      cols = -all_of(metadata_cols),
+      names_to = "species_code",
+      values_to = "cover"
+    ) %>%
+    # Convert cover to numeric and filter out NA values
+    mutate(cover = as.numeric(cover)) %>%
+    filter(!is.na(cover))
+  
+  DCRMP_long <- DCRMP_long %>%
+    rename(
+      location_id = SiteCode,
+      year = SampleYear,
+      date = SurveyDate,
+      analysis_by = AnalysisBy,
+      analysis_date = AnalysisDate,
+      data_points = NoPts,
+      species = species_code
+    ) %>%
+    select(date, location_id, analysis_by, analysis_date,
+           data_points, species, cover) %>%
+    arrange(location_id, species)
+  
+  #refactor locations and drop unnecessary variables
+  DCRMP_long <- DCRMP_long %>%
+    # Remove the as.factor() conversion - keep as numeric
+    select(-analysis_by, -analysis_date, -data_points)
+  
+  #bring in lat/lons
+  # NOTE - this step introduces a many-to-many warning and makes the dataframe slightly longer.
+  #         something to keep in mind
+  DCRMP_long <- DCRMP_long %>%
+    left_join(DCRMP_metadata %>% select(SiteCode, Latitude, Longitude),
+              by = c("location_id" = "SiteCode")) %>%
+    rename(lat = Latitude, lon = Longitude)
+  
+  # Convert to factor after the join if you still want it as a factor
+  DCRMP_long <- DCRMP_long %>%
+    mutate(location_id = as.factor(location_id))
+  
+  #refactor species names and drop non-coral species
+  DCRMP_long <- DCRMP_long %>%
+    left_join(DCRMP_codes %>% select(Code, Meaning, Category),
+              by = c("species" = "Code")) %>%
+    filter(Category == "Coral") %>%
+    rename(species_name = Meaning) %>%
+    select(-Category, -species)
+
+  # Rename columns to lowercase to match NODICE format
+  DCRMP_long <- DCRMP_long %>%
+    rename_with(tolower) %>%
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(
+      PSU = location_id,
+      spp = species_name
+    )
+  
+  ################################## wrangle TCRMP ##################################
+  
+  # NOTE / STOPPING POINT - 6 June 2025 - will need to fix dates for TCRMP benthic too!!
+  
+  # benthic
+  #
+  # Identify metadata columns (first 7 columns based on your preview)
+  metadata_cols <- c("SampleYear", "SampleMonth", "Period", "Location", "FilmDate", "NoPts",
+                     "AnalysisBy", "AnalysisDate", "Transect")
+  
+  # Transform to long format
+  TCRMP_benthic_long <- TCRMP_benthic %>%
+    pivot_longer(
+      cols = -all_of(metadata_cols),
+      names_to = "species_code", 
+      values_to = "cover"
+    ) %>%
+    # Convert cover to numeric and filter out NA values
+    mutate(cover = as.numeric(cover)) %>%
+    filter(!is.na(cover))
+  
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    rename(
+      year = SampleYear,
+      month = SampleMonth,
+      location_id = Location,
+      date = FilmDate,
+      analysis_by = AnalysisBy,
+      analysis_date = AnalysisDate,
+      data_points = NoPts,
+      species = species_code,
+      transect = Transect
+    ) %>%
+    select(year, month, date, location_id, analysis_by, analysis_date, data_points, species, cover) %>%
+    arrange(location_id, species)
+  
+  #refactor locations and drop unnecessary variables
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    mutate(location_id = as.factor(location_id)) %>%
+    select(-year, -month, -analysis_by, -analysis_date, -data_points)
+  
+  #bring in lat/lons
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    left_join(TCRMP_benthic_metadata %>% select(Location, Latitude, Longitude), 
+              by = c("location_id" = "Location")) %>%
+    rename(lat = Latitude, lon = Longitude)
+  
+  #refactor species names and drop non-coral species
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    left_join(TCRMP_benthic_codes %>% select(Code, Meaning, Category), 
+              by = c("species" = "Code")) %>%
+    filter(Category == "Coral") %>%
+    rename(species_name = Meaning) %>%
+    select(-Category, -species)
+  
+  # Rename columns to lowercase to match NODICE format
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    rename_with(tolower) %>%
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(
+      PSU = location_id,
+      spp = species_name
+    )
+  
+  #demographic (health)
+  #
+  #shift columns to lowercase
+  TCRMP_health_long <- TCRMP_health %>%
+    rename_with(tolower) %>%
+    rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
+    rename(
+      PSU = location
+    )
+  
+  #refactor locations and drop unnecessary variables
+  TCRMP_health_long <- TCRMP_health_long %>%
+    mutate(PSU = as.factor(PSU)) %>%
+    select(-sampleyear, -samplemonth, -period, -sampletype, -recorder, -transect)
+  
+  #bring in lat/lons
+  TCRMP_health_long <- TCRMP_health_long %>%
+    left_join(TCRMP_health_metadata %>% select(Location, Latitude, Longitude), 
+              by = c("PSU" = "Location")) %>%
+    rename(lat = Latitude, lon = Longitude)
+  
+  #refactor species names
+  TCRMP_health_long <- TCRMP_health_long %>%
+    left_join(TCRMP_health_codes %>% select(Code, Meaning, Category), 
+              by = c("spp" = "Code")) %>%
+    filter(Category == "Coral") %>%
+    rename(code = spp) %>%
+    rename(spp = Meaning) %>%
+    select(-Category)
+  
+  #drop species code
+  TCRMP_health_long_withcode = TCRMP_health_long
+  TCRMP_health_long = TCRMP_health_long %>%
+    select(-code)
+  
+  ################################## wrangle NCRMP ##################################
+  
+  #benthic
+  #
+  NCRMP_benthic = bind_rows(
     USVI_2013_benthic_cover,
     USVI_2015_benthic_cover,
     USVI_2017_benthic_cover
   )
   
-  USVI_demo = bind_rows(
-    USVI_2013_coral_demographics,
-    USVI_2015_coral_demographics,
-    USVI_2017_coral_demographics
-  )
-  
   #refactor variables and remove unnecessary ones
-  USVI_benthic_cover = USVI_benthic_cover %>%
+  NCRMP_benthic_long = NCRMP_benthic %>%
     mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
            -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
            -MIN_DEPTH, -MAX_DEPTH)
-  USVI_demo = USVI_demo %>%
-    mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
-    select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
-           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
-           -MIN_DEPTH, -MAX_DEPTH, -N, -JUV, -BLEACH_CONDITION, -DISEASE)
   
   #refactor date
-  USVI_benthic_cover = USVI_benthic_cover %>%
-    mutate(
-      date = as.POSIXct(
-        paste(sprintf("%02d.%02d.%02d", MONTH, DAY, YEAR %% 100)), 
-        format = "%m.%d.%y"
-      )
-    ) %>%
-    select(-YEAR, -MONTH, -DAY) %>%
-    select(date, everything())
-  USVI_demo = USVI_demo %>%
+  NCRMP_benthic_long = NCRMP_benthic_long %>%
     mutate(
       date = as.POSIXct(
         paste(sprintf("%02d.%02d.%02d", MONTH, DAY, YEAR %% 100)), 
@@ -299,25 +491,233 @@
     select(date, everything())
   
   #calculate cover
-  USVI_benthic_cover <- USVI_benthic_cover %>%
+  NCRMP_benthic_long <- NCRMP_benthic_long %>%
     mutate(cover = HARDBOTTOM_P + SOFTBOTTOM_P + RUBBLE_P) %>%
     select(-HARDBOTTOM_P, -SOFTBOTTOM_P, -RUBBLE_P)
+  
+  #rename variables
+  NCRMP_benthic_long <- NCRMP_benthic_long %>%
+    rename_with(tolower) %>% #convert to lowercase
+    rename_with(~ tolower(gsub("_", "", .))) %>% #remove underscores
+    rename(
+      PSU = primarysampleunit,
+      lat = latdegrees,
+      lon = londegrees,
+      code = covercatcd,
+      spp = covercatname
+    )
+  
+  #filter out non-scleractinian cover
+  # NOTE - removing 'OTH SPE.' - even if this might include corals, we don't know which species
+  #         - also removing 'OTH CORA' - again because we do not know which coral this was
+  levels(NCRMP_benthic_long$code)
+  NCRMP_benthic_long = NCRMP_benthic_long %>%
+    filter(!code %in% c('BAR SUB.', 'CLI SPE.', 'CYA SPE.', 'DIC SPE.', 'GOR ENCR', 'GOR GORG', 'HAL SPE.',
+                        'LOB SPE.', 'MAC CALC', 'MAC FLES', 'MAG SPE.', 'MIL SPE.', 'PAL SPE.', 'PEY SPE.',
+                        'RHO CRUS', 'SPO OTHE', 'TUR FREE', 'TUR SEDI', 'RAM SPE.',
+                        'OTH SPE.', 'OTH CORA')) %>%
+    mutate(code = droplevels(code),
+           spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
+  
+  #drop the code entirely
+  NCRMP_benthic_long_withcode = NCRMP_benthic_long
+  NCRMP_benthic_long = NCRMP_benthic_long %>%
+    select(-code)
+  
+  #demo
+  #
+  NCRMP_demo = bind_rows(
+    USVI_2013_coral_demographics,
+    USVI_2015_coral_demographics,
+    USVI_2017_coral_demographics
+  )
+  
+  #refactor variables and remove unnecessary ones
+  NCRMP_demo_long = NCRMP_demo %>%
+    mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
+    select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
+           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
+           -MIN_DEPTH, -MAX_DEPTH, -N, -JUV, -BLEACH_CONDITION, -DISEASE)
+  
+  #refactor further
+  NCRMP_demo_long <- NCRMP_demo_long %>%
+    rename_with(tolower) %>% #convert to lowercase
+    rename_with(~ tolower(gsub("_", "", .))) %>% #remove underscores
+    rename(
+      PSU = primarysampleunit,
+      lat = latdegrees,
+      lon = londegrees,
+      code = speciescd,
+      spp = speciesname,
+      length = maxdiameter,
+      width = perpdiameter
+    )
+  
+  # Convert year, month, day to POSIXct date
+  NCRMP_demo_long <- NCRMP_demo_long %>%
+    mutate(
+      # Create date string in format "m.d.yy" (matching your example format)
+      date_string = paste0(month, ".", day, ".", str_sub(as.character(year), 3, 4)),
+      # Convert to POSIXct
+      date = as.POSIXct(date_string, format = "%m.%d.%y")
+    ) %>%
+    # Remove the original year, month, day columns and the temporary date_string
+    select(-year, -month, -day, -date_string) %>%
+    # Move date to leftmost position
+    relocate(date, .before = everything())
+  
+  #drop species code
+  NCRMP_demo_long_withcode = NCRMP_demo_long
+  NCRMP_demo_long = NCRMP_demo_long %>%
+    select(-code)
+  
+  ################################## collate benthic data ##################################
+  
+  # Function to standardize datasets
+  standardize_benthic_dataset <- function(df, dataset_name) {
+    # Add source dataset column
+    df$dataset <- dataset_name
+    
+    # Standardize column names based on what's available
+    if ("depth_m" %in% names(df)) {
+      df <- df %>% rename(depth = depth_m)
+    }
+    
+    if ("meterscompleted" %in% names(df)) {
+      df <- df %>% rename(depth = meterscompleted)
+    }
+    
+    # Ensure all datasets have the same core columns
+    # If date column doesn't exist, set to NA
+    if (!"date" %in% names(df)) {
+      df$date <- NA
+    }
+    
+    # If depth column doesn't exist, set to NA
+    if (!"depth" %in% names(df)) {
+      df$depth <- NA
+    }
+    
+    # Select and reorder columns consistently
+    df <- df %>%
+      select(dataset, date, PSU, lat, lon, cover, spp, depth) %>%
+      # Move dataset to leftmost position
+      relocate(dataset, .before = everything())
+    
+    return(df)
+  }
+  
+  # Standardize each dataset
+  DCRMP_std <- standardize_benthic_dataset(DCRMP_long, "DCRMP")
+  DeepLion_std <- standardize_benthic_dataset(DeepLion_long, "DeepLion")
+  NODICE_std <- standardize_benthic_dataset(NODICE_long, "NODICE")
+  SESAP_std <- standardize_benthic_dataset(SESAP_long, "SESAP")
+  TCRMP_std <- standardize_benthic_dataset(TCRMP_benthic_long, "TCRMP_benthic")
+  NCRMP_std = standardize_benthic_dataset(NCRMP_benthic_long, "NCRMP_benthic")
+  
+  # Combine all datasets
+  combined_benthic_data <- bind_rows(
+    DCRMP_std,
+    DeepLion_std,
+    NODICE_std,
+    SESAP_std,
+    TCRMP_std,
+    NCRMP_std
+  )
+  
+  # Convert spp to factor
+  combined_benthic_data$spp <- as.factor(combined_benthic_data$spp)
+  
+  # Show all species levels
+  print("\nAll species levels:")
+  spp_levels <- levels(combined_benthic_data$spp)
+  print(spp_levels)
+  print(paste("Total number of species:", length(spp_levels)))
+  
+  ################################## collate demo data ##################################
+  
+  # Function to standardize demographic/health datasets
+  standardize_demo_dataset <- function(df, dataset_name) {
+    # Add source dataset column
+    df$dataset <- dataset_name
+    
+    # Standardize column names based on what's available
+    # Handle different depth/distance column names
+    if ("meterscompleted" %in% names(df)) {
+      df <- df %>% rename(depth = meterscompleted)
+    }
+    
+    # Handle different mortality column names
+    if ("recmort" %in% names(df)) {
+      df <- df %>% rename(recentmort = recmort)
+    }
+    
+    # Ensure all datasets have the same core columns
+    # Add missing columns with NA if they don't exist
+    required_cols <- c("date", "PSU", "lat", "lon", "depth", "spp", 
+                       "length", "width", "height", "oldmort", "recentmort")
+    
+    for (col in required_cols) {
+      if (!col %in% names(df)) {
+        df[[col]] <- NA
+      }
+    }
+    
+    # Handle any additional columns that might be useful
+    # Keep sampledate if it exists (from TCRMP)
+    if ("sampledate" %in% names(df)) {
+      df <- df %>% select(dataset, all_of(required_cols), sampledate, everything())
+    } else {
+      df <- df %>% select(dataset, all_of(required_cols), everything())
+    }
+    
+    # Move dataset to leftmost position
+    df <- df %>% relocate(dataset, .before = everything())
+    
+    return(df)
+  }
+  
+  # Standardize each dataset
+  TCRMP_health_std <- standardize_demo_dataset(TCRMP_health_long, "TCRMP_health")
+  NCRMP_demo_std <- standardize_demo_dataset(NCRMP_demo_long, "NCRMP_demo")
+  
+  # Combine the datasets
+  combined_demo_data <- bind_rows(
+    TCRMP_health_std,
+    NCRMP_demo_std
+  )
+  
+  # Convert spp to factor
+  combined_demo_data$spp <- as.factor(combined_demo_data$spp)
+  
+  # Show all species levels
+  print("\nAll species levels:")
+  spp_levels <- levels(combined_demo_data$spp)
+  print(spp_levels)
+  print(paste("Total number of species:", length(spp_levels)))
+  
+  
+  # STOPPING POINT 6 June 2025- almost at the point of summarizing everything together. will still need
+  #   to go back and get things like meters covered maybe...or just confirm. and also get any
+  #   datasets I'm still missing
+  
+  ################################## summarize cover & SA ##################################
   
   #calculate susceptible tissue surface area (SA)
   # NOTE - could consider trimming down predicted SA for OANN since it has a lot of dead space in reality
   #
   # remove corals that had recently suffered complete mortality upon survey, but keep NAs
-  USVI_demo = USVI_demo %>%
+  NCRMP_demo_long = NCRMP_demo_long %>%
     filter(is.na(OLD_MORT + RECENT_MORT) | OLD_MORT + RECENT_MORT < 100)
   # set '0' cm heights as an arbitrarily small amount (cm) to allow the hemi-ellipsoid estimation to function correctly. coral recruits 
   #   have very little tangible height, and were recorded underwater as 0 cm height. there is also
   #   an instance of '-1' height but it is an acroporid and gets filtered out downstream anyways
-  USVI_demo = USVI_demo %>%
+  NCRMP_demo_long = NCRMP_demo_long %>%
     mutate(HEIGHT = ifelse(HEIGHT == 0, 0.01, HEIGHT))
   #
   # hemi-ellipsoid estimation (Knud Thomsen approximation; see Xu 2009 but also Holstein 2015).
   #   p is a dimensionless constant; all else in square cm
-  USVI_demo = USVI_demo %>%
+  NCRMP_demo_long = NCRMP_demo_long %>%
     mutate(
       a = HEIGHT,
       b = PERP_DIAMETER / 2,
@@ -330,54 +730,22 @@
     select(-a, -b, -c, -p)
   #
   # remove unnecessary variables
-  USVI_demo = USVI_demo %>%
+  NCRMP_demo_long = NCRMP_demo_long %>%
     select(-MAX_DIAMETER, -PERP_DIAMETER, -HEIGHT, -OLD_MORT, -RECENT_MORT, -SA_colony)
-  
-  #rename variables
-  USVI_benthic_cover <- USVI_benthic_cover %>%
-    rename_with(tolower) %>% #convert to lowercase
-    rename_with(~ tolower(gsub("_", "", .))) %>% #remove underscores
-    rename(
-      PSU = primarysampleunit,
-      lat = latdegrees,
-      lon = londegrees,
-      code = covercatcd,
-      spp = covercatname
-    )
-  USVI_demo <- USVI_demo %>%
-    rename_with(tolower) %>% #convert to lowercase
-    rename_with(~ tolower(gsub("_", "", .))) %>% #remove underscores
-    rename(
-      PSU = primarysampleunit,
-      lat = latdegrees,
-      lon = londegrees,
-      code = speciescd,
-      spp = speciesname
-    )
   
   #preserve absence data
   # NOTE - this is a little tricky with demo data since possible species codes
   #         expanded with each sampling year. should be fine since we are binning species coarsely
   #         by susceptibility group, though
-  all_PSU_info_cover <- USVI_benthic_cover %>%
-    distinct(PSU, lat, lon, date)
-  all_PSU_info_demo <- USVI_demo %>%
+  all_PSU_info_demo <- NCRMP_demo_long %>%
     distinct(PSU, lat, lon, date, spp)
   
   #filter out non-scleractinian cover
   # NOTE - removing 'OTH SPE.' - even if this might include corals, we don't know which species
   #         - also removing 'OTH CORA' - again because we do not know which coral this was
-  levels(USVI_benthic_cover$code)
-  USVI_benthic_cover = USVI_benthic_cover %>%
-    filter(!code %in% c('BAR SUB.', 'CLI SPE.', 'CYA SPE.', 'DIC SPE.', 'GOR ENCR', 'GOR GORG', 'HAL SPE.',
-                              'LOB SPE.', 'MAC CALC', 'MAC FLES', 'MAG SPE.', 'MIL SPE.', 'PAL SPE.', 'PEY SPE.',
-                              'RHO CRUS', 'SPO OTHE', 'TUR FREE', 'TUR SEDI', 'RAM SPE.',
-                              'OTH SPE.', 'OTH CORA')) %>%
-    mutate(code = droplevels(code),
-           spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
   #filter out unidentified scleractinians
-  levels(USVI_demo$code)
-  USVI_demo = USVI_demo %>%
+  levels(NCRMP_demo_long$code)
+  NCRMP_demo_long = NCRMP_demo_long %>%
     filter(!code %in% c('SCL SPE.')) %>%
     mutate(code = droplevels(code),
            spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
@@ -398,8 +766,8 @@
   # - Oculina
   # - Porites
   # - Mycetophyllia
-  levels(USVI_benthic_cover$code)
-  USVI_benthic_cover = USVI_benthic_cover %>%
+  levels(NCRMP_benthic_long$code)
+  NCRMP_benthic_long = NCRMP_benthic_long %>%
     mutate(
       susc = case_when(
         code %in% c('AGA AGAR', 'AGA FRAG', 'AGA GRAH', 'AGA HUMI', 'AGA LAMA', 'AGA SPE.', 'MAD AURE',
@@ -416,14 +784,14 @@
     )
   #
   # Find codes in demo but not in benthic_cover
-  levels(USVI_demo$code)
-  benthic_levels <- levels(USVI_benthic_cover$code)
-  demo_levels <- levels(USVI_demo$code)
+  levels(NCRMP_demo_long$code)
+  benthic_levels <- levels(NCRMP_benthic_long$code)
+  demo_levels <- levels(NCRMP_demo_long$code)
   in_demo_only <- setdiff(demo_levels, benthic_levels)
-  cat("Coral codes in USVI_demo but not in USVI_benthic_cover:\n")
+  cat("Coral codes in NCRMP_demo_long but not in NCRMP_benthic_long:\n")
   print(in_demo_only)
   #
-  USVI_demo = USVI_demo %>%
+  NCRMP_demo_long = NCRMP_demo_long %>%
     mutate(
       susc = case_when(
         code %in% c('AGA AGAR', 'AGA FRAG', 'AGA GRAH', 'AGA HUMI', 'AGA LAMA', 'AGA SPE.', 'MAD AURE',
@@ -442,19 +810,19 @@
     )
   
   #summaries
-  cover_by_susc <- USVI_benthic_cover %>%
+  cover_by_susc <- NCRMP_benthic_long %>%
     group_by(PSU, susc) %>%
     summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop')
   #
-  total_cover_by_PSU <- USVI_benthic_cover %>%
+  total_cover_by_PSU <- NCRMP_benthic_long %>%
     group_by(PSU) %>%
     summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop')
   #
-  SA_by_susc <- USVI_demo %>%
+  SA_by_susc <- NCRMP_demo_long %>%
     group_by(PSU, susc) %>%
     summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
   #
-  total_SA_by_PSU <- USVI_demo %>%
+  total_SA_by_PSU <- NCRMP_demo_long %>%
     group_by(PSU) %>%
     summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
   
@@ -463,10 +831,13 @@
   #   demo surveys, then will collate the demo & LPI surveys together, then append bathymetry & derived
   #   values to dataframe, then produce a simple test GAM. finally will need to figure out prediction
   #   onto a uniform grid which will "talk" to the habitat grid plugged into the CMS
-
+  
+  #preserve absence data
+  all_PSU_info_cover <- NCRMP_benthic_long %>%
+    distinct(PSU, lat, lon, date)
   
   # Updated summaries that include zero-cover PSU's
-  cover_by_susc_complete <- USVI_benthic_cover %>%
+  cover_by_susc_complete <- NCRMP_benthic_long %>%
     group_by(PSU, susc) %>%
     summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop') %>%
     complete(PSU = all_PSU_info_cover$PSU, 
@@ -474,7 +845,7 @@
              fill = list(total_cover = 0)) %>%
     left_join(all_PSU_info_cover, by = "PSU")  # Add back location info
   
-  total_cover_by_PSU_complete <- USVI_benthic_cover %>%
+  total_cover_by_PSU_complete <- NCRMP_benthic_long %>%
     group_by(PSU) %>%
     summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop') %>%
     right_join(all_PSU_info_cover, by = "PSU") %>%
