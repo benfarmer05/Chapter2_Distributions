@@ -15,6 +15,10 @@
   #      - also, for LTR sites we need to consider that they have repeated measures. so, we may want
   #           to average across observations?
   
+  # NOTE - why are there no corals marked properly as JUV in NCRMP data?
+  
+  # NOTE - what is the meaning of intercept methods in the TCRMP data?
+  
   # NOTE - need to add in PR NCRMP!
   
   # NOTE - 3 June 2025 - other datasets possibly to include:
@@ -90,8 +94,6 @@
     relocate(date, .before = everything()) %>%
     # Filter for 2013 and onward
     filter(year(date) >= 2013)
-  
-  
   
   ################################## wrangle CSUN ##################################
   
@@ -363,6 +365,62 @@
       spp = species_name
     )
   
+  
+  
+  
+  
+  
+  # Check for duplicates in DCRMP_long data
+  duplicates_dcrmp <- DCRMP_long %>%
+    group_by(date, PSU, lat, lon, spp) %>%
+    summarise(
+      count = n(), 
+      cover_values = paste(cover, collapse = ", "),
+      unique_covers = n_distinct(cover),
+      .groups = "drop"
+    ) %>%
+    filter(count > 1) %>%
+    arrange(desc(count))
+  
+  cat("=== DCRMP DUPLICATE ANALYSIS ===\n")
+  cat("Number of species-sampling event combinations with multiple records:", nrow(duplicates_dcrmp), "\n")
+  
+  # Show the duplicates
+  print(duplicates_dcrmp)
+  
+  # Identify true duplicates vs multiple observations
+  true_duplicates_dcrmp <- duplicates_dcrmp %>%
+    filter(unique_covers == 1)
+  
+  multiple_observations_dcrmp <- duplicates_dcrmp %>%
+    filter(unique_covers > 1)
+  
+  cat("\nTrue duplicates (same cover value):", nrow(true_duplicates_dcrmp), "\n")
+  cat("Multiple observations (different cover values):", nrow(multiple_observations_dcrmp), "\n")
+  
+  # Remove duplicates - keep only the first occurrence of each combination
+  DCRMP_long_cleaned <- DCRMP_long %>%
+    distinct(date, PSU, lat, lon, spp, .keep_all = TRUE)
+  
+  cat("\n=== CLEANING RESULTS ===\n")
+  cat("Original DCRMP_long rows:", nrow(DCRMP_long), "\n")
+  cat("Cleaned DCRMP_long rows:", nrow(DCRMP_long_cleaned), "\n")
+  cat("Rows removed:", nrow(DCRMP_long) - nrow(DCRMP_long_cleaned), "\n")
+  
+  # Verify no duplicates remain
+  remaining_duplicates <- DCRMP_long_cleaned %>%
+    group_by(date, PSU, lat, lon, spp) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    filter(count > 1)
+  
+  cat("Duplicates remaining after cleaning:", nrow(remaining_duplicates), "\n")
+  
+  # Show first few rows of cleaned data
+  cat("\n=== FIRST 10 ROWS OF CLEANED DCRMP DATA ===\n")
+  print(head(DCRMP_long_cleaned, 10))
+  
+  DCRMP_long = DCRMP_long_cleaned
+  
   ################################## wrangle TCRMP ##################################
   
   # NOTE / STOPPING POINT - 6 June 2025 - will need to fix dates for TCRMP benthic too!!
@@ -396,7 +454,8 @@
       species = species_code,
       transect = Transect
     ) %>%
-    select(year, month, date, location_id, analysis_by, analysis_date, data_points, species, cover) %>%
+    filter(year(date) >= 2013) %>% # NOTE - mismatch of sample year with date in Ginsburg Fringe
+    select(year, month, date, transect, location_id, analysis_by, analysis_date, data_points, species, cover) %>%
     arrange(location_id, species)
   
   #refactor locations and drop unnecessary variables
@@ -440,7 +499,7 @@
   #refactor locations and drop unnecessary variables
   TCRMP_health_long <- TCRMP_health_long %>%
     mutate(PSU = as.factor(PSU)) %>%
-    select(-sampleyear, -samplemonth, -period, -sampletype, -recorder, -transect)
+    select(-sampleyear, -samplemonth, -period, -sampletype, -recorder)
   
   #bring in lat/lons
   TCRMP_health_long <- TCRMP_health_long %>%
@@ -461,6 +520,36 @@
   TCRMP_health_long_withcode = TCRMP_health_long
   TCRMP_health_long = TCRMP_health_long %>%
     select(-code)
+  
+  #### Check for duplicates in TCRMP_benthic_long data
+  duplicates_TCRMP_benthic <- TCRMP_benthic_long %>%
+    group_by(date, transect, PSU, lat, lon, spp) %>% # NOTE - can take out 'transect' to see how data is structured by transect
+    summarise(
+      count = n(), 
+      cover_values = paste(cover, collapse = ", "),
+      unique_covers = n_distinct(cover),
+      any_non_zero = any(cover != 0),  # Check if THIS species has any non-zero values
+      .groups = "drop"
+    ) %>%
+    filter(count > 1) %>%
+    arrange(desc(count))
+  #
+  cat("=== TCRMP_benthic DUPLICATE ANALYSIS ===\n")
+  cat("Number of species-sampling event combinations with multiple records:", nrow(duplicates_TCRMP_benthic), "\n")
+  #
+  # Show the duplicates
+  print(duplicates_TCRMP_benthic)
+  #
+  # True duplicates = same cover value AND at least one non-zero value for this species
+  true_duplicates_TCRMP_benthic <- duplicates_TCRMP_benthic %>%
+    filter(unique_covers == 1 & any_non_zero)
+  #
+  # Multiple observations = different values OR all values are zero
+  multiple_observations_TCRMP_benthic <- duplicates_TCRMP_benthic %>%
+    filter(unique_covers > 1 | !any_non_zero)
+  #
+  cat("\nTrue duplicates (same cover value with non-zero values):", nrow(true_duplicates_TCRMP_benthic), "\n")
+  cat("Multiple observations (different values or all zeros):", nrow(multiple_observations_TCRMP_benthic), "\n")
   
   ################################## wrangle NCRMP ##################################
   
@@ -634,6 +723,180 @@
   print(spp_levels)
   print(paste("Total number of species:", length(spp_levels)))
   
+  
+  
+  ### check duplicates - should just be TCRMP
+  duplicates <- combined_benthic_data %>%
+    group_by(dataset, PSU, date, lat, lon, spp) %>%
+    summarise(count = n(), cover_values = paste(cover, collapse = ", "), .groups = "drop") %>%
+    filter(count > 1)
+  #
+  # See how many sampling events you actually have
+  n_sampling_events <- combined_benthic_data %>%
+    select(dataset, PSU, date, lat, lon) %>%
+    distinct() %>%
+    nrow()
+  #
+  # See how many unique species
+  n_species <- length(unique(combined_benthic_data$spp))
+  #
+  cat("Unique sampling events:", n_sampling_events)
+  cat("Unique species:", n_species) 
+  cat("Expected complete grid size:", n_sampling_events * n_species)
+  
+  ### Check for repeat (different dates) visits to same PSUs across datasets
+  # NOTE - all looks fine. a few repeat visits in the DeepLion/DCRMP for whatever reason
+  cat("\n\n=== MULTIPLE PSU VISITS CHECK ===\n")
+  #
+  # For datasets with dates: DeepLion_long, DCRMP_long, NCRMP_benthic_long
+  datasets_with_dates <- c("DeepLion", "DCRMP", "NCRMP_benthic")
+  #
+  for(dataset_name in datasets_with_dates) {
+    dataset_data <- combined_benthic_data %>%
+      filter(dataset == dataset_name)
+    
+    if(nrow(dataset_data) > 0) {
+      multiple_visits <- dataset_data %>%
+        select(PSU, date) %>%
+        distinct() %>%
+        group_by(PSU) %>%
+        summarise(
+          visit_count = n(),
+          dates = paste(unique(date), collapse = ", "),
+          .groups = "drop"
+        ) %>%
+        filter(visit_count > 1) %>%
+        arrange(desc(visit_count))
+      
+      cat(paste0("\n", dataset_name, " - PSUs visited multiple times: ", nrow(multiple_visits), "\n"))
+      if(nrow(multiple_visits) > 0) {
+        print(multiple_visits)
+      }
+    } else {
+      cat(paste0("\n", dataset_name, " - No data found\n"))
+    }
+  }
+  #
+  # For datasets without dates: SESAP_long, NODICE_long (check for >61 entries per PSU)
+  datasets_without_dates <- c("SESAP", "NODICE")
+  #
+  for(dataset_name in datasets_without_dates) {
+    dataset_data <- combined_benthic_data %>%
+      filter(dataset == dataset_name)
+    
+    if(nrow(dataset_data) > 0) {
+      psu_counts <- dataset_data %>%
+        group_by(PSU) %>%
+        summarise(
+          entry_count = n(),
+          species_count = n_distinct(spp),
+          .groups = "drop"
+        ) %>%
+        filter(entry_count > 61) %>%
+        arrange(desc(entry_count))
+      
+      cat(paste0("\n", dataset_name, " - PSUs with >61 entries: ", nrow(psu_counts), "\n"))
+      if(nrow(psu_counts) > 0) {
+        print(psu_counts)
+      }
+    } else {
+      cat(paste0("\n", dataset_name, " - No data found\n"))
+    }
+  }
+  #
+  cat("\n=== END MULTIPLE VISITS CHECK ===\n")  
+  
+  ################################## fill in benthic absences ##################################
+  
+  ### Check for incomplete absences by sampling event (fewer than 61 species per sampling event)
+  # NOTE - everything looks good! only NCRMP had true missing absences in the first place
+  # Check for incomplete sampling events (fewer than 61 species per sampling event)
+  cat("=== CHECKING FOR INCOMPLETE SAMPLING EVENTS ===\n")
+  #
+  # For datasets with dates (most datasets)
+  datasets_with_dates <- combined_benthic_data %>%
+    filter(!dataset %in% c("SESAP", "NODICE")) %>%
+    group_by(dataset, PSU, date, lat, lon) %>%
+    summarise(
+      species_count = n_distinct(spp),
+      total_records = n(),
+      .groups = "drop"
+    ) %>%
+    filter(species_count < 61) %>%
+    arrange(dataset, species_count)
+  
+  cat("Sampling events with <61 species (datasets with dates):", nrow(datasets_with_dates), "\n")
+  if(nrow(datasets_with_dates) > 0) {
+    print(datasets_with_dates)
+  }
+  #
+  # For SESAP and NODICE (no dates, use PSU/lat/lon)
+  sesap_nodice <- combined_benthic_data %>%
+    filter(dataset %in% c("SESAP", "NODICE")) %>%
+    group_by(dataset, PSU, lat, lon) %>%
+    summarise(
+      species_count = n_distinct(spp),
+      total_records = n(),
+      .groups = "drop"
+    ) %>%
+    filter(species_count < 61) %>%
+    arrange(dataset, species_count)
+  #
+  cat("\nSampling events with <61 species (SESAP/NODICE):", nrow(sesap_nodice), "\n")
+  if(nrow(sesap_nodice) > 0) {
+    print(sesap_nodice)
+  }
+  
+  ### Fill in absences (mainly matters for NCRMP but also doing it for all datasets
+  #     since there are different factor levels by dataset)
+  # Step 1: Get all unique species from your dataset
+  all_species <- unique(combined_benthic_data$spp)
+  cat("Total unique species found:", length(all_species), "\n")
+  cat("First 10 species:\n")
+  print(head(all_species, 10))
+  
+  # Step 2: Create sampling event identifiers
+  # This combines all the grouping variables that define a unique sampling event
+  sampling_events <- combined_benthic_data %>%
+    select(dataset, PSU, date, lat, lon) %>%
+    distinct()
+  
+  cat("\nTotal unique sampling events:", nrow(sampling_events), "\n")
+  
+  # Step 3: Create complete grid of all possible combinations
+  complete_grid <- sampling_events %>%
+    crossing(spp = all_species)
+  
+  cat("Expected total rows after completion:", nrow(complete_grid), "\n")
+  
+  # Step 4: Join with original data and fill missing values
+  completed_data <- complete_grid %>%
+    left_join(combined_benthic_data, 
+              by = c("dataset", "PSU", "date", "lat", "lon", "spp")) %>%
+    mutate(
+      # Create indicator for inferred absence BEFORE filling missing values
+      # If cover is NA, it means this record wasn't in the original data
+      inferred_absence = ifelse(is.na(cover), "Y", "N"),
+      # Fill missing cover values with 0
+      cover = ifelse(is.na(cover), 0, cover)
+      # Note: depth remains as is - NA for inferred records, original values for real records
+    ) %>%
+    arrange(dataset, PSU, date, lat, lon, spp)
+  
+  # Step 5: Summary of changes
+  original_rows <- nrow(combined_benthic_data)
+  final_rows <- nrow(completed_data)
+  inferred_records <- sum(completed_data$inferred_absence == "Y")
+  
+  cat("\n=== SUMMARY ===\n")
+  cat("Original rows:", original_rows, "\n")
+  cat("Final rows:", final_rows, "\n")
+  cat("Records added (inferred absences):", inferred_records, "\n")
+  cat("Percentage of data that is inferred:", 
+      round(100 * inferred_records / final_rows, 1), "%\n")
+  
+  combined_benthic_data = completed_data
+  
   ################################## collate demo data ##################################
   
   # Function to standardize demographic/health datasets
@@ -701,23 +964,32 @@
   #   to go back and get things like meters covered maybe...or just confirm. and also get any
   #   datasets I'm still missing
   
+  ################################## fill in demo absences ##################################
+  
+  # NOTE / STOPPING POINT - 9 June 2025: should check for duplication in demo at the END of
+  #           the introduction of absence data, to make the dataframe(s) easy to parse
+  
+  # NOTE - do I actually even need to do this before summarizing? Maybe?
+  
+  
+  
   ################################## summarize cover & SA ##################################
   
   #calculate susceptible tissue surface area (SA)
   # NOTE - could consider trimming down predicted SA for OANN since it has a lot of dead space in reality
   #
   # remove corals that had recently suffered complete mortality upon survey, but keep NAs
-  NCRMP_demo_long = NCRMP_demo_long %>%
-    filter(is.na(OLD_MORT + RECENT_MORT) | OLD_MORT + RECENT_MORT < 100)
+  combined_demo_data_summed = combined_demo_data %>%
+    filter(is.na(oldmort + recentmort) | oldmort + recentmort < 100)
   # set '0' cm heights as an arbitrarily small amount (cm) to allow the hemi-ellipsoid estimation to function correctly. coral recruits 
   #   have very little tangible height, and were recorded underwater as 0 cm height. there is also
   #   an instance of '-1' height but it is an acroporid and gets filtered out downstream anyways
-  NCRMP_demo_long = NCRMP_demo_long %>%
-    mutate(HEIGHT = ifelse(HEIGHT == 0, 0.01, HEIGHT))
+  combined_demo_data_summed = combined_demo_data_summed %>%
+    mutate(height = ifelse(height == 0, 0.01, height))
   #
   # hemi-ellipsoid estimation (Knud Thomsen approximation; see Xu 2009 but also Holstein 2015).
   #   p is a dimensionless constant; all else in square cm
-  NCRMP_demo_long = NCRMP_demo_long %>%
+  combined_demo_data_summed = combined_demo_data_summed %>%
     mutate(
       a = HEIGHT,
       b = PERP_DIAMETER / 2,
@@ -730,22 +1002,22 @@
     select(-a, -b, -c, -p)
   #
   # remove unnecessary variables
-  NCRMP_demo_long = NCRMP_demo_long %>%
+  combined_demo_data_summed = combined_demo_data_summed %>%
     select(-MAX_DIAMETER, -PERP_DIAMETER, -HEIGHT, -OLD_MORT, -RECENT_MORT, -SA_colony)
   
   #preserve absence data
   # NOTE - this is a little tricky with demo data since possible species codes
   #         expanded with each sampling year. should be fine since we are binning species coarsely
   #         by susceptibility group, though
-  all_PSU_info_demo <- NCRMP_demo_long %>%
+  all_PSU_info_demo <- combined_demo_data_summed %>%
     distinct(PSU, lat, lon, date, spp)
   
   #filter out non-scleractinian cover
   # NOTE - removing 'OTH SPE.' - even if this might include corals, we don't know which species
   #         - also removing 'OTH CORA' - again because we do not know which coral this was
   #filter out unidentified scleractinians
-  levels(NCRMP_demo_long$code)
-  NCRMP_demo_long = NCRMP_demo_long %>%
+  levels(combined_demo_data_summed$code)
+  NCRMP_demo_long = combined_demo_data_summed %>%
     filter(!code %in% c('SCL SPE.')) %>%
     mutate(code = droplevels(code),
            spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
@@ -818,11 +1090,11 @@
     group_by(PSU) %>%
     summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop')
   #
-  SA_by_susc <- NCRMP_demo_long %>%
+  SA_by_susc <- combined_demo_data_summed %>%
     group_by(PSU, susc) %>%
     summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
   #
-  total_SA_by_PSU <- NCRMP_demo_long %>%
+  total_SA_by_PSU <- combined_demo_data_summed %>%
     group_by(PSU) %>%
     summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
   
