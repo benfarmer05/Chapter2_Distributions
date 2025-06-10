@@ -255,7 +255,7 @@
   NODICE_long <- NODICE_long %>%
     rename_with(tolower) %>% #convert to lowercase
     rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
-    rename(PSU = location_id)
+    rename(PSU = location_id, depth = depth_m)
   
   #refactor coral names
   NODICE_long <- NODICE_long %>%
@@ -288,7 +288,7 @@
     mutate(`Location:` = as.factor(`Location:`)) %>%
     select(-`Seaward Strata`, -`Shelf Strata`, -`Transect Number:`, -`Tape Number:`, -`Transect Type:`,
            -`# of data points:`, -`Analysis by:`, -species_full_name, -`Date of Filming:`,
-           -`Date of Analysis:`, -`Depth (m)`) 
+           -`Date of Analysis:`) 
   
   #rename variables
   SESAP_long <- SESAP_long %>%
@@ -298,8 +298,13 @@
       PSU = location,
       lat = latitude,
       lon = longitude,
-      meterscompleted = `transect length`
+      meterscompleted = `transect length`,
+      depth = `depth (m)`
     )
+  
+  #convert depth to positive format
+  SESAP_long = SESAP_long %>%
+    mutate(depth = abs(depth))
   
   ################################## wrangle DCRMP ##################################
   
@@ -340,9 +345,9 @@
   # NOTE - this step introduces a many-to-many warning and makes the dataframe slightly longer.
   #         something to keep in mind
   DCRMP_long <- DCRMP_long %>%
-    left_join(DCRMP_metadata %>% select(SiteCode, Latitude, Longitude),
+    left_join(DCRMP_metadata %>% select(SiteCode, Latitude, Longitude, DepthM),
               by = c("location_id" = "SiteCode")) %>%
-    rename(lat = Latitude, lon = Longitude)
+    rename(lat = Latitude, lon = Longitude, depth = DepthM)
   
   # Convert to factor after the join if you still want it as a factor
   DCRMP_long <- DCRMP_long %>%
@@ -364,11 +369,6 @@
       PSU = location_id,
       spp = species_name
     )
-  
-  
-  
-  
-  
   
   # Check for duplicates in DCRMP_long data
   duplicates_dcrmp <- DCRMP_long %>%
@@ -465,7 +465,7 @@
   
   #bring in lat/lons
   TCRMP_benthic_long <- TCRMP_benthic_long %>%
-    left_join(TCRMP_benthic_metadata %>% select(Location, Latitude, Longitude), 
+    left_join(TCRMP_benthic_metadata %>% select(Location, Latitude, Longitude, Depth), 
               by = c("location_id" = "Location")) %>%
     rename(lat = Latitude, lon = Longitude)
   
@@ -503,9 +503,9 @@
   
   #bring in lat/lons
   TCRMP_health_long <- TCRMP_health_long %>%
-    left_join(TCRMP_health_metadata %>% select(Location, Latitude, Longitude), 
+    left_join(TCRMP_health_metadata %>% select(Location, Latitude, Longitude, Depth), 
               by = c("PSU" = "Location")) %>%
-    rename(lat = Latitude, lon = Longitude)
+    rename(lat = Latitude, lon = Longitude, depth = Depth)
   
   #refactor species names
   TCRMP_health_long <- TCRMP_health_long %>%
@@ -565,8 +565,12 @@
   NCRMP_benthic_long = NCRMP_benthic %>%
     mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
-           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
-           -MIN_DEPTH, -MAX_DEPTH)
+           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT)
+  
+  #calculate average depth (this will come from bathymetry later anyways, but interesting to compare)
+  NCRMP_benthic_long = NCRMP_benthic_long %>%
+    mutate(depth = (MIN_DEPTH + MAX_DEPTH)/2) %>%
+    select(-MIN_DEPTH, -MAX_DEPTH)
   
   #refactor date
   NCRMP_benthic_long = NCRMP_benthic_long %>%
@@ -625,8 +629,13 @@
   NCRMP_demo_long = NCRMP_demo %>%
     mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
-           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT,
-           -MIN_DEPTH, -MAX_DEPTH, -N, -JUV, -BLEACH_CONDITION, -DISEASE)
+           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT, -N, -JUV,
+           -BLEACH_CONDITION, -DISEASE)
+  
+  #calculate average depth (this will come from bathymetry later anyways, but interesting to compare)
+  NCRMP_demo_long = NCRMP_demo_long %>%
+    mutate(depth = (MIN_DEPTH + MAX_DEPTH)/2) %>%
+    select(-MIN_DEPTH, -MAX_DEPTH)
   
   #refactor further
   NCRMP_demo_long <- NCRMP_demo_long %>%
@@ -660,7 +669,55 @@
   NCRMP_demo_long = NCRMP_demo_long %>%
     select(-code)
   
+  # # NOTE - the below was from when I was grouping by species with just NCRMP data. now, doing so *after*
+  # #         collating all datasets
+  # levels(NCRMP_benthic_long$code)
+  # NCRMP_benthic_long = NCRMP_benthic_long %>%
+  #   mutate(
+  #     susc = case_when(
+  #       code %in% c('AGA AGAR', 'AGA FRAG', 'AGA GRAH', 'AGA HUMI', 'AGA LAMA', 'AGA SPE.', 'MAD AURE',
+  #                  'MAD DECA', 'MAD SPE.', 'POR ASTR', 'POR DIVA', 'POR FURC', 'POR PORI', 'POR SPE.',
+  #                  'SID RADI', 'SID SIDE', 'SID SPE.', 'STE INTE', 'AGA TENU', 'POR COLO') ~ 'low',
+  #       code %in% c('MON CAVE', 'ORB ANNU', 'ORB FAVE', 'ORB FRAN', 'ORB SPE.', 'SOL BOUR', 'SOL SPE.',
+  #                  'ORB ANCX') ~ 'moderate',
+  #       code %in% c('COL NATA', 'DEN CYLI', 'DIC STOK', 'DIP LABY', 'EUS FAST', 'MEA MEAN', 'MYC ALIC', 'MYC FERO',
+  #                  'PSE CLIV', 'PSE SPE.', 'PSE STRI', 'MEA JACK', 'MYC REES', 'MEA SPE.') ~ 'high',
+  #       code %in% c('ACR CERV', 'ACR PALM') ~ 'Unaffected',
+  #       code %in% c('SCO CUBE', 'SCO SPE.', 'HEL CUCU', 'MAN AREO', 'FAV FRAG', 'ISO RIGI', 'ISO SINU',
+  #                  'TUB COCC') ~ 'Unknown'
+  #     )
+  #   )
+  # # Find codes in demo but not in benthic_cover
+  # levels(NCRMP_demo_long$code)
+  # benthic_levels <- levels(NCRMP_benthic_long$code)
+  # demo_levels <- levels(NCRMP_demo_long$code)
+  # in_demo_only <- setdiff(demo_levels, benthic_levels)
+  # cat("Coral codes in NCRMP_demo_long but not in NCRMP_benthic_long:\n")
+  # print(in_demo_only)
+  # #
+  # NCRMP_demo_long = NCRMP_demo_long %>%
+  #   mutate(
+  #     susc = case_when(
+  #       code %in% c('AGA AGAR', 'AGA FRAG', 'AGA GRAH', 'AGA HUMI', 'AGA LAMA', 'AGA SPE.', 'MAD AURE',
+  #                   'MAD DECA', 'MAD SPE.', 'POR ASTR', 'POR DIVA', 'POR FURC', 'POR PORI', 'POR SPE.',
+  #                   'SID RADI', 'SID SIDE', 'SID SPE.', 'STE INTE', 'AGA TENU', 'POR COLO',
+  #                   'MAD PHAR', 'POR BRAN', 'MAD FORM') ~ 'low',
+  #       code %in% c('MON CAVE', 'ORB ANNU', 'ORB FAVE', 'ORB FRAN', 'ORB SPE.', 'SOL BOUR', 'SOL SPE.',
+  #                   'ORB ANCX') ~ 'moderate',
+  #       code %in% c('COL NATA', 'DEN CYLI', 'DIC STOK', 'DIP LABY', 'EUS FAST', 'MEA MEAN', 'MYC ALIC', 'MYC FERO', 
+  #                   'PSE CLIV', 'PSE SPE.', 'PSE STRI', 'MEA JACK', 'MYC REES', 'MEA SPE.',
+  #                   'MYC SPE.', 'MEA DANA', 'MYC DANA', 'MYC LAMA') ~ 'high',
+  #       code %in% c('ACR CERV', 'ACR PALM', 'ACR PROL') ~ 'Unaffected',
+  #       code %in% c('SCO CUBE', 'SCO SPE.', 'HEL CUCU', 'MAN AREO', 'FAV FRAG', 'ISO RIGI', 'ISO SINU',
+  #                   'TUB COCC', 'OCU DIFF', 'MUS ANGU', 'SCO LACE', 'ISO SPE.', 'OCU SPE.') ~ 'Unknown'
+  #     )
+  #   )
+  
+  
   ################################## collate benthic data ##################################
+  
+  # NOTE - eventually may need to consider meters completed for coral cover surveys, and/or #/points
+  #   used for CPCe analysis
   
   # Function to standardize datasets
   standardize_benthic_dataset <- function(df, dataset_name) {
@@ -670,10 +727,6 @@
     # Standardize column names based on what's available
     if ("depth_m" %in% names(df)) {
       df <- df %>% rename(depth = depth_m)
-    }
-    
-    if ("meterscompleted" %in% names(df)) {
-      df <- df %>% rename(depth = meterscompleted)
     }
     
     # Ensure all datasets have the same core columns
@@ -722,8 +775,6 @@
   spp_levels <- levels(combined_benthic_data$spp)
   print(spp_levels)
   print(paste("Total number of species:", length(spp_levels)))
-  
-  
   
   ### check duplicates - should just be TCRMP
   duplicates <- combined_benthic_data %>%
@@ -904,11 +955,11 @@
     # Add source dataset column
     df$dataset <- dataset_name
     
-    # Standardize column names based on what's available
-    # Handle different depth/distance column names
-    if ("meterscompleted" %in% names(df)) {
-      df <- df %>% rename(depth = meterscompleted)
-    }
+    # # Standardize column names based on what's available
+    # # Handle different depth/distance column names
+    # if ("meterscompleted" %in% names(df)) {
+    #   df <- df %>% rename(depth = meterscompleted)
+    # }
     
     # Handle different mortality column names
     if ("recmort" %in% names(df)) {
@@ -977,50 +1028,54 @@
   
   #calculate susceptible tissue surface area (SA)
   # NOTE - could consider trimming down predicted SA for OANN since it has a lot of dead space in reality
+  #         - but, it also has more or equal SA potentially in lobes than it would as an ellipsoid?
   #
-  # remove corals that had recently suffered complete mortality upon survey, but keep NAs
+  # calculate total mortality, then remove corals that had suffered 100% mortality upon survey
+  #   NOTE - NAs treated as 0% mortality here
   combined_demo_data_summed = combined_demo_data %>%
-    filter(is.na(oldmort + recentmort) | oldmort + recentmort < 100)
+    mutate(totalmort = coalesce(oldmort, 0) + coalesce(recentmort, 0)) %>%
+    filter(totalmort < 100)
+  #
   # set '0' cm heights as an arbitrarily small amount (cm) to allow the hemi-ellipsoid estimation to function correctly. coral recruits 
   #   have very little tangible height, and were recorded underwater as 0 cm height. there is also
   #   an instance of '-1' height but it is an acroporid and gets filtered out downstream anyways
   combined_demo_data_summed = combined_demo_data_summed %>%
-    mutate(height = ifelse(height == 0, 0.01, height))
+    mutate(height = ifelse(height <= 0, 0.01, height))
   #
   # hemi-ellipsoid estimation (Knud Thomsen approximation; see Xu 2009 but also Holstein 2015).
   #   p is a dimensionless constant; all else in square cm
   combined_demo_data_summed = combined_demo_data_summed %>%
     mutate(
-      a = HEIGHT,
-      b = PERP_DIAMETER / 2,
-      c = MAX_DIAMETER / 2,
+      a = height,
+      b = width / 2,
+      c = length / 2,
       p = 1.6075,
       SA_colony = 2 * pi * (((a * b)^p + (a * c)^p + (b * c)^p) / 3)^(1 / p),
       SA_colony = SA_colony / 10000,  # Convert from square cm to square meters
-      SA = SA_colony*(1-(OLD_MORT + RECENT_MORT)/100)
+      SA = SA_colony*(1-(totalmort)/100)
     ) %>%
     select(-a, -b, -c, -p)
   #
   # remove unnecessary variables
   combined_demo_data_summed = combined_demo_data_summed %>%
-    select(-MAX_DIAMETER, -PERP_DIAMETER, -HEIGHT, -OLD_MORT, -RECENT_MORT, -SA_colony)
+    select(-length, -width, -height, -oldmort, -recentmort, -SA_colony)
   
-  #preserve absence data
-  # NOTE - this is a little tricky with demo data since possible species codes
-  #         expanded with each sampling year. should be fine since we are binning species coarsely
-  #         by susceptibility group, though
-  all_PSU_info_demo <- combined_demo_data_summed %>%
-    distinct(PSU, lat, lon, date, spp)
+  # STOPPING POINT - 10 June 2025 - still figuring out absences here
   
-  #filter out non-scleractinian cover
-  # NOTE - removing 'OTH SPE.' - even if this might include corals, we don't know which species
-  #         - also removing 'OTH CORA' - again because we do not know which coral this was
+  # #preserve absence data
+  # # NOTE - this is a little tricky with demo data since possible species codes
+  # #         expanded with each sampling year. should be fine since we are binning species coarsely
+  # #         by susceptibility group, though
+  # all_PSU_info_demo <- combined_demo_data_summed %>%
+  #   distinct(PSU, lat, lon, date, spp)
+  
   #filter out unidentified scleractinians
-  levels(combined_demo_data_summed$code)
-  NCRMP_demo_long = combined_demo_data_summed %>%
-    filter(!code %in% c('SCL SPE.')) %>%
-    mutate(code = droplevels(code),
-           spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
+  # NOTE - these were just 2 very small colonies in 2013. but of course, also there were plenty of "absences"
+  #         of unidentifiable coral...just not sure that has real ecological meaning
+  levels(combined_demo_data_summed$spp)
+  combined_demo_data_summed = combined_demo_data_summed %>%
+    filter(!spp %in% c('Scleractinia spp')) %>%
+    mutate(spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
   
   #break corals into susceptibility groups
   # Questionable corals:
@@ -1038,22 +1093,27 @@
   # - Oculina
   # - Porites
   # - Mycetophyllia
-  levels(NCRMP_benthic_long$code)
-  NCRMP_benthic_long = NCRMP_benthic_long %>%
+  #
+  combined_benthic_data_summed = combined_benthic_data
+  levels(combined_benthic_data_summed$spp)
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
     mutate(
       susc = case_when(
-        code %in% c('AGA AGAR', 'AGA FRAG', 'AGA GRAH', 'AGA HUMI', 'AGA LAMA', 'AGA SPE.', 'MAD AURE',
-                   'MAD DECA', 'MAD SPE.', 'POR ASTR', 'POR DIVA', 'POR FURC', 'POR PORI', 'POR SPE.',
-                   'SID RADI', 'SID SIDE', 'SID SPE.', 'STE INTE', 'AGA TENU', 'POR COLO') ~ 'low',
-        code %in% c('MON CAVE', 'ORB ANNU', 'ORB FAVE', 'ORB FRAN', 'ORB SPE.', 'SOL BOUR', 'SOL SPE.',
-                   'ORB ANCX') ~ 'moderate',
-        code %in% c('COL NATA', 'DEN CYLI', 'DIC STOK', 'DIP LABY', 'EUS FAST', 'MEA MEAN', 'MYC ALIC', 'MYC FERO', 
-                   'PSE CLIV', 'PSE SPE.', 'PSE STRI', 'MEA JACK', 'MYC REES', 'MEA SPE.') ~ 'high',
-        code %in% c('ACR CERV', 'ACR PALM') ~ 'Unaffected',
-        code %in% c('SCO CUBE', 'SCO SPE.', 'HEL CUCU', 'MAN AREO', 'FAV FRAG', 'ISO RIGI', 'ISO SINU',
-                   'TUB COCC') ~ 'Unknown'
+        spp %in% c('Agaricia agaricites', 'Agaricia fragilis', 'Agaricia grahamae', 'Agaricia humilis',
+                   'Agaricia lamarcki', 'Agaricia species', 'Agaricia spp', 'Agaricia spp.',
+                   'Agaricia tenuifolia', 'Agaricia undata', 'MAD AURE',
+                    'MAD DECA', 'MAD SPE.', 'POR ASTR', 'POR DIVA', 'POR FURC', 'POR PORI', 'POR SPE.',
+                    'SID RADI', 'SID SIDE', 'SID SPE.', 'STE INTE', 'AGA TENU', 'POR COLO') ~ 'low',
+        spp %in% c('MON CAVE', 'ORB ANNU', 'ORB FAVE', 'ORB FRAN', 'ORB SPE.', 'SOL BOUR', 'SOL SPE.',
+                    'ORB ANCX') ~ 'moderate',
+        spp %in% c('COL NATA', 'DEN CYLI', 'DIC STOK', 'DIP LABY', 'EUS FAST', 'MEA MEAN', 'MYC ALIC', 'MYC FERO', 
+                    'PSE CLIV', 'PSE SPE.', 'PSE STRI', 'MEA JACK', 'MYC REES', 'MEA SPE.') ~ 'high',
+        spp %in% c('Acropora cervicornis', 'Acropora palmata', 'Acropora prolifera') ~ 'Unaffected',
+        spp %in% c('SCO CUBE', 'SCO SPE.', 'HEL CUCU', 'MAN AREO', 'FAV FRAG', 'ISO RIGI', 'ISO SINU',
+                    'TUB COCC') ~ 'Unknown'
       )
     )
+  
   #
   # Find codes in demo but not in benthic_cover
   levels(NCRMP_demo_long$code)
