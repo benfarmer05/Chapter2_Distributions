@@ -1069,17 +1069,30 @@
   # all_PSU_info_demo <- combined_demo_data_summed %>%
   #   distinct(PSU, lat, lon, date, spp)
   
-  #filter out unidentified scleractinians
+  #filter out unidentified scleractinians from demo data
   # NOTE - these were just 2 very small colonies in 2013. but of course, also there were plenty of "absences"
   #         of unidentifiable coral...just not sure that has real ecological meaning
   levels(combined_demo_data_summed$spp)
   combined_demo_data_summed = combined_demo_data_summed %>%
     filter(!spp %in% c('Scleractinia spp')) %>%
+    filter(!grepl('Millepora', spp)) %>% #also drop hydrozoans
     mutate(spp = droplevels(spp)) #drop factor levels which no longer are associated with any data
+  
+  #filter out corals simply marked as 'juvenile' or 'Coral' - since we don't know what species they were
+  combined_benthic_data_summed = combined_benthic_data
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
+    filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.')) %>%
+    filter(!grepl('Millepora', spp)) %>% #also drop hydrozoans
+    mutate(spp = droplevels(spp))
+  
+  #filter 'Montastraea spp' since none were marked as present anyways, and this taxonomy is ambiguous
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
+    filter(!spp %in% c('Montastraea species', 'Montastraea spp.')) %>%
+    mutate(spp = droplevels(spp))
   
   #break corals into susceptibility groups
   # Questionable corals:
-  # - PCLI
+  # - Pseudodiploria clivosa
   # - Scolymia
   # - Agaricia
   # - Madracis
@@ -1093,26 +1106,107 @@
   # - Oculina
   # - Porites
   # - Mycetophyllia
+  # - Mussa
   #
-  combined_benthic_data_summed = combined_benthic_data
+  # NOTE - how do we deal with situations like 'Montastraea spp' absences ? pre 2012ish or so, this included
+  #         orbicellids, which we now know should not be the case. important distinction...may need to
+  #         simply toss that species level entirely. it is all absences, at least
+  #
   levels(combined_benthic_data_summed$spp)
   combined_benthic_data_summed = combined_benthic_data_summed %>%
     mutate(
       susc = case_when(
         spp %in% c('Agaricia agaricites', 'Agaricia fragilis', 'Agaricia grahamae', 'Agaricia humilis',
                    'Agaricia lamarcki', 'Agaricia species', 'Agaricia spp', 'Agaricia spp.',
-                   'Agaricia tenuifolia', 'Agaricia undata', 'MAD AURE',
-                    'MAD DECA', 'MAD SPE.', 'POR ASTR', 'POR DIVA', 'POR FURC', 'POR PORI', 'POR SPE.',
-                    'SID RADI', 'SID SIDE', 'SID SPE.', 'STE INTE', 'AGA TENU', 'POR COLO') ~ 'low',
-        spp %in% c('MON CAVE', 'ORB ANNU', 'ORB FAVE', 'ORB FRAN', 'ORB SPE.', 'SOL BOUR', 'SOL SPE.',
-                    'ORB ANCX') ~ 'moderate',
-        spp %in% c('COL NATA', 'DEN CYLI', 'DIC STOK', 'DIP LABY', 'EUS FAST', 'MEA MEAN', 'MYC ALIC', 'MYC FERO', 
-                    'PSE CLIV', 'PSE SPE.', 'PSE STRI', 'MEA JACK', 'MYC REES', 'MEA SPE.') ~ 'high',
+                   'Agaricia tenuifolia', 'Agaricia undata', 'Branching Porites spp.', 'Madracis auretenra',
+                    'Madracis decactis', 'Madracis formosa', 'Madracis mirabilis', 'Madracis pharensis',
+                   'Madracis spp', 'Madracis spp.', 'Porites astreoides', 'Porites branching species',
+                   'Porites branneri', 'Porites colonensis', 'Porites divaricata', 'Porites furcata',
+                   'Porites porites', 'Porites spp', 'Siderastrea radians', 'Siderastrea siderea',
+                   'Siderastrea species', 'Siderastrea spp', 'Siderastrea spp.',
+                   'Stephanocoenia intercepta', 'Stephanocoenia intersepta') ~ 'low',
+        spp %in% c('Montastraea annularis', 'Montastraea annularis complex', 'Montastraea cavernosa',
+                   'Montastraea faveolata', 'Montastraea franksi', 'Montastraea species',
+                   'Montastraea spp.', 'Orbicella annularis', 'Orbicella annularis species complex',
+                   'Orbicella faveolata', 'Orbicella franksi', 'Orbicella franksii',
+                   'Orbicella species complex', 'Orbicella spp', 'Solenastrea bournoni',
+                   'Solenastrea hyades', 'Solenastrea spp') ~ 'moderate',
+        spp %in% c('Colpophyllia natans', 'Dendrogyra cylindrus', 'Dichocoenia stokesii',
+                   'Diploria labyrinthiformis', 'Eusmilia fastigiata', 'Meandrina danae',
+                   'Meandrina jacksoni', 'Meandrina meandrites', 'Meandrina spp', 'Mycetophyllia aliciae',
+                   'Mycetophyllia danaana', 'Mycetophyllia daniana', 'Mycetophyllia ferox',
+                   'Mycetophyllia lamarckiana', 'Mycetophyllia reesi', 'Mycetophyllia species',
+                   'Mycetophyllia spp.', 'Pseudodiploria clivosa', 'Pseudodiploria spp', 'Diploria strigosa',
+                   'Diploria clivosa', 'Pseudodiploria strigosa') ~ 'high',
         spp %in% c('Acropora cervicornis', 'Acropora palmata', 'Acropora prolifera') ~ 'Unaffected',
-        spp %in% c('SCO CUBE', 'SCO SPE.', 'HEL CUCU', 'MAN AREO', 'FAV FRAG', 'ISO RIGI', 'ISO SINU',
-                    'TUB COCC') ~ 'Unknown'
+        spp %in% c('Scolymia cubensis', 'Scolymia lacera', 'Scolymia species', 'Scolymia spp',
+                   'Scolymia spp.', 'Helioceris cucullata', 'Helioseris cucullata', 'Leptoseris cucullata',
+                   'Manicina areolata', 'Favia fragum', 'Isophyllastrea rigida', 'Isopyhyllastrea rigida',
+                   'Isophyllia sinuosa', 'Isophyllia spp', 'Mussa angulosa', 'Oculina diffusa',
+                   'Tubastraea coccinea') ~ 'Unknown'
       )
     )
+  
+  # Update species names to current taxonomy and correct spelling errors,and also collapse species to
+  #   genus where appropriate
+  #     NOTE - the largest effect of collapsing here is on Agaricia, because there is so much A. undata
+  #             at mesophotic depth. should carefully consider effect this has on distribution modeling
+  #          - but also a large effect on Porites, since there is now no distinction between branching and
+  #             P. astreoides
+  #          - effect on Madracis may be important because of certain species being prevalent deep
+  #     NOTE - am treating orbicella complex as its own species! a tough choice, but might make the most sense
+  #             given available data. importantly, am including the few 'Orbicella spp' entries from NCRMP
+  #             in this category, and also merging ALL of O. franksi & O. faveolata into it, since these
+  #             are commonly extremely hard to distinguish or may be mostly franksi anyways
+  combined_test = combined_benthic_data_summed %>%
+    mutate(
+      spp = case_when(
+        spp == 'Montastraea annularis' ~ 'Orbicella annularis',
+        spp == 'Montastraea annularis complex' ~ 'Orbicella annularis',
+        spp == 'Orbicella annularis species complex' ~ 'Orbicella annularis',
+        spp == 'Montastraea faveolata' ~ 'Orbicella comp.',
+        spp == 'Montastraea franksi' ~ 'Orbicella comp.',
+        spp == 'Orbicella species complex' ~ 'Orbicella comp.',
+        spp == 'Orbicella spp' ~ 'Orbicella comp.',
+        spp == 'Orbicella faveolata' ~ 'Orbicella comp.',
+        spp == 'Orbicella franksi' ~ 'Orbicella comp.',
+        spp == 'Orbicella franksii' ~ 'Orbicella comp.',
+        spp == 'Diploria clivosa' ~ 'Pseudodiploria clivosa',
+        spp == 'Helioceris cucullata' ~ 'Helioseris cucullata',
+        spp == 'Leptoseris cucullata' ~ 'Helioseris cucullata',
+        spp == 'Isopyhyllastrea rigida' ~ 'Isophyllastrea rigida',
+        TRUE ~ spp  # keep all other species names unchanged
+      )
+    ) %>%
+    mutate(spp = factor(spp)) %>%  # convert back to factor
+    mutate(spp = droplevels(spp))  # drop unused factor levels
+  levels(combined_test$spp)
+  
+  # collapse species to genus where appropriate
+  #     NOTE - the largest effect of collapsing here is on Agaricia, because there is so much A. undata
+  #             at mesophotic depth. should carefully consider effect this has on distribution modeling
+  #          - but also a large effect on Porites, since there is now no distinction between branching and
+  #             P. astreoides
+  #          - effect on Madracis may be important because of certain species being prevalent deep
+  combined_test = combined_test %>%
+    mutate(
+      spp = case_when(
+        grepl('Agaricia', spp) ~ 'Agaricia spp',
+        grepl('Porites', spp) ~ 'Porites spp',
+        grepl('Madracis', spp) ~ 'Madracis spp',
+        grepl('Meandrina', spp) ~ 'Meandrina spp',
+        grepl('Mycetophyllia', spp) ~ 'Mycetophyllia spp',
+        grepl('Pseudodiploria', spp) ~ 'Pseudodiploria spp',
+        grepl('Scolymia', spp) ~ 'Scolymia spp',
+        TRUE ~ spp  # keep all other species names unchanged
+      )
+    ) %>%
+    mutate(spp = factor(spp)) %>%  # convert back to factor
+    mutate(spp = droplevels(spp))  # drop unused factor levels
+  levels(combined_test$spp)
+  
+  #for now, will treat 
+  # NOTE - should discuss this!!
   
   #
   # Find codes in demo but not in benthic_cover
