@@ -1091,17 +1091,23 @@
     mutate(spp = droplevels(spp))
   
   #break corals into susceptibility groups
-  # Questionable corals:
-  # - Pseudodiploria clivosa
+  # NOTE - made some assumptions here; please see 'questionable' groupings below. a main assumption was
+  #         that corals in Mussidae are all considered highly susceptible, even if they are so small/rare
+  #         that we can't confirm this from the field
+  #
+  # NOTE - assuming Oculina diffusa (1 occurrence) and Tubastraea coccinea (also 1 colony) are 'Unaffected'
+  #
+  # NOTE - Questionable corals:
+  # - Pseudodiploria clivosa (see Spadafore 2021 for some more reference on this)
   # - Scolymia
   # - Agaricia
   # - Madracis
-  # - Helioceris
+  # - Helioseris
   # - Manicina
   # - Siderastrea radians
   # - Favia fragum
   # - Isophyllia
-  # - Solenastrea
+  # - Solenastrea (see Spadafore 2021 for some more reference on this)
   # - Tubastrea coccinea
   # - Oculina
   # - Porites
@@ -1124,7 +1130,8 @@
                    'Porites branneri', 'Porites colonensis', 'Porites divaricata', 'Porites furcata',
                    'Porites porites', 'Porites spp', 'Siderastrea radians', 'Siderastrea siderea',
                    'Siderastrea species', 'Siderastrea spp', 'Siderastrea spp.',
-                   'Stephanocoenia intercepta', 'Stephanocoenia intersepta') ~ 'low',
+                   'Stephanocoenia intercepta', 'Stephanocoenia intersepta',
+                   'Helioceris cucullata', 'Helioseris cucullata', 'Leptoseris cucullata') ~ 'low',
         spp %in% c('Montastraea annularis', 'Montastraea annularis complex', 'Montastraea cavernosa',
                    'Montastraea faveolata', 'Montastraea franksi', 'Montastraea species',
                    'Montastraea spp.', 'Orbicella annularis', 'Orbicella annularis species complex',
@@ -1137,15 +1144,15 @@
                    'Mycetophyllia danaana', 'Mycetophyllia daniana', 'Mycetophyllia ferox',
                    'Mycetophyllia lamarckiana', 'Mycetophyllia reesi', 'Mycetophyllia species',
                    'Mycetophyllia spp.', 'Pseudodiploria clivosa', 'Pseudodiploria spp', 'Diploria strigosa',
-                   'Diploria clivosa', 'Pseudodiploria strigosa') ~ 'high',
-        spp %in% c('Acropora cervicornis', 'Acropora palmata', 'Acropora prolifera') ~ 'Unaffected',
-        spp %in% c('Scolymia cubensis', 'Scolymia lacera', 'Scolymia species', 'Scolymia spp',
-                   'Scolymia spp.', 'Helioceris cucullata', 'Helioseris cucullata', 'Leptoseris cucullata',
-                   'Manicina areolata', 'Favia fragum', 'Isophyllastrea rigida', 'Isopyhyllastrea rigida',
-                   'Isophyllia sinuosa', 'Isophyllia spp', 'Mussa angulosa', 'Oculina diffusa',
-                   'Tubastraea coccinea') ~ 'Unknown'
+                   'Diploria clivosa', 'Pseudodiploria strigosa', 'Isophyllastrea rigida',
+                   'Isopyhyllastrea rigida', 'Isophyllia sinuosa', 'Manicina areolata',
+                   'Mussa angulosa', 'Scolymia cubensis', 'Scolymia lacera', 'Scolymia species', 'Scolymia spp',
+                   'Scolymia spp.', 'Manicina areolata', 'Favia fragum') ~ 'high',
+        spp %in% c('Acropora cervicornis', 'Acropora palmata', 'Acropora prolifera',
+                   'Oculina diffusa', 'Tubastraea coccinea') ~ 'Unaffected'
       )
-    )
+    ) %>%
+    mutate(susc = as.factor(susc))
   
   # Update species names to current taxonomy and correct spelling errors,and also collapse species to
   #   genus where appropriate
@@ -1158,9 +1165,11 @@
   #             given available data. importantly, am including the few 'Orbicella spp' entries from NCRMP
   #             in this category, and also merging ALL of O. franksi & O. faveolata into it, since these
   #             are commonly extremely hard to distinguish or may be mostly franksi anyways
-  combined_test = combined_benthic_data_summed %>%
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
     mutate(
       spp = case_when(
+        spp == 'Isophyllastrea rigida' ~ 'Isophyllia rigida',
+        spp == 'Montastraea annularis' ~ 'Orbicella annularis',
         spp == 'Montastraea annularis' ~ 'Orbicella annularis',
         spp == 'Montastraea annularis complex' ~ 'Orbicella annularis',
         spp == 'Orbicella annularis species complex' ~ 'Orbicella annularis',
@@ -1172,15 +1181,17 @@
         spp == 'Orbicella franksi' ~ 'Orbicella comp.',
         spp == 'Orbicella franksii' ~ 'Orbicella comp.',
         spp == 'Diploria clivosa' ~ 'Pseudodiploria clivosa',
+        spp == 'Diploria strigosa' ~ 'Pseudodiploria strigosa',
         spp == 'Helioceris cucullata' ~ 'Helioseris cucullata',
         spp == 'Leptoseris cucullata' ~ 'Helioseris cucullata',
-        spp == 'Isopyhyllastrea rigida' ~ 'Isophyllastrea rigida',
+        spp == 'Isopyhyllastrea rigida' ~ 'Isophyllia rigida',
+        spp == 'Stephanocoenia intercepta' ~ 'Stephanocoenia intersepta',
         TRUE ~ spp  # keep all other species names unchanged
       )
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_test$spp)
+  levels(combined_benthic_data_summed$spp)
   
   # collapse species to genus where appropriate
   #     NOTE - the largest effect of collapsing here is on Agaricia, because there is so much A. undata
@@ -1188,7 +1199,7 @@
   #          - but also a large effect on Porites, since there is now no distinction between branching and
   #             P. astreoides
   #          - effect on Madracis may be important because of certain species being prevalent deep
-  combined_test = combined_test %>%
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
     mutate(
       spp = case_when(
         grepl('Agaricia', spp) ~ 'Agaricia spp',
@@ -1198,15 +1209,38 @@
         grepl('Mycetophyllia', spp) ~ 'Mycetophyllia spp',
         grepl('Pseudodiploria', spp) ~ 'Pseudodiploria spp',
         grepl('Scolymia', spp) ~ 'Scolymia spp',
+        grepl('Siderastrea', spp) ~ 'Siderastrea spp',
+        grepl('Solenastrea', spp) ~ 'Solenastrea spp',
         TRUE ~ spp  # keep all other species names unchanged
       )
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_test$spp)
+  levels(combined_benthic_data_summed$spp)
   
-  #for now, will treat 
-  # NOTE - should discuss this!!
+  #drop the unaffected species
+  #   - Acropora: like 35 occurrences total
+  #   - Oculina & Tubastraea: 1 occurrence each
+  combined_benthic_data_summed = combined_benthic_data_summed %>%
+    filter(!susc %in% c('Unaffected')) %>%
+    mutate(susc = droplevels(susc))
+  
+  #quick read-out of species by susceptibility group
+  combined_benthic_data_summed %>%
+    distinct(spp, susc) %>%
+    arrange(susc, spp) %>%
+    group_by(susc) %>%
+    summarise(species = paste(spp, collapse = "\n  - ")) %>%
+    mutate(output = paste0(susc, ":\n  - ", species)) %>%
+    pull(output) %>%
+    cat(sep = "\n\n")
+  
+  
+  
+  
+  
+  
+  
   
   #
   # Find codes in demo but not in benthic_cover
