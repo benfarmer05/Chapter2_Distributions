@@ -277,6 +277,11 @@
     ) %>%
     select(-species)
   
+  #there were some issues with the read-in date format - just setting it to 10/23/2015 manually
+  #   - some filming dates were actually 10/22/2015, but doesn't matter for this analysis
+  NODICE_long = NODICE_long %>%
+    mutate(date = as.POSIXct("2015-10-23"))
+  
   ################################## wrangle SESAP ##################################
   
   #convert from wide to long format
@@ -318,6 +323,11 @@
   #convert depth to positive format
   SESAP_long = SESAP_long %>%
     mutate(depth = abs(depth))
+  
+  #as with NODICE, there were some issues with the read-in date format - just setting it to 2013-08-22 manually
+  #   - some filming dates were actually out to at least 2013-10-04, but doesn't matter for this analysis
+  SESAP_long = SESAP_long %>%
+    mutate(date = as.POSIXct("2013-08-22"))
   
   ################################## wrangle DCRMP ##################################
   
@@ -584,19 +594,22 @@
   #benthic
   #
   NCRMP_benthic = bind_rows(
-    USVI_2013_benthic_cover,
-    USVI_2015_benthic_cover,
-    USVI_2017_benthic_cover,
-    PRICO_2014_benthic_cover,
-    PRICO_2016_benthic_cover
+    USVI_2013_benthic_cover %>% mutate(region_id = "VI"),
+    USVI_2015_benthic_cover %>% mutate(region_id = "VI"),
+    USVI_2017_benthic_cover %>% mutate(region_id = "VI"),
+    PRICO_2014_benthic_cover %>% mutate(region_id = "PR"),
+    PRICO_2016_benthic_cover %>% mutate(region_id = "PR")
   )
   
   #refactor variables and remove unnecessary ones
   NCRMP_benthic_long = NCRMP_benthic %>%
-    mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
+    mutate(
+      PRIMARY_SAMPLE_UNIT = paste(PRIMARY_SAMPLE_UNIT, region_id, sep = "_"),
+      PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)
+    ) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
-           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT)
-  
+           -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT, -region_id)
+
   #calculate average depth (this will come from bathymetry later anyways, but interesting to compare)
   NCRMP_benthic_long = NCRMP_benthic_long %>%
     mutate(depth = (MIN_DEPTH + MAX_DEPTH)/2) %>%
@@ -702,19 +715,22 @@
   #demo
   #
   NCRMP_demo = bind_rows(
-    USVI_2013_coral_demographics,
-    USVI_2015_coral_demographics,
-    USVI_2017_coral_demographics,
-    PRICO_2014_coral_demographics,
-    PRICO_2016_coral_demographics
+    USVI_2013_coral_demographics %>% mutate(region_id = 'VI'),
+    USVI_2015_coral_demographics %>% mutate(region_id = 'VI'),
+    USVI_2017_coral_demographics %>% mutate(region_id = 'VI'),
+    PRICO_2014_coral_demographics %>% mutate(region_id = 'PR'),
+    PRICO_2016_coral_demographics %>% mutate(region_id = 'PR')
   )
   
   #refactor variables and remove unnecessary ones
   NCRMP_demo_long = NCRMP_demo %>%
-    mutate(PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)) %>%
+    mutate(
+      PRIMARY_SAMPLE_UNIT = paste(PRIMARY_SAMPLE_UNIT, region_id, sep = "_"),
+      PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)
+    ) %>%
     select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
            -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT, -N, -JUV,
-           -BLEACH_CONDITION, -DISEASE)
+           -BLEACH_CONDITION, -DISEASE, -region_id)
   
   #calculate average depth (this will come from bathymetry later anyways, but interesting to compare)
   NCRMP_demo_long = NCRMP_demo_long %>%
@@ -1043,24 +1059,25 @@
   print(spp_levels)
   print(paste("Total number of species:", length(spp_levels)))
   
-  ################################## group by susceptibility ##################################
+  ################################## define susceptibility ##################################
   
   ## BENTHIC
   #
   #filter out corals simply marked as 'juvenile' or 'Coral' - since we don't know what species they were
-  combined_benthic_data_grouped = combined_benthic_data
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
-    filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.')) %>%
+  combined_benthic_data_trimmed = combined_benthic_data
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
+    filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.',
+                       'Scleractinia spp')) %>%
     filter(!grepl('Millepora', spp)) %>% #also drop hydrozoans
     mutate(spp = droplevels(spp))
   
   #filter only 2013 to November 2018 pre-SCTLD
   # NOTE - consider if this is the filter we want!!
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     filter(year(date) >= 2013 & date <= as.Date("2018-11-30"))
   
   #filter 'Montastraea spp' since none were marked as present anyways, and this taxonomy is ambiguous
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     filter(!spp %in% c('Montastraea species', 'Montastraea spp.')) %>%
     mutate(spp = droplevels(spp))
   
@@ -1084,6 +1101,7 @@
   # - Solenastrea (see Spadafore 2021 for some more reference on this)
   # - Tubastrea coccinea
   # - Oculina
+  # - Cladocora
   # - Porites
   # - Mycetophyllia
   # - Mussa
@@ -1092,8 +1110,8 @@
   #         orbicellids, which we now know should not be the case. important distinction...may need to
   #         simply toss that species level entirely. it is all absences, at least
   #
-  levels(combined_benthic_data_grouped$spp)
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  levels(combined_benthic_data_trimmed$spp)
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     mutate(
       susc = case_when(
         spp %in% c('Agaricia agaricites', 'Agaricia fragilis', 'Agaricia grahamae', 'Agaricia humilis',
@@ -1123,7 +1141,7 @@
                    'Mussa angulosa', 'Scolymia cubensis', 'Scolymia lacera', 'Scolymia species', 'Scolymia spp',
                    'Scolymia spp.', 'Manicina areolata', 'Favia fragum') ~ 'high',
         spp %in% c('Acropora cervicornis', 'Acropora palmata', 'Acropora prolifera',
-                   'Oculina diffusa', 'Tubastraea coccinea') ~ 'Unaffected'
+                   'Oculina diffusa', 'Tubastraea coccinea', 'Cladocora abruscula') ~ 'Unaffected'
       )
     ) %>%
     mutate(susc = as.factor(susc))
@@ -1139,7 +1157,7 @@
   #             given available data. importantly, am including the few 'Orbicella spp' entries from NCRMP
   #             in this category, and also merging ALL of O. franksi & O. faveolata into it, since these
   #             are commonly extremely hard to distinguish or may be mostly franksi anyways
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     mutate(
       spp = case_when(
         spp == 'Isophyllastrea rigida' ~ 'Isophyllia rigida',
@@ -1165,7 +1183,7 @@
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_benthic_data_grouped$spp)
+  levels(combined_benthic_data_trimmed$spp)
   
   # collapse species to genus where appropriate
   #     NOTE - the largest effect of collapsing here is on Agaricia, because there is so much A. undata
@@ -1173,7 +1191,7 @@
   #          - but also a large effect on Porites, since there is now no distinction between branching and
   #             P. astreoides
   #          - effect on Madracis may be important because of certain species being prevalent deep
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     mutate(
       spp = case_when(
         grepl('Agaricia', spp) ~ 'Agaricia spp',
@@ -1190,18 +1208,18 @@
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_benthic_data_grouped$spp)
+  levels(combined_benthic_data_trimmed$spp)
   
   #drop the unaffected species
   #   - Acropora: like 35 occurrences total
   #   - Oculina & Tubastraea: 1 occurrence each
-  combined_benthic_data_grouped = combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     filter(!susc %in% c('Unaffected')) %>%
     mutate(susc = droplevels(susc)) %>%
     mutate(spp = droplevels(spp))
   
   #quick read-out of species by susceptibility group
-  combined_benthic_data_grouped %>%
+  combined_benthic_data_trimmed %>%
     distinct(spp, susc) %>%
     arrange(susc, spp) %>%
     group_by(susc) %>%
@@ -1210,57 +1228,8 @@
     pull(output) %>%
     cat(sep = "\n\n")
   
-  #complicated summation by PSU/spp, which accounts for repeat observations but also 
-  #   multiple transects in the case of TCRMP. also handles lack of 'date' information
-  #   for NODICE & SESAP
-  #
-  # Sum cover values with dataset-specific grouping
-  combined_benthic_data_summed <- combined_benthic_data_grouped %>%
-    group_by(
-      dataset, PSU,
-      # Keep original date column for grouping, but handle NAs properly
-      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
-      # Keep original transect, but set to NA for non-TCRMP datasets
-      transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_),
-      spp
-    ) %>%
-    summarise(
-      # Keep other variables (taking first value since they should be consistent within groups)
-      lat = first(lat),
-      lon = first(lon),
-      cover = sum(cover, na.rm = TRUE),
-      depth = first(depth),
-      susc = first(susc),
-      .groups = 'drop'
-    ) %>%
-    # Reorder columns to match original structure
-    select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
-  
-  # Average coral cover across transects and dates for each PSU
-  combined_benthic_data_averaged <- combined_benthic_data_summed %>%
-    group_by(dataset, PSU, spp) %>%
-    summarise(
-      # Average cover across all transects/dates within each PSU
-      cover = mean(cover, na.rm = TRUE),
-      # Keep other variables (taking first value since they should be consistent within PSU)
-      lat = first(lat),
-      lon = first(lon),
-      depth = first(depth),
-      susc = first(susc),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
-      # Set transect to NA for everything since we're now at PSU level
-      transect = NA_real_,
-      .groups = 'drop'
-    ) %>%
-    # Reorder columns to match original structure
-    select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
-  
   ## DEMO
   #
-  combined_demo_data = combined_demo_data %>%
-    filter(year(date) >= 2013 & date <= as.Date("2018-11-30"))
-  
   # NOTE / UPDATE
   #   - the more I think about it, the more I think the TCRMP intercept data can't be used at all
   #   - the problem is, all the small corals will be totally lost with this approach, and there is no
@@ -1269,6 +1238,11 @@
   #       - a consideration here though is that belts were only used in situations with already-low density.
   #         so, may bias a bit towards low surface area estimates. still seems like a better solution
   #
+  
+  #filter only 2013 to November 2018 pre-SCTLD
+  combined_demo_data = combined_demo_data %>%
+    filter(year(date) >= 2013 & date <= as.Date("2018-11-30"))
+  
   #drop all TCRMP health data collected using transect-intercept methods
   combined_demo_data <- combined_demo_data %>%
     filter(method != "intercept" | is.na(method))
@@ -1300,26 +1274,31 @@
       )
     )
   
+  #drop 10-cm belt data. it looks like it inflates surface area density within a transect too much,
+  #   unfortunately
+  combined_demo_data = combined_demo_data %>%
+    filter(method != '10 cm belt' | is.na(method))
+  
   #calculate susceptible tissue surface area (SA)
   # NOTE - could consider trimming down predicted SA for OANN since it has a lot of dead space in reality
   #         - but, it also has more or equal SA potentially in lobes than it would as an ellipsoid?
   #
   # calculate total mortality, then remove corals that had suffered 100% mortality upon survey
   #   NOTE - NAs treated as 0% mortality here
-  combined_demo_data_grouped = combined_demo_data %>%
+  combined_demo_data_trimmed = combined_demo_data %>%
     mutate(totalmort = coalesce(oldmort, 0) + coalesce(recentmort, 0)) %>%
     filter(totalmort < 100)
   #
   # set '0' cm heights as an arbitrarily small amount (cm) to allow the hemi-ellipsoid estimation to function correctly. coral recruits 
   #   have very little tangible height, and were recorded underwater as 0 cm height. there is also
   #   an instance of '-1' height but it is an acroporid and gets filtered out downstream anyways
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     mutate(height = ifelse(height <= 0, 0.01, height))
   #
   # hemi-ellipsoid estimation (Knud Thomsen approximation; see Xu 2009 but also Holstein 2015).
   #   p is a dimensionless constant; all else in square cm
   #     NOTE / IMPORTANT - at least at some point during TCRMP, colonies <10 cm were not assessed for mortality
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     mutate(
       a = height,
       b = width / 2,
@@ -1332,14 +1311,14 @@
     select(-a, -b, -c, -p)
   #
   # remove unnecessary variables
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     select(-length, -width, -height, -oldmort, -recentmort, -SA_colony)
   
   #filter out unidentified scleractinians from demo data
   # NOTE - these were just 2 very small colonies in 2013. but of course, also there were plenty of "absences"
   #         of unidentifiable coral...just not sure that has real ecological meaning
-  levels(combined_demo_data_grouped$spp)
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  levels(combined_demo_data_trimmed$spp)
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     filter(!spp %in% c('Scleractinia spp', 'Other coral')) %>%
     filter(!grepl('Millepora', spp)) %>% #also drop hydrozoans
     filter(!grepl('Isophyllia spp|Oculina spp', spp)) %>% #drop since no occurrences and makes groupings ambiguous
@@ -1347,8 +1326,8 @@
   
   #break corals into susceptibility groups
   # NOTE - same as grouping for coral cover (benthic data)
-  levels(combined_demo_data_grouped$spp)
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  levels(combined_demo_data_trimmed$spp)
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     mutate(
       susc = case_when(
         grepl("Madracis", spp) | #handle strange string for Madracis
@@ -1395,7 +1374,7 @@
   #             given available data. importantly, am including the few 'Orbicella spp' entries from NCRMP
   #             in this category, and also merging ALL of O. franksi & O. faveolata into it, since these
   #             are commonly extremely hard to distinguish or may be mostly franksi anyways
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     mutate(
       spp = case_when(
         spp == 'Undaria spp' ~ 'Agaricia spp',
@@ -1422,7 +1401,7 @@
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_demo_data_grouped$spp)
+  levels(combined_demo_data_trimmed$spp)
   
   # collapse species to genus where appropriate
   #     NOTE - the largest effect of collapsing here is on Agaricia, because there is so much A. undata
@@ -1430,7 +1409,7 @@
   #          - but also a large effect on Porites, since there is now no distinction between branching and
   #             P. astreoides
   #          - effect on Madracis may be important because of certain species being prevalent deep
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     mutate(
       spp = case_when(
         grepl('Agaricia', spp) ~ 'Agaricia spp',
@@ -1447,18 +1426,23 @@
     ) %>%
     mutate(spp = factor(spp)) %>%  # convert back to factor
     mutate(spp = droplevels(spp))  # drop unused factor levels
-  levels(combined_demo_data_grouped$spp)
+  levels(combined_demo_data_trimmed$spp)
+  
+  #set transect as a factor
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
+    mutate(transect = as.factor(transect))
+  levels(combined_demo_data_trimmed$transect)
   
   #drop the unaffected species
   #   - Acropora: like 35 occurrences total
   #   - Oculina & Tubastraea: 1 occurrence each
-  combined_demo_data_grouped = combined_demo_data_grouped %>%
+  combined_demo_data_trimmed = combined_demo_data_trimmed %>%
     filter(!susc %in% c('Unaffected')) %>%
-    mutate(susc = droplevels(susc)) %>%
-    mutate(spp = droplevels(spp))  # drop unused factor levels
+    mutate(susc = droplevels(susc)) %>% # drop unused factor levels
+    mutate(spp = droplevels(spp))
   
   #quick read-out of species by susceptibility group
-  combined_demo_data_grouped %>%
+  combined_demo_data_trimmed %>%
     distinct(spp, susc) %>%
     arrange(susc, spp) %>%
     group_by(susc) %>%
@@ -1467,12 +1451,216 @@
     pull(output) %>%
     cat(sep = "\n\n")
   
-  #complicated summation by PSU/spp, which accounts for repeat observations but also 
+  
+  ################################## absences: benthic ##################################
+  
+  # Get all unique species levels (should be 24)
+  all_species_levels <- levels(combined_benthic_data_trimmed$spp)
+  
+  # Create master susceptibility lookup BEFORE splitting datasets
+  master_susc_lookup <- combined_benthic_data_trimmed %>% 
+    select(spp, susc) %>% 
+    distinct()
+  
+  # Function to complete species data for each dataset
+  complete_species_data <- function(data) {
+    # Check if transect column exists and has non-NA values
+    has_transect <- "transect" %in% names(data) && any(!is.na(data$transect))
+    
+    if (has_transect) {
+      # Has transect level (like TCRMP)
+      grouping_vars <- c("dataset", "date", "PSU", "transect")
+      
+      # Get sampling units with metadata
+      sampling_units <- data %>%
+        group_by(dataset, date, PSU, transect) %>%
+        summarise(
+          lat = first(lat),
+          lon = first(lon),
+          depth = first(depth),
+          .groups = "drop"
+        )
+      
+      # Get actual cover data
+      cover_data <- data %>%
+        group_by(dataset, date, PSU, transect, spp) %>%
+        summarise(actual_cover = sum(cover, na.rm = TRUE), .groups = "drop")
+      
+      join_vars <- c("dataset", "date", "PSU", "transect", "spp")
+      
+    } else {
+      # No transect level (other datasets)
+      grouping_vars <- c("dataset", "date", "PSU")
+      
+      # Get sampling units with metadata
+      sampling_units <- data %>%
+        group_by(dataset, date, PSU) %>%
+        summarise(
+          lat = first(lat),
+          lon = first(lon),
+          depth = first(depth),
+          .groups = "drop"
+        ) %>%
+        mutate(transect = NA)  # Add transect column as NA
+      
+      # Get actual cover data
+      cover_data <- data %>%
+        group_by(dataset, date, PSU, spp) %>%
+        summarise(actual_cover = sum(cover, na.rm = TRUE), .groups = "drop")
+      
+      join_vars <- c("dataset", "date", "PSU", "spp")
+    }
+    
+    # Create complete grid of all combinations
+    complete_grid <- sampling_units %>%
+      crossing(spp = factor(all_species_levels, levels = all_species_levels)) %>%
+      # Use the MASTER susceptibility lookup instead of dataset-specific one
+      left_join(master_susc_lookup, by = "spp") %>%
+      # Left join with original data to get actual cover values
+      left_join(cover_data, by = join_vars) %>%
+      # Fill in missing values
+      mutate(
+        cover = ifelse(is.na(actual_cover), 0, actual_cover),
+        inferred_absence = case_when(
+          is.na(actual_cover) ~ "Y",  # Species not recorded
+          actual_cover == 0 ~ "N",   # Species recorded as 0
+          TRUE ~ "N"                 # Species recorded with positive cover
+        )
+      ) %>%
+      select(-actual_cover) %>%
+      # Reorder columns to match original
+      select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
+    
+    return(complete_grid)
+  }
+  
+  # Apply to each dataset separately
+  datasets <- split(combined_benthic_data_trimmed, combined_benthic_data_trimmed$dataset)
+  combined_benthic_data_complete <- map_dfr(datasets, complete_species_data)
+  
+  # Check the results
+  cat("Original data dimensions:", dim(combined_benthic_data_trimmed), "\n")
+  cat("Complete data dimensions:", dim(combined_benthic_data_complete), "\n")
+  cat("Number of inferred absences:", sum(combined_benthic_data_complete$inferred_absence == "Y"), "\n")
+  
+  # Verify all species are present for each sampling unit
+  sampling_unit_check <- combined_benthic_data_complete %>%
+    group_by(dataset, date, PSU, transect) %>%
+    summarise(
+      n_species = n_distinct(spp),
+      .groups = "drop"
+    )
+  
+  cat("Species count per sampling unit (should all be 24):\n")
+  print(table(sampling_unit_check$n_species))
+  
+  # Additional check: verify susceptibility data is complete
+  susc_check <- combined_benthic_data_complete %>%
+    group_by(spp) %>%
+    summarise(
+      n_na_susc = sum(is.na(susc)),
+      unique_susc = n_distinct(susc, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  cat("\nSusceptibility data check:\n")
+  print(susc_check)
+  if(any(susc_check$n_na_susc > 0)) {
+    cat("WARNING: Some species have missing susceptibility data!\n")
+  } else {
+    cat("All species have susceptibility data - SUCCESS!\n")
+  }  
+  
+  combined_benthic_data_summed = combined_benthic_data_complete
+  
+  ################################## spp-grouping ##################################
+  
+  # Average coral cover across transects and dates for each PSU
+  combined_benthic_data_averaged <- combined_benthic_data_summed %>%
+    group_by(dataset, PSU, spp) %>%
+    summarise(
+      # Average cover across all transects/dates within each PSU
+      cover = mean(cover, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      susc = first(susc),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_real_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns to match original structure
+    select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
+  
+  # test = combined_benthic_data_summed %>%
+  #   filter(spp == 'Meandrina spp',
+  #          PSU == 'Black Point') %>%
+  #   summarise(avg = mean(cover, na.rm = TRUE))
+  # test
+  
+  #summation by PSU/susc, which accounts for repeat observations but also 
   #   multiple transects in the case of TCRMP. also handles lack of 'date' information
   #   for NODICE & SESAP
   #
+  # Sum cover values with dataset-specific grouping by susceptibility group
+  combined_benthic_data_summed_susc = combined_benthic_data_summed %>%
+    group_by(dataset, PSU, date,
+             transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_),
+             susc  # Group by susceptibility instead of species
+    ) %>%
+    summarise(
+      # Keep other variables (taking first value since they should be consistent within groups)
+      lat = first(lat),
+      lon = first(lon),
+      cover = sum(cover, na.rm = TRUE),  # Sum all species cover within susceptibility group
+      depth = first(depth),
+      # Count number of species contributing to this susceptibility group
+      species_count = n_distinct(spp),
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns to match structure
+    select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)  
+  
+  # Average coral cover across transects and dates for each PSU by susceptibility group
+  combined_benthic_data_averaged_susc <- combined_benthic_data_summed_susc %>%
+    group_by(dataset, PSU, susc) %>%
+    summarise(
+      # Average cover across all transects/dates within each PSU
+      cover = mean(cover, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      # Average species count across transects
+      species_count = mean(species_count, na.rm = TRUE),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_real_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns to match structure
+    select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)
+  
+  # STOPPING POINT - 18 June 2025
+  #   - So I am still deliberating about whether to figure out absences before or after summation, for
+  #       the demo data. I think I have to sum first, then generate absences. THEN average - right?
+  
+  ## DEMO
+  #
+  #summation by PSU/spp, which accounts for repeat observations but also 
+  #   multiple transects in the case of TCRMP. also handles lack of 'date' information
+  #   for NODICE & SESAP
+  #
+  # NOTE - there are some outliers here, mainly on the 10-cm belt transects, because a few very large colonies
+  #         were considered part of the transect even though it is very narrow. will likely need to cut
+  #         those dates out, or simply all 10-cm belt transects for consistency
+  #
   # Sum SA values with dataset-specific grouping
-  combined_demo_data_summed <- combined_demo_data_grouped %>%
+  combined_demo_data_summed <- combined_demo_data_trimmed %>%
     group_by(
       dataset, PSU,
       # Keep original date column for grouping, but handle NAs properly
@@ -1498,17 +1686,14 @@
     select(dataset, date, PSU, transect, lat, lon, depth, spp, method, meterscompleted, surveyarea,
            SA, susc)  
   
+  #calculate transect- and species-level surface area which is scaled to 2D transect area
+  combined_demo_data_summed = combined_demo_data_summed %>%
+    mutate(SA_density = SA / surveyarea)
   
   # STOPPING POINT - 13 June 2025
-  # - the averaging looks to be okay, but a couple main considerations now:
-  #   1.) need to determine order of operations for calculating relative surface area (i.e., scaling
-  #         to 2D survey area)
-  #   2.) Need to also figure out order of operations for bringing in inferred absences! very important to
+  #   - Need to also figure out order of operations for bringing in inferred absences! very important to
   #         these averages. I think they at least need to be there for surface area, since the demo data
   #         only notes when a colony was found
-  
-  
-  
   
   # Average coral SA across transects and dates for each PSU
   combined_demo_data_averaged <- combined_demo_data_summed %>%
@@ -1516,6 +1701,7 @@
     summarise(
       # Average SA across all transects/dates within each PSU
       SA = mean(SA, na.rm = TRUE),
+      SA_density = mean(SA_density, na.rm = TRUE),
       # Keep other variables (taking first value since they should be consistent within PSU)
       lat = first(lat),
       lon = first(lon),
@@ -1528,72 +1714,199 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns to match original structure
-    select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc)  
+    select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density)  
   
-  
-  ################################## fill in absences ##################################
-  
-  # NOTE / STOPPING POINT - 13 June 2025
-  # - okay, NOW I can focus on bringing in absences. they are primarily missing from NCRMP data I think. but
-  #     will need to systematically add them in so all species factor levels are represented
-  
-  # BENTHIC
+  #summation by PSU/susc, which accounts for repeat observations but also 
+  #   multiple transects in the case of TCRMP. also handles lack of 'date' information
+  #   for NODICE & SESAP
   #
-  # Step 1: Get all unique species from your dataset
-  all_species <- unique(combined_benthic_data_grouped$spp)
-  cat("Total unique species found:", length(all_species), "\n")
-  cat("First 10 species:\n")
-  print(head(all_species, 10))
-  
-  # Step 2: Create sampling event identifiers
-  # This combines all the grouping variables that define a unique sampling event
-  sampling_events_benthic <- combined_benthic_data_grouped %>%
-    # select(dataset, PSU, date) %>%
-    select(dataset, PSU) %>%
-    distinct()
-  
-  cat("\nTotal unique sampling events:", nrow(sampling_events_benthic), "\n")
-  
-  # Step 3: Create complete grid of all possible combinations
-  complete_grid <- sampling_events_benthic %>%
-    crossing(spp = all_species)
-  
-  cat("Expected total rows after completion:", nrow(complete_grid), "\n")
-  
-  # Step 4: Join with original data and fill missing values
-  completed_data <- complete_grid %>%
-    left_join(combined_benthic_data, 
-              by = c("dataset", "PSU", "date", "lat", "lon", "spp")) %>%
-    mutate(
-      # Create indicator for inferred absence BEFORE filling missing values
-      # If cover is NA, it means this record wasn't in the original data
-      inferred_absence = ifelse(is.na(cover), "Y", "N"),
-      # Fill missing cover values with 0
-      cover = ifelse(is.na(cover), 0, cover)
-      # Note: depth remains as is - NA for inferred records, original values for real records
+  # Sum SA values with dataset-specific grouping by susceptibility group
+  combined_demo_data_summed_susc <- combined_demo_data_trimmed %>%
+    group_by(
+      dataset, PSU,
+      # Keep original date column for grouping, but handle NAs properly
+      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      # Keep original transect, but set to NA for non-TCRMP datasets
+      transect = if_else(dataset == "TCRMP_health", transect, NA_character_),
+      susc  # Group by susceptibility instead of species
     ) %>%
-    arrange(dataset, PSU, date, lat, lon, spp)
+    summarise(
+      # Keep other variables (taking first value since they should be consistent within groups)
+      lat = first(lat),
+      lon = first(lon),
+      SA = sum(SA, na.rm = TRUE),  # Sum all species within susceptibility group
+      depth = first(depth),
+      method = first(method),
+      meterscompleted = first(meterscompleted),
+      surveyarea = first(surveyarea),
+      # Count number of species contributing to this susceptibility group
+      species_count = n_distinct(spp),
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns to match structure
+    select(dataset, date, PSU, transect, lat, lon, depth, susc, method, meterscompleted, surveyarea,
+           SA, species_count)  
   
-  # Step 5: Summary of changes
-  original_rows <- nrow(combined_benthic_data)
-  final_rows <- nrow(completed_data)
-  inferred_records <- sum(completed_data$inferred_absence == "Y")
+  #calculate transect- and susceptibility-level surface area which is scaled to 2D transect area
+  combined_demo_data_summed_susc = combined_demo_data_summed_susc %>%
+    mutate(SA_density = SA / surveyarea)
   
-  cat("\n=== SUMMARY ===\n")
-  cat("Original rows:", original_rows, "\n")
-  cat("Final rows:", final_rows, "\n")
-  cat("Records added (inferred absences):", inferred_records, "\n")
-  cat("Percentage of data that is inferred:", 
-      round(100 * inferred_records / final_rows, 1), "%\n")
+  # Average coral SA across transects and dates for each PSU by susceptibility group
+  combined_demo_data_averaged_susc <- combined_demo_data_summed_susc %>%
+    group_by(dataset, PSU, susc) %>%
+    summarise(
+      # Average SA across all transects/dates within each PSU
+      SA = mean(SA, na.rm = TRUE),
+      SA_density = mean(SA_density, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      # Average species count across transects
+      species_count = mean(species_count, na.rm = TRUE),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_character_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns to match structure
+    select(dataset, date, PSU, transect, lat, lon, SA, susc, depth, SA_density, species_count)
   
-  combined_benthic_data = completed_data
+  
+  
+  
+  ################################## site-level grouping ##################################
+  
+  #summation by PSU only, pooling all species together
+  #   accounts for repeat observations and multiple transects in the case of TCRMP
+  #   also handles lack of 'date' information for NODICE & SESAP
+  #
+  # Sum SA values across all species with dataset-specific grouping
+  combined_demo_data_summed_psu <- combined_demo_data_grouped %>%
+    group_by(
+      dataset, PSU,
+      # Keep original date column for grouping, but handle NAs properly
+      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      # Keep original transect, but set to NA for non-TCRMP datasets
+      transect = if_else(dataset == "TCRMP_health", transect, NA_character_)
+      # No species or susceptibility grouping - pooling all species
+    ) %>%
+    summarise(
+      # Keep other variables (taking first value since they should be consistent within groups)
+      lat = first(lat),
+      lon = first(lon),
+      SA = sum(SA, na.rm = TRUE),  # Sum all species together
+      depth = first(depth),
+      method = first(method),
+      meterscompleted = first(meterscompleted),
+      surveyarea = first(surveyarea),
+      # Count total number of species and susceptibility groups
+      total_species_count = n_distinct(spp),
+      high_susc_count = sum(susc == "high", na.rm = TRUE),
+      moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
+      low_susc_count = sum(susc == "low", na.rm = TRUE),
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, depth, method, meterscompleted, surveyarea,
+           SA, total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
+  
+  #calculate transect-level total surface area scaled to 2D transect area
+  combined_demo_data_summed_psu = combined_demo_data_summed_psu %>%
+    mutate(SA_density = SA / surveyarea)
+  
+  # Average total coral SA across transects and dates for each PSU
+  combined_demo_data_averaged_psu <- combined_demo_data_summed_psu %>%
+    group_by(dataset, PSU) %>%
+    summarise(
+      # Average SA across all transects/dates within each PSU
+      SA = mean(SA, na.rm = TRUE),
+      SA_density = mean(SA_density, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      # Average species counts across transects
+      total_species_count = mean(total_species_count, na.rm = TRUE),
+      high_susc_count = mean(high_susc_count, na.rm = TRUE),
+      moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
+      low_susc_count = mean(low_susc_count, na.rm = TRUE),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_character_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, SA, depth, SA_density, 
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
+  
+  
+  #summation by PSU only, pooling all species together
+  #   accounts for repeat observations and multiple transects in the case of TCRMP
+  #   also handles lack of 'date' information for NODICE & SESAP
+  #
+  # Sum cover values across all species with dataset-specific grouping
+  combined_benthic_data_summed_psu <- combined_benthic_data_summed %>%
+    group_by(
+      dataset, PSU, date,
+      # # Keep original date column for grouping, but handle NAs properly
+      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      # Keep original transect, but set to NA for non-TCRMP datasets
+      transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_)
+      # No species or susceptibility grouping - pooling all species
+    ) %>%
+    summarise(
+      # Keep other variables (taking first value since they should be consistent within groups)
+      lat = first(lat),
+      lon = first(lon),
+      cover = sum(cover, na.rm = TRUE),  # Sum all species cover together
+      depth = first(depth),
+      # Count total number of species and susceptibility groups
+      total_species_count = n_distinct(spp),
+      high_susc_count = sum(susc == "high", na.rm = TRUE),
+      moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
+      low_susc_count = sum(susc == "low", na.rm = TRUE),
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, depth, cover, 
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
+  
+  # Average total coral cover across transects and dates for each PSU
+  combined_benthic_data_averaged_psu <- combined_benthic_data_summed_psu %>%
+    group_by(dataset, PSU) %>%
+    summarise(
+      # Average cover across all transects/dates within each PSU
+      cover = mean(cover, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      # Average species counts across transects
+      total_species_count = mean(total_species_count, na.rm = TRUE),
+      high_susc_count = mean(high_susc_count, na.rm = TRUE),
+      moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
+      low_susc_count = mean(low_susc_count, na.rm = TRUE),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_real_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, cover, depth,
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
   
   
   
   
+  ################################## absences: demo ##################################
   
-  
-  
+  # STOPPING POINT - 18 June 2025
+  #   - I'm pretty sure absences have to be introduced at the level of the grouping, post summation, for demo data.
+  #       since the data are inherently colony-specific
   
   
   
