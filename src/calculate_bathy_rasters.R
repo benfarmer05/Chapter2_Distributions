@@ -11,23 +11,27 @@
   library(scico)
   library(RColorBrewer)
   library(progress)
+  library(spatialEco)
+  library(MultiscaleDTM)
   
   source(here("src/functions.R"))
   
-  # # Print GDAL, PROJ, and GEOS versions linked with sf
-  # sf::sf_extSoftVersion()
-  # 
-  # # Print GDAL version linked with terra
-  # terra::gdal()
-  
   ################################## setup ##################################
   
-  load_spat_objects(directory = here("output")) #call function
-  load(here("output/create_habitat_grid_workspace.RData")) #load workspace from upstream script
+  # load_spat_objects(directory = here("output")) #call function
+  # load(here("output/create_habitat_grid_workspace.RData")) #load workspace from upstream script
+  
+  #load initial set of objects
+  load_spat_objects(directory = 'output/output_import_merge_rasters/')
+  load(here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData'))
+  
+  #load next set
+  load_spat_objects(directory = 'output/output_create_habitat_grid/')
+  load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
   
   ################################## Pretty bathy plot ##################################
   
-  # color_palette <- scico(100, palette = "hawaii", direction = -1) #scico pallete
+  # color_palette <- scico(100, palette = "hawaii", direction = -1) #scico palette
   color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100) #YlGnBu palette, as used by me in QGIS. color ramp reversed, and continuous colors interpolated
   
   # Plot the raster
@@ -203,6 +207,43 @@
   roughness = terrain(bathy_merged3_crm_reefdepth, v = "roughness")
   TPI = terrain(bathy_merged3_crm_reefdepth, v = 'TPI') #Wilson 2007 bathymetric-friendly method
   TRI = terrain(bathy_merged3_crm_reefdepth, v = 'TRI')
+  VRM <- vrm(bathy_merged3_crm_reefdepth)
+  # VRM_larger <- vrm(bathy_merged3_crm_reefdepth, s = 2)  
+  VRM_largest <- vrm(bathy_merged3_crm_reefdepth, s = 9) 
+  plan_curv <- PlanCurv(bathy_merged3_crm_reefdepth)
+  prof_curv <- ProfCurv(bathy_water_only)  
+  # NOTE - VRM especially may require sub-50 m resolution
+  # Look at these with MultiscaleDTM: TPI, DMV, BPI, RelPos, SAPA (measure of rugosity), VRM
+  # MultiscaleDTM measures
+  TPI_multiscale <- TPI(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  DMV <- DMV(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  BPI <- BPI(bathy_merged3_crm_reefdepth, w = c(5, 5))  # BPI is same as TPI for bathymetry
+  RelPos <- RelPos(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  SAPA_150m <- SAPA(bathy_merged3_crm_reefdepth, w = c(3, 3))
+  SAPA_250m <- SAPA(bathy_merged3_crm_reefdepth, w = c(5, 5))  # Surface Area to Planar Area ratio
+  SAPA_350m <- SAPA(bathy_merged3_crm_reefdepth, w = c(7, 7))
+  VRM_multiscale <- VRM(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  
+  plot(SAPA_350m,
+       # breaks = seq(1.000, 1.040, by = 0.002),
+       range = c(1.000, 1.020),
+       main = "SAPA (350m window)")
+  
+  plot(BPI)
+  plot(slopeofslope)
+  plot(roughness)
+  
+  # NOTE - strikes me that BPI, slope of slope, roughness might be the most useful
+  #         - remains to be seen whether these are worth calculating at native resolution. probably not, due to 
+  #           our contiguous bathy product being a mosaic of resolutions. 50 m seems like a good compromise. but
+  #           could consider 30 m (and possibly then resample to 50). move forward with this though!
+  #         - SAPA in particular might become a lot more useful at higher res
+  #         - BPI might be a good indicator of risk (or lack thereof) to sedimentation from upslope
+  #         - roughness seems like a good metric, just unclear what it correlates to in the literature at the moment
+  
+  # STOPPING POINT - 20 June 2025
+  #   - now just getting all the spatial layers figured out. need to have a grid, then snap the biological layers
+  #       to it. then a matter of running the GAMs, and making predictions
   
   # #TEST
   # bathy_merged_crm_forslopes <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE)

@@ -514,11 +514,6 @@
   TCRMP_health = TCRMP_health %>%
     filter(Period != 'Juvenile')
   
-  
-  # STOPPING POINT - figured it out! these were actually '2L, 2R, etc...', and the left and right letters
-  #   threw off R when importing the datasheet. fixed that; now the task will be ensuring averages are done
-  #   correctly at Black Point across transects
-  #
   # #drop all instances where there is no transect information. this problem is specific to Black Point, 
   # #   December 2017 where for whatever reason there was a very large amount of row entries with no transect
   # #   number noted. very odd; makes it harder to clearly process data downstream so filtering out here
@@ -1248,7 +1243,7 @@
     filter(method != "intercept" | is.na(method))
   
   #calculate 2D area of survey (disregards rugosity)
-  # STOPPING POINT - 13 June 2025
+  # NOTE - 13 June 2025
   #   - This is where I will go back and fill in better information once I have it. NCRMP is fine,
   #       it is just TCRMP where there is ambiguity
   combined_demo_data <- combined_demo_data %>%
@@ -1645,15 +1640,10 @@
     # Reorder columns to match structure
     select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)
   
-  # STOPPING POINT - 18 June 2025
-  #   - So I am still deliberating about whether to figure out absences before or after summation, for
-  #       the demo data. I think I have to sum first, then generate absences. THEN average - right?
-  
   ## DEMO
   #
   #summation by PSU/spp, which accounts for repeat observations but also 
-  #   multiple transects in the case of TCRMP. also handles lack of 'date' information
-  #   for NODICE & SESAP
+  #   multiple transects in the case of TCRMP
   #
   # NOTE - there are some outliers here, mainly on the 10-cm belt transects, because a few very large colonies
   #         were considered part of the transect even though it is very narrow. will likely need to cut
@@ -1662,9 +1652,9 @@
   # Sum SA values with dataset-specific grouping
   combined_demo_data_summed <- combined_demo_data_trimmed %>%
     group_by(
-      dataset, PSU,
-      # Keep original date column for grouping, but handle NAs properly
-      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      dataset, PSU, date,
+      # # Keep original date column for grouping, but handle NAs properly
+      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
       # Keep original transect, but set to NA for non-TCRMP datasets
       # transect = if_else(dataset == "TCRMP_health", transect, NA_real_),
       transect = if_else(dataset == "TCRMP_health", transect, NA_character_), # Changed to NA_character_
@@ -1690,11 +1680,6 @@
   combined_demo_data_summed = combined_demo_data_summed %>%
     mutate(SA_density = SA / surveyarea)
   
-  # STOPPING POINT - 13 June 2025
-  #   - Need to also figure out order of operations for bringing in inferred absences! very important to
-  #         these averages. I think they at least need to be there for surface area, since the demo data
-  #         only notes when a colony was found
-  
   # Average coral SA across transects and dates for each PSU
   combined_demo_data_averaged <- combined_demo_data_summed %>%
     group_by(dataset, PSU, spp) %>%
@@ -1716,16 +1701,56 @@
     # Reorder columns to match original structure
     select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density)  
   
+  #fill in absences
+  #
+  # Get all unique species across all datasets
+  all_species <- combined_demo_data_averaged %>%
+    distinct(spp) %>%
+    pull(spp)
+  
+  # Get all unique combinations of dataset/PSU (with their associated metadata)
+  all_locations <- combined_demo_data_averaged %>%
+    select(dataset, PSU, lat, lon, depth) %>%
+    distinct()
+  
+  # Create complete grid of all location/species combinations
+  complete_grid <- expand_grid(
+    location_data = all_locations,
+    spp = all_species
+  ) %>%
+    # Unnest the location data
+    unnest(location_data)
+  
+  # Join with existing data to fill in absences
+  combined_demo_data_averaged <- complete_grid %>%
+    left_join(combined_demo_data_averaged, 
+              by = c("dataset", "PSU", "spp", "lat", "lon", "depth")) %>%
+    # Fill in missing values
+    mutate(
+      # Mark inferred absences
+      inferred_absence = if_else(is.na(SA), "Y", "N"),
+      # Fill in zeros for SA and SA_density where missing
+      SA = if_else(is.na(SA), 0, SA),
+      SA_density = if_else(is.na(SA_density), 0, SA_density),
+      # For inferred absences, we need to assign susc values
+      # You may want to modify this logic based on your species data
+      susc = if_else(is.na(susc), "unknown", susc),
+      # Keep date and transect as NA for inferred absences
+      date = if_else(inferred_absence == "Y", as.Date(NA), date),
+      transect = if_else(inferred_absence == "Y", NA_real_, transect)
+    ) %>%
+    # Reorder columns to match your structure plus new column
+    select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density, inferred_absence)
+
   #summation by PSU/susc, which accounts for repeat observations but also 
-  #   multiple transects in the case of TCRMP. also handles lack of 'date' information
-  #   for NODICE & SESAP
+  #   multiple transects in the case of TCRMP
   #
   # Sum SA values with dataset-specific grouping by susceptibility group
   combined_demo_data_summed_susc <- combined_demo_data_trimmed %>%
     group_by(
-      dataset, PSU,
-      # Keep original date column for grouping, but handle NAs properly
-      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      dataset, PSU, date,
+      # # Keep original date column for grouping, but handle NAs properly
+      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
       # Keep original transect, but set to NA for non-TCRMP datasets
       transect = if_else(dataset == "TCRMP_health", transect, NA_character_),
       susc  # Group by susceptibility instead of species
@@ -1773,21 +1798,119 @@
     # Reorder columns to match structure
     select(dataset, date, PSU, transect, lat, lon, SA, susc, depth, SA_density, species_count)
   
+  #fill in absences
+  #
+  # Get all unique species across all datasets
+  all_susc <- combined_demo_data_averaged_susc %>%
+    distinct(susc) %>%
+    pull(susc)
   
+  # Get all unique combinations of dataset/PSU (with their associated metadata)
+  all_locations <- combined_demo_data_averaged_susc %>%
+    select(dataset, PSU, lat, lon, depth) %>%
+    distinct()
   
+  # Create complete grid of all location/species combinations
+  complete_grid <- expand_grid(
+    location_data = all_locations,
+    susc = all_susc
+  ) %>%
+    # Unnest the location data
+    unnest(location_data)
+  
+  # Join with existing data to fill in absences
+  combined_demo_data_averaged_susc <- complete_grid %>%
+    left_join(combined_demo_data_averaged_susc, 
+              by = c("dataset", "PSU", "susc", "lat", "lon", "depth")) %>%
+    # Fill in missing values
+    mutate(
+      # Mark inferred absences
+      inferred_absence = if_else(is.na(SA), "Y", "N"),
+      # Fill in zeros for SA and SA_density where missing
+      SA = if_else(is.na(SA), 0, SA),
+      SA_density = if_else(is.na(SA_density), 0, SA_density),
+      # Keep date and transect as NA for inferred absences
+      date = if_else(inferred_absence == "Y", as.Date(NA), date),
+      transect = if_else(inferred_absence == "Y", NA_character_, transect)  # Changed to NA_character_
+      # Note: removed the susc line since it's already correctly populated from the grid
+    ) %>%
+    # Reorder columns to match your structure plus new column
+    select(dataset, date, PSU, transect, lat, lon, SA, depth, susc, SA_density, inferred_absence)  
   
   ################################## site-level grouping ##################################
   
+  # NOTE - there are zero NCRMP PSU's with absolute zero coral coverage. I am wondering if some were
+  #         in fact recorded but filtered before hosting on Github? if so, would be very useful to retrieve
+  #         missing absence data
+  
+  # BENTHIC
+  #
   #summation by PSU only, pooling all species together
   #   accounts for repeat observations and multiple transects in the case of TCRMP
-  #   also handles lack of 'date' information for NODICE & SESAP
+  #
+  # Sum cover values across all species with dataset-specific grouping
+  combined_benthic_data_summed_psu <- combined_benthic_data_summed %>%
+    group_by(
+      dataset, PSU, date,
+      # # Keep original date column for grouping, but handle NAs properly
+      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      # Keep original transect, but set to NA for non-TCRMP datasets
+      transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_)
+      # No species or susceptibility grouping - pooling all species
+    ) %>%
+    summarise(
+      # Keep other variables (taking first value since they should be consistent within groups)
+      lat = first(lat),
+      lon = first(lon),
+      cover = sum(cover, na.rm = TRUE),  # Sum all species cover together
+      depth = first(depth),
+      # Count total number of species and susceptibility groups
+      total_species_count = n_distinct(spp),
+      high_susc_count = sum(susc == "high", na.rm = TRUE),
+      moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
+      low_susc_count = sum(susc == "low", na.rm = TRUE),
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, depth, cover, 
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
+  
+  # Average total coral cover across transects and dates for each PSU
+  combined_benthic_data_averaged_psu <- combined_benthic_data_summed_psu %>%
+    group_by(dataset, PSU) %>%
+    summarise(
+      # Average cover across all transects/dates within each PSU
+      cover = mean(cover, na.rm = TRUE),
+      # Keep other variables (taking first value since they should be consistent within PSU)
+      lat = first(lat),
+      lon = first(lon),
+      depth = first(depth),
+      # Average species counts across transects
+      total_species_count = mean(total_species_count, na.rm = TRUE),
+      high_susc_count = mean(high_susc_count, na.rm = TRUE),
+      moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
+      low_susc_count = mean(low_susc_count, na.rm = TRUE),
+      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+      date = if_else(n() > 1, as.Date(NA), first(date)),
+      # Set transect to NA for everything since we're now at PSU level
+      transect = NA_real_,
+      .groups = 'drop'
+    ) %>%
+    # Reorder columns
+    select(dataset, date, PSU, transect, lat, lon, cover, depth,
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
+  
+  # DEMO
+  #
+  #summation by PSU only, pooling all species together
+  #   accounts for repeat observations and multiple transects in the case of TCRMP
   #
   # Sum SA values across all species with dataset-specific grouping
-  combined_demo_data_summed_psu <- combined_demo_data_grouped %>%
+  combined_demo_data_summed_psu <- combined_demo_data_trimmed %>%
     group_by(
-      dataset, PSU,
-      # Keep original date column for grouping, but handle NAs properly
-      date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+      dataset, PSU, date,
+      # # Keep original date column for grouping, but handle NAs properly
+      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
       # Keep original transect, but set to NA for non-TCRMP datasets
       transect = if_else(dataset == "TCRMP_health", transect, NA_character_)
       # No species or susceptibility grouping - pooling all species
@@ -1843,402 +1966,396 @@
            total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
   
   
-  #summation by PSU only, pooling all species together
-  #   accounts for repeat observations and multiple transects in the case of TCRMP
-  #   also handles lack of 'date' information for NODICE & SESAP
-  #
-  # Sum cover values across all species with dataset-specific grouping
-  combined_benthic_data_summed_psu <- combined_benthic_data_summed %>%
-    group_by(
-      dataset, PSU, date,
-      # # Keep original date column for grouping, but handle NAs properly
-      # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
-      # Keep original transect, but set to NA for non-TCRMP datasets
-      transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_)
-      # No species or susceptibility grouping - pooling all species
-    ) %>%
-    summarise(
-      # Keep other variables (taking first value since they should be consistent within groups)
-      lat = first(lat),
-      lon = first(lon),
-      cover = sum(cover, na.rm = TRUE),  # Sum all species cover together
-      depth = first(depth),
-      # Count total number of species and susceptibility groups
-      total_species_count = n_distinct(spp),
-      high_susc_count = sum(susc == "high", na.rm = TRUE),
-      moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
-      low_susc_count = sum(susc == "low", na.rm = TRUE),
-      .groups = 'drop'
-    ) %>%
-    # Reorder columns
-    select(dataset, date, PSU, transect, lat, lon, depth, cover, 
-           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
-  
-  # Average total coral cover across transects and dates for each PSU
-  combined_benthic_data_averaged_psu <- combined_benthic_data_summed_psu %>%
-    group_by(dataset, PSU) %>%
-    summarise(
-      # Average cover across all transects/dates within each PSU
-      cover = mean(cover, na.rm = TRUE),
-      # Keep other variables (taking first value since they should be consistent within PSU)
-      lat = first(lat),
-      lon = first(lon),
-      depth = first(depth),
-      # Average species counts across transects
-      total_species_count = mean(total_species_count, na.rm = TRUE),
-      high_susc_count = mean(high_susc_count, na.rm = TRUE),
-      moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
-      low_susc_count = mean(low_susc_count, na.rm = TRUE),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
-      # Set transect to NA for everything since we're now at PSU level
-      transect = NA_real_,
-      .groups = 'drop'
-    ) %>%
-    # Reorder columns
-    select(dataset, date, PSU, transect, lat, lon, cover, depth,
-           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
+  # NOTE - from what I can tell, absences are automatically filtered down to the site-level for both
+  #         benthic and demo data
   
   
+  ################################## plot total cover ##################################
   
   
-  ################################## absences: demo ##################################
-  
-  # STOPPING POINT - 18 June 2025
-  #   - I'm pretty sure absences have to be introduced at the level of the grouping, post summation, for demo data.
-  #       since the data are inherently colony-specific
-  
-  
-  
-  ################################## summarize SA & cover ##################################
-  
-  
-  #summaries
-  # cover_by_susc <- combined_benthic_data_grouped %>%
-  #   group_by(PSU, susc) %>%
-  #   summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop')
-  # #
-  # total_cover_by_PSU <- combined_benthic_data_grouped %>%
-  #   group_by(PSU) %>%
-  #   summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop')
-  # Average cover for each species within each PSU across dates, with sample size
-  avg_cover_by_species_PSU <- combined_benthic_data_grouped %>%
-    group_by(PSU, spp) %>%
-    summarise(
-      avg_cover = mean(cover, na.rm = TRUE),
-      N = n(),  # Total number of transect observations
-      .groups = 'drop'
-    )
-  
-  # Then sum across species to get total average cover per PSU
-  total_avg_cover_by_PSU <- avg_cover_by_species_PSU %>%
-    group_by(PSU) %>%
-    summarise(
-      total_avg_cover = sum(avg_cover, na.rm = TRUE),
-      .groups = 'drop'
-    )
-  #
-  SA_by_susc <- combined_demo_data_grouped %>%
-    group_by(PSU, susc) %>%
-    summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
-  #
-  total_SA_by_PSU <- combined_demo_data_grouped %>%
-    group_by(PSU) %>%
-    summarise(total_SA = sum(sa, na.rm = TRUE), .groups = 'drop')
-  
-  
-  # STOPPING POINT - 2 June 2025. am about to produce plots of SA, then should figure out 'absence' for
-  #   demo surveys, then will collate the demo & LPI surveys together, then append bathymetry & derived
-  #   values to dataframe, then produce a simple test GAM. finally will need to figure out prediction
+  # STOPPING POINT - 2 June 2025. am about to produce plots, then append bathymetry & derived
+  #   values to dataframes, then produce simple test GAMs. finally will need to figure out prediction
   #   onto a uniform grid which will "talk" to the habitat grid plugged into the CMS
   
-  #preserve absence data
-  all_PSU_info_cover <- NCRMP_benthic_long %>%
-    distinct(PSU, lat, lon, date)
   
-  # Updated summaries that include zero-cover PSU's
-  cover_by_susc_complete <- NCRMP_benthic_long %>%
-    group_by(PSU, susc) %>%
-    summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop') %>%
-    complete(PSU = all_PSU_info_cover$PSU, 
-             susc = c('low', 'moderate', 'high', 'Unaffected', 'Unknown'), 
-             fill = list(total_cover = 0)) %>%
-    left_join(all_PSU_info_cover, by = "PSU")  # Add back location info
+  hist(combined_benthic_data_averaged_psu$cover)
+  hist(combined_demo_data_averaged_psu$SA_density)
   
-  total_cover_by_PSU_complete <- NCRMP_benthic_long %>%
-    group_by(PSU) %>%
-    summarise(total_cover = sum(cover, na.rm = TRUE), .groups = 'drop') %>%
-    right_join(all_PSU_info_cover, by = "PSU") %>%
-    mutate(total_cover = replace_na(total_cover, 0))
+  # Bar plot version for ultimate clarity at low values
+  low_cover_data <- combined_benthic_data_averaged_psu %>%
+    filter(cover <= 5) %>%
+    mutate(cover_rounded = round(cover * 4) / 4)  # Round to nearest 0.25%
+
+  ggplot(low_cover_data, aes(x = factor(cover_rounded))) +
+    geom_bar(fill = "darkgreen", alpha = 0.7, color = "white") +
+    labs(
+      title = "Distribution of Low Coral Cover Sites (≤5%)",
+      subtitle = "Each bar represents 0.25% intervals - perfect for distinguishing 0% vs 1% sites",
+      x = "Total Coral Cover (%) - Rounded to nearest 0.25%",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(size = 10)
+    )
   
-  hist(total_cover_by_PSU_complete$total_cover)
+  # Basic detailed histogram
+  ggplot(combined_benthic_data_averaged_psu, aes(x = cover)) +
+    geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
+    scale_x_continuous(
+      breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 5),
+      minor_breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 1)
+    ) +
+    labs(
+      title = "Distribution of Total Coral Cover by PSU",
+      subtitle = "USVI Benthic Cover Data (2013, 2015, 2017)",
+      x = "Total Coral Cover (%)",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
   
-  # ################################## plot total cover ##################################
-  # 
-  # # Alternative version with density overlay
-  # ggplot(total_cover_by_PSU_complete, aes(x = total_cover)) +
-  #   geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
-  #   geom_density(color = "red", size = 1) +
-  #   scale_x_continuous(
-  #     breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 5),
-  #     minor_breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 1)
-  #   ) +
-  #   labs(
-  #     title = "Distribution of Total Coral Cover by PSU",
-  #     subtitle = "With density curve overlay",
-  #     x = "Total Coral Cover (%)",
-  #     y = "Density"
-  #   ) +
-  #   theme_minimal()
-  # 
-  # # Bar plot version for ultimate clarity at low values
-  # low_cover_data <- total_cover_by_PSU_complete %>%
-  #   filter(total_cover <= 5) %>%
-  #   mutate(cover_rounded = round(total_cover * 4) / 4)  # Round to nearest 0.25%
-  # 
-  # ggplot(low_cover_data, aes(x = factor(cover_rounded))) +
-  #   geom_bar(fill = "darkgreen", alpha = 0.7, color = "white") +
-  #   labs(
-  #     title = "Distribution of Low Coral Cover Sites (≤5%)",
-  #     subtitle = "Each bar represents 0.25% intervals - perfect for distinguishing 0% vs 1% sites",
-  #     x = "Total Coral Cover (%) - Rounded to nearest 0.25%",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     axis.text.x = element_text(size = 10)
-  #   )
-  # library(ggplot2)
-  # library(dplyr)
-  # 
-  # # Basic detailed histogram
-  # ggplot(total_cover_by_PSU_complete, aes(x = total_cover)) +
-  #   geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
-  #   scale_x_continuous(
-  #     breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 5),
-  #     minor_breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 1)
-  #   ) +
-  #   labs(
-  #     title = "Distribution of Total Coral Cover by PSU",
-  #     subtitle = "USVI Benthic Cover Data (2013, 2015, 2017)",
-  #     x = "Total Coral Cover (%)",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     plot.title = element_text(size = 14, face = "bold"),
-  #     plot.subtitle = element_text(size = 12),
-  #     axis.text.x = element_text(angle = 45, hjust = 1)
-  #   )
-  # 
-  # # Alternative version with density overlay
-  # ggplot(total_cover_by_PSU_complete, aes(x = total_cover)) +
-  #   geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
-  #   geom_density(color = "red", size = 1) +
-  #   scale_x_continuous(
-  #     breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 5),
-  #     minor_breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 1)
-  #   ) +
-  #   labs(
-  #     title = "Distribution of Total Coral Cover by PSU",
-  #     subtitle = "With density curve overlay",
-  #     x = "Total Coral Cover (%)",
-  #     y = "Density"
-  #   ) +
-  #   theme_minimal()
-  # 
-  # # Version with fine bin width to distinguish low values clearly
-  # ggplot(total_cover_by_PSU_complete, aes(x = total_cover)) +
-  #   geom_histogram(binwidth = 0.5, fill = "coral", alpha = 0.7, color = "white", size = 0.3) +
-  #   scale_x_continuous(
-  #     breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 1),
-  #     minor_breaks = seq(0, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE), by = 0.5),
-  #     limits = c(-0.25, max(total_cover_by_PSU_complete$total_cover, na.rm = TRUE) + 1)
-  #   ) +
-  #   labs(
-  #     title = "Distribution of Total Coral Cover by PSU",
-  #     subtitle = "Bin width = 0.5% to clearly distinguish zero vs low cover sites",
-  #     x = "Total Coral Cover (%)",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
-  #     panel.grid.major.x = element_line(color = "grey70", size = 0.5),
-  #     axis.text.x = element_text(angle = 45, hjust = 1, size = 10)
-  #   )
-  # 
-  # # Zoomed-in version focusing on low values (0-10%)
-  # ggplot(total_cover_by_PSU_complete, aes(x = total_cover)) +
-  #   geom_histogram(binwidth = 0.25, fill = "steelblue", alpha = 0.7, color = "white", size = 0.3) +
-  #   scale_x_continuous(
-  #     breaks = seq(0, 10, by = 0.5),
-  #     minor_breaks = seq(0, 10, by = 0.25),
-  #     limits = c(-0.125, 10)
-  #   ) +
-  #   labs(
-  #     title = "Distribution of Coral Cover: Focus on Low Values (0-10%)",
-  #     subtitle = "Bin width = 0.25% to clearly separate zero, near-zero, and low cover",
-  #     x = "Total Coral Cover (%)",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
-  #     panel.grid.major.x = element_line(color = "grey60", size = 0.5),
-  #     axis.text.x = element_text(size = 10)
-  #   )
-  # 
-  # # Bar plot version for ultimate clarity at low values
-  # low_cover_data <- total_cover_by_PSU_complete %>%
-  #   filter(total_cover <= 5) %>%
-  #   mutate(cover_rounded = round(total_cover * 4) / 4)  # Round to nearest 0.25%
-  # 
-  # ggplot(low_cover_data, aes(x = factor(cover_rounded))) +
-  #   geom_bar(fill = "darkgreen", alpha = 0.7, color = "white") +
-  #   labs(
-  #     title = "Distribution of Low Coral Cover Sites (≤5%)",
-  #     subtitle = "Each bar represents 0.25% intervals - perfect for distinguishing 0% vs 1% sites",
-  #     x = "Total Coral Cover (%) - Rounded to nearest 0.25%",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     axis.text.x = element_text(size = 10)
-  #   )
-  # 
-  # # Summary statistics to help interpret the histogram
-  # summary_stats <- total_cover_by_PSU_complete %>%
-  #   summarise(
-  #     mean_cover_all = mean(total_cover, na.rm = TRUE),
-  #     mean_cover_nonzero = mean(total_cover[total_cover > 0], na.rm = TRUE),
-  #     median_cover = median(total_cover, na.rm = TRUE),
-  #     median_cover_nonzero = median(total_cover[total_cover > 0], na.rm = TRUE),
-  #     sd_cover_nonzero = sd(total_cover[total_cover > 0], na.rm = TRUE),
-  #     min_cover = min(total_cover, na.rm = TRUE),
-  #     max_cover = max(total_cover, na.rm = TRUE),
-  #     zero_cover_sites = sum(total_cover == 0, na.rm = TRUE),
-  #     nonzero_cover_sites = sum(total_cover > 0, na.rm = TRUE),
-  #     total_sites = n(),
-  #     percent_zero_sites = round(100 * zero_cover_sites / total_sites, 1)
-  #   )
-  # 
-  # print(summary_stats)
-  # 
-  # # Additional breakdown by cover categories
-  # cover_categories <- total_cover_by_PSU_complete %>%
-  #   mutate(
-  #     cover_category = case_when(
-  #       total_cover == 0 ~ "Zero cover (0%)",
-  #       total_cover > 0 & total_cover <= 1 ~ "Very low (0-1%)",
-  #       total_cover > 1 & total_cover <= 5 ~ "Low (1-5%)",
-  #       total_cover > 5 & total_cover <= 10 ~ "Moderate (5-10%)",
-  #       total_cover > 10 & total_cover <= 25 ~ "High (10-25%)",
-  #       total_cover > 25 ~ "Very high (>25%)"
-  #     )
-  #   ) %>%
-  #   count(cover_category) %>%
-  #   mutate(percentage = round(100 * n / sum(n), 1))
-  # 
-  # print("Cover category breakdown:")
-  # print(cover_categories)
-  # 
-  # ################################## plot by susceptibility ##################################
-  # 
-  # # Summary statistics by susceptibility group
-  # susc_summary <- cover_by_susc_complete %>%
-  #   mutate(susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown"))) %>%
-  #   group_by(susc) %>%
-  #   summarise(
-  #     mean_cover_all = mean(total_cover, na.rm = TRUE),
-  #     mean_cover_nonzero = mean(total_cover[total_cover > 0], na.rm = TRUE),
-  #     median_cover_nonzero = median(total_cover[total_cover > 0], na.rm = TRUE),
-  #     sd_cover_nonzero = sd(total_cover[total_cover > 0], na.rm = TRUE),
-  #     min_cover = min(total_cover, na.rm = TRUE),
-  #     max_cover = max(total_cover, na.rm = TRUE),
-  #     zero_cover_sites = sum(total_cover == 0, na.rm = TRUE),
-  #     nonzero_cover_sites = sum(total_cover > 0, na.rm = TRUE),
-  #     total_sites = n(),
-  #     percent_zero_sites = round(100 * zero_cover_sites / total_sites, 1),
-  #     .groups = 'drop'
-  #   )
-  # 
-  # print("Summary statistics by susceptibility group:")
-  # print(susc_summary)
-  # 
-  # # Histogram by susceptibility group
-  # ggplot(cover_by_susc_complete %>% 
-  #          mutate(susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown"))), 
-  #        aes(x = total_cover, fill = susc)) +
-  #   geom_histogram(binwidth = 0.5, alpha = 0.7, color = "white", size = 0.2) +
-  #   facet_wrap(~susc, scales = "free_y", ncol = 2) +
-  #   scale_x_continuous(
-  #     breaks = seq(0, max(cover_by_susc_complete$total_cover, na.rm = TRUE), by = 2),
-  #     minor_breaks = seq(0, max(cover_by_susc_complete$total_cover, na.rm = TRUE), by = 1)
-  #   ) +
-  #   scale_fill_viridis_d(name = "Susceptibility") +
-  #   labs(
-  #     title = "Distribution of Coral Cover by Susceptibility Group",
-  #     subtitle = "Bin width = 0.5% for each susceptibility category",
-  #     x = "Coral Cover (%) by Susceptibility Group",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
-  #     axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
-  #     strip.text = element_text(size = 10, face = "bold")
-  #   )
-  # 
-  # # Box plot comparing susceptibility groups
-  # ggplot(cover_by_susc_complete %>% 
-  #          filter(total_cover > 0) %>%
-  #          mutate(susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown"))), 
-  #        aes(x = susc, y = total_cover, fill = susc)) +
-  #   geom_boxplot(alpha = 0.7, outlier.alpha = 0.6) +
-  #   geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
-  #   scale_fill_viridis_d(name = "Susceptibility") +
-  #   labs(
-  #     title = "Coral Cover by Susceptibility Group (Non-zero sites only)",
-  #     subtitle = "Box plots with individual data points overlaid",
-  #     x = "Susceptibility Group",
-  #     y = "Coral Cover (%)"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     axis.text.x = element_text(angle = 45, hjust = 1),
-  #     legend.position = "none"
-  #   )
-  # 
-  # # Stacked bar chart showing proportion of zero vs non-zero sites by susceptibility
-  # susc_zero_nonzero <- cover_by_susc_complete %>%
-  #   mutate(
-  #     susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown")),
-  #     has_cover = ifelse(total_cover > 0, "Has coral cover", "Zero coral cover")
-  #   ) %>%
-  #   count(susc, has_cover) %>%
-  #   group_by(susc) %>%
-  #   mutate(
-  #     total_sites = sum(n),
-  #     percentage = round(100 * n / total_sites, 1)
-  #   )
-  # 
-  # ggplot(susc_zero_nonzero, aes(x = susc, y = n, fill = has_cover)) +
-  #   geom_col(position = "stack", alpha = 0.8) +
-  #   geom_text(aes(label = paste0(n, "\n(", percentage, "%)")), 
-  #             position = position_stack(vjust = 0.5), 
-  #             size = 3, color = "white", fontface = "bold") +
-  #   scale_fill_manual(
-  #     values = c("Zero coral cover" = "grey60", "Has coral cover" = "coral"),
-  #     name = "Cover Status"
-  #   ) +
-  #   labs(
-  #     title = "Sites with vs without Coral Cover by Susceptibility Group",
-  #     subtitle = "Numbers and percentages shown for each category",
-  #     x = "Susceptibility Group",
-  #     y = "Number of PSUs"
-  #   ) +
-  #   theme_minimal() +
-  #   theme(
-  #     axis.text.x = element_text(angle = 45, hjust = 1)
-  #   )
+  # Alternative version with density overlay
+  ggplot(combined_benthic_data_averaged_psu, aes(x = cover)) +
+    geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
+    geom_density(color = "red", size = 1) +
+    scale_x_continuous(
+      breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 5),
+      minor_breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 1)
+    ) +
+    labs(
+      title = "Distribution of Total Coral Cover by PSU",
+      subtitle = "With density curve overlay",
+      x = "Total Coral Cover (%)",
+      y = "Density"
+    ) +
+    theme_minimal()
+  
+  # Version with fine bin width to distinguish low values clearly
+  ggplot(combined_benthic_data_averaged_psu, aes(x = cover)) +
+    geom_histogram(binwidth = 0.5, fill = "coral", alpha = 0.7, color = "white", size = 0.3) +
+    scale_x_continuous(
+      breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 1),
+      minor_breaks = seq(0, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE), by = 0.5),
+      limits = c(-0.25, max(combined_benthic_data_averaged_psu$cover, na.rm = TRUE) + 1)
+    ) +
+    labs(
+      title = "Distribution of Total Coral Cover by PSU",
+      subtitle = "Bin width = 0.5% to clearly distinguish zero vs low cover sites",
+      x = "Total Coral Cover (%)",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
+      panel.grid.major.x = element_line(color = "grey70", size = 0.5),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 10)
+    )
+
+  # Zoomed-in version focusing on low values (0-10%)
+  ggplot(combined_benthic_data_averaged_psu, aes(x = cover)) +
+    geom_histogram(binwidth = 0.25, fill = "steelblue", alpha = 0.7, color = "white", size = 0.3) +
+    scale_x_continuous(
+      breaks = seq(0, 10, by = 0.5),
+      minor_breaks = seq(0, 10, by = 0.25),
+      limits = c(-0.125, 10)
+    ) +
+    labs(
+      title = "Distribution of Coral Cover: Focus on Low Values (0-10%)",
+      subtitle = "Bin width = 0.25% to clearly separate zero, near-zero, and low cover",
+      x = "Total Coral Cover (%)",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
+      panel.grid.major.x = element_line(color = "grey60", size = 0.5),
+      axis.text.x = element_text(size = 10)
+    )
+
+  # Bar plot version for ultimate clarity at low values
+  low_cover_data <- combined_benthic_data_averaged_psu %>%
+    filter(cover <= 5) %>%
+    mutate(cover_rounded = round(cover * 4) / 4)  # Round to nearest 0.25%
+
+  ggplot(low_cover_data, aes(x = factor(cover_rounded))) +
+    geom_bar(fill = "darkgreen", alpha = 0.7, color = "white") +
+    labs(
+      title = "Distribution of Low Coral Cover Sites (≤5%)",
+      subtitle = "Each bar represents 0.25% intervals - perfect for distinguishing 0% vs 1% sites",
+      x = "Total Coral Cover (%) - Rounded to nearest 0.25%",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(size = 10)
+    )
+
+  # Summary statistics to help interpret the histogram
+  summary_stats <- combined_benthic_data_averaged_psu %>%
+    summarise(
+      mean_cover_all = mean(cover, na.rm = TRUE),
+      mean_cover_nonzero = mean(cover[cover > 0], na.rm = TRUE),
+      median_cover = median(cover, na.rm = TRUE),
+      median_cover_nonzero = median(cover[cover > 0], na.rm = TRUE),
+      sd_cover_nonzero = sd(cover[cover > 0], na.rm = TRUE),
+      min_cover = min(cover, na.rm = TRUE),
+      max_cover = max(cover, na.rm = TRUE),
+      zero_cover_sites = sum(cover == 0, na.rm = TRUE),
+      nonzero_cover_sites = sum(cover > 0, na.rm = TRUE),
+      total_sites = n(),
+      percent_zero_sites = round(100 * zero_cover_sites / total_sites, 1)
+    )
+
+  print(summary_stats)
+
+  # Additional breakdown by cover categories
+  cover_categories <- combined_benthic_data_averaged_psu %>%
+    mutate(
+      cover_category = case_when(
+        cover == 0 ~ "Zero cover (0%)",
+        cover > 0 & cover <= 1 ~ "Very low (0-1%)",
+        cover > 1 & cover <= 5 ~ "Low (1-5%)",
+        cover > 5 & cover <= 10 ~ "Moderate (5-10%)",
+        cover > 10 & cover <= 25 ~ "High (10-25%)",
+        cover > 25 ~ "Very high (>25%)"
+      )
+    ) %>%
+    count(cover_category) %>%
+    mutate(percentage = round(100 * n / sum(n), 1))
+
+  print("Cover category breakdown:")
+  print(cover_categories)
+
+  
+  
+  
+  
+  
+  # Stacked bar chart showing proportion of zero vs non-zero sites by susceptibility
+  susc_zero_nonzero_psu <- combined_benthic_data_averaged_psu %>%
+    mutate(
+      # Create high/moderate/low categories based on the count columns
+      # You may need to adjust this logic based on how you want to categorize PSUs
+      dominant_susc = case_when(
+        high_susc_count >= moderate_susc_count & high_susc_count >= low_susc_count ~ "high",
+        moderate_susc_count >= low_susc_count ~ "moderate",
+        TRUE ~ "low"
+      ),
+      dominant_susc = factor(dominant_susc, levels = c("low", "moderate", "high")),
+      has_cover = ifelse(cover > 0, "Has coral cover", "Zero coral cover")
+    ) %>%
+    count(dominant_susc, has_cover) %>%
+    group_by(dominant_susc) %>%
+    mutate(
+      total_sites = sum(n),
+      percentage = round(100 * n / total_sites, 1)
+    )
+  
+  ggplot(susc_zero_nonzero_psu, aes(x = dominant_susc, y = n, fill = has_cover)) +
+    geom_col(position = "stack", alpha = 0.8) +
+    geom_text(aes(label = paste0(n, "\n(", percentage, "%)")),
+              position = position_stack(vjust = 0.5),
+              size = 3, color = "white", fontface = "bold") +
+    scale_fill_manual(
+      values = c("Zero coral cover" = "grey60", "Has coral cover" = "coral"),
+      name = "Cover Status"
+    ) +
+    labs(
+      title = "PSUs with vs without Coral Cover by Dominant Susceptibility Group",
+      subtitle = "Numbers and percentages shown for each category",
+      x = "Dominant Susceptibility Group",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  
+  
+  # Alternative: Group by dataset instead of susceptibility
+  dataset_zero_nonzero_psu <- combined_benthic_data_averaged_psu %>%
+    mutate(
+      has_cover = ifelse(cover > 0, "Has coral cover", "Zero coral cover")
+    ) %>%
+    count(dataset, has_cover) %>%
+    group_by(dataset) %>%
+    mutate(
+      total_sites = sum(n),
+      percentage = round(100 * n / total_sites, 1)
+    )
+  
+  ggplot(dataset_zero_nonzero_psu, aes(x = dataset, y = n, fill = has_cover)) +
+    geom_col(position = "stack", alpha = 0.8) +
+    geom_text(aes(label = paste0(n, "\n(", percentage, "%)")),
+              position = position_stack(vjust = 0.5),
+              size = 3, color = "white", fontface = "bold") +
+    scale_fill_manual(
+      values = c("Zero coral cover" = "grey60", "Has coral cover" = "coral"),
+      name = "Cover Status"
+    ) +
+    labs(
+      title = "PSUs with vs without Coral Cover by Dataset",
+      subtitle = "Numbers and percentages shown for each category",
+      x = "Dataset",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  
+  
+  
+  # Alternative: Group by dataset instead of susceptibility
+  dataset_zero_nonzero_psu_demo <- combined_demo_data_averaged_psu %>%
+    mutate(
+      has_corals = ifelse(SA_density > 0, "Has corals", "No corals")
+    ) %>%
+    count(dataset, has_corals) %>%
+    group_by(dataset) %>%
+    mutate(
+      total_sites = sum(n),
+      percentage = round(100 * n / total_sites, 1)
+    )
+  
+  ggplot(dataset_zero_nonzero_psu_demo, aes(x = dataset, y = n, fill = has_corals)) +
+    geom_col(position = "stack", alpha = 0.8) +
+    geom_text(aes(label = paste0(n, "\n(", percentage, "%)")),
+              position = position_stack(vjust = 0.5),
+              size = 3, color = "white", fontface = "bold") +
+    scale_fill_manual(
+      values = c("Zero corals" = "grey60", "Has corals" = "coral"),
+      name = "Demo/Health Status"
+    ) +
+    labs(
+      title = "Demo/Health survey PSUs with vs without corals by Dataset",
+      subtitle = "Numbers and percentages shown for each category",
+      x = "Dataset",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  ################################## plot by susceptibility ##################################
+
+  # Summary statistics by susceptibility group
+  susc_summary <- combined_benthic_data_averaged_susc %>%
+    mutate(susc = factor(susc, levels = c("low", "moderate", "high"))) %>%
+    group_by(susc) %>%
+    summarise(
+      mean_cover_all = mean(cover, na.rm = TRUE),
+      mean_cover_nonzero = mean(cover[cover > 0], na.rm = TRUE),
+      median_cover_nonzero = median(cover[cover > 0], na.rm = TRUE),
+      sd_cover_nonzero = sd(cover[cover > 0], na.rm = TRUE),
+      min_cover = min(cover, na.rm = TRUE),
+      max_cover = max(cover, na.rm = TRUE),
+      zero_cover_sites = sum(cover == 0, na.rm = TRUE),
+      nonzero_cover_sites = sum(cover > 0, na.rm = TRUE),
+      total_sites = n(),
+      percent_zero_sites = round(100 * zero_cover_sites / total_sites, 1),
+      .groups = 'drop'
+    )
+
+  print("Summary statistics by susceptibility group:")
+  print(susc_summary)
+
+  # Histogram by susceptibility group
+  ggplot(combined_benthic_data_averaged_susc %>%
+           mutate(susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown"))),
+         aes(x = cover, fill = susc)) +
+    geom_histogram(binwidth = 0.5, alpha = 0.7, color = "white", size = 0.2) +
+    facet_wrap(~susc, scales = "free_y", ncol = 2) +
+    scale_x_continuous(
+      breaks = seq(0, max(combined_benthic_data_averaged_susc$cover, na.rm = TRUE), by = 2),
+      minor_breaks = seq(0, max(combined_benthic_data_averaged_susc$cover, na.rm = TRUE), by = 1)
+    ) +
+    scale_fill_viridis_d(name = "Susceptibility") +
+    labs(
+      title = "Distribution of Coral Cover by Susceptibility Group",
+      subtitle = "Bin width = 0.5% for each susceptibility category",
+      x = "Coral Cover (%) by Susceptibility Group",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      panel.grid.minor.x = element_line(color = "grey90", size = 0.3),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+      strip.text = element_text(size = 10, face = "bold")
+    )
+
+  # Box plot comparing susceptibility groups
+  ggplot(combined_benthic_data_averaged_susc %>%
+           filter(cover > 0) %>%
+           mutate(susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown"))),
+         aes(x = susc, y = cover, fill = susc)) +
+    geom_boxplot(alpha = 0.7, outlier.alpha = 0.6) +
+    geom_jitter(width = 0.2, alpha = 0.4, size = 0.8) +
+    scale_fill_viridis_d(name = "Susceptibility") +
+    labs(
+      title = "Coral Cover by Susceptibility Group (Non-zero sites only)",
+      subtitle = "Box plots with individual data points overlaid",
+      x = "Susceptibility Group",
+      y = "Coral Cover (%)"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "none"
+    )
+
+  # Stacked bar chart showing proportion of zero vs non-zero sites by susceptibility
+  susc_zero_nonzero <- combined_benthic_data_averaged_susc %>%
+    mutate(
+      susc = factor(susc, levels = c("low", "moderate", "high", "Unaffected", "Unknown")),
+      has_cover = ifelse(cover > 0, "Has coral cover", "Zero coral cover")
+    ) %>%
+    count(susc, has_cover) %>%
+    group_by(susc) %>%
+    mutate(
+      total_sites = sum(n),
+      percentage = round(100 * n / total_sites, 1)
+    )
+
+  ggplot(susc_zero_nonzero, aes(x = susc, y = n, fill = has_cover)) +
+    geom_col(position = "stack", alpha = 0.8) +
+    geom_text(aes(label = paste0(n, "\n(", percentage, "%)")),
+              position = position_stack(vjust = 0.5),
+              size = 3, color = "white", fontface = "bold") +
+    scale_fill_manual(
+      values = c("Zero coral cover" = "grey60", "Has coral cover" = "coral"),
+      name = "Cover Status"
+    ) +
+    labs(
+      title = "Sites with vs without Coral Cover by Susceptibility Group",
+      subtitle = "Numbers and percentages shown for each category",
+      x = "Susceptibility Group",
+      y = "Number of PSUs"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  
+  
+  ################################## Save output ##################################
+  
+  # # # Save specific combined datasets in an .rda file for stats downstream
+  # save(combined_benthic_data_averaged, 
+  #      combined_benthic_data_averaged_susc, 
+  #      combined_benthic_data_averaged_psu,
+  #      combined_demo_data_averaged, 
+  #      combined_demo_data_averaged_susc, 
+  #      combined_demo_data_averaged_psu,
+  #      file = here("output", "all_combined_data.rda"))
+  
+  # #pass workspace to downstream script
+  # save.image(file = here("output", "process_species_data.RData"))

@@ -14,17 +14,13 @@
   
   source(here("src/functions.R"))
   
-  # # Print GDAL, PROJ, and GEOS versions linked with sf
-  # sf::sf_extSoftVersion()
-  # 
-  # # Print GDAL version linked with terra
-  # terra::gdal()
-  
   ################################## setup ##################################
-
+  
   load_spat_objects(directory = 'output/output_import_merge_rasters/') #call function
   load(here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData')) #load workspace from upstream script
-
+  
+  existing_objects <- ls(envir = .GlobalEnv)
+  
   # # all various things I tried to get things working. not currently required on my M1 Macbook, newly updated
   # install.packages("sf", dependencies = TRUE) #this may be required after updating to Sequoia (I reinstalled R via homebrew due to issues with Sequoia and it broke some more things)
   # tools::package_dependencies(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), recursive = TRUE) #check all dependencies for below packages
@@ -33,7 +29,7 @@
   # Sys.setenv(LD_LIBRARY_PATH = "/opt/homebrew/lib:/opt/homebrew/include:/opt/homebrew/share") #this may also be required, followed by possibly installing sf and terra from source (below)
   # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj") #this was temporarily needed after updating M1 Macbook to Sequoia OS
   # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
-
+  
   # # What I had to do to get R spatial stuff working after updating to Sequoia was:
   # #   1.) Tried uninstalling everything macports, which was probably dumb because now QGIS has to be entirely reinstalled (and may
   # #       may not work now anyways through macports yet because of delays in dependency updates after Sequoia - we shall see)
@@ -45,7 +41,7 @@
   # install.packages("terra", type = "source")
   # #check current R version
   # R.version.string
-
+  
   ################################## Test simple crm-usvi ##################################
   
   # STOPPING POINT - 8 April 2025
@@ -485,7 +481,10 @@
   
   ################################## Save objects/workspace ##################################
   
-  # #save terra objects and then workspace for use in downstream scripts
-  # save_spat_objects() #call from functions.R
-  # save.image(file = here("output", "create_habitat_grid_workspace.RData"))
+  # # #save terra objects and then workspace for use in downstream scripts
+  # # save_spat_objects() #call from functions.R
+  # # save.image(file = here("output", "create_habitat_grid_workspace.RData"))
+  # 
+  # #updated way to handle saving of new objects
+  # save_new_objects("output/output_create_habitat_grid", existing_objects)
   

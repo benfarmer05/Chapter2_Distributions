@@ -2,30 +2,29 @@
   
   # Function to save SpatRaster and SpatVector objects
   save_spat_objects <- function(output_dir = "output") {
-    # Get all objects in the workspace
     all_objects <- ls(envir = .GlobalEnv)
-    
-    # Create output directory if it doesn't exist
     dir.create(here(output_dir), showWarnings = FALSE)
     
-    # Loop through each object
     for (obj_name in all_objects) {
       obj <- get(obj_name)
       
-      # Check if the object is a SpatRaster or SpatVector
-      # if (inherits(obj, "SpatRaster") || inherits(obj, "SpatVector")) {
       if (inherits(obj, c("SpatRaster", "SpatVector", "SpatExtent"))) {
-        # Create a filename based on the object name
+        # Check if SpatRaster has values
+        if (inherits(obj, "SpatRaster")) {
+          if (!terra::hasValues(obj)) {
+            warning("Object ", obj_name, " is a SpatRaster with no values")
+            next  # Skip saving empty rasters
+          }
+        }
+        
         file_name <- paste0(obj_name, ".rds")
         file_path <- here(output_dir, file_name)
         
-        # Save the object to an RDS file
         saveRDS(obj, file_path)
-        
         message("Saved ", obj_name, " to ", file_path)
       }
     }
-  }
+  }  
   
   # Function to load SpatRaster and SpatVector objects
   # NOTE - 21 May 2025, updated to skip files with, e.g., no matching .tif instead of killing the process. also includes support for
@@ -57,6 +56,45 @@
       }, error = function(e) {
         warning(paste("Skipping", basename(file), "due to error:", conditionMessage(e)))
       })
+    }
+  }
+  
+  
+  # Save only *new* objects
+  save_new_objects <- function(output_dir = "output", existing_objects) {
+    current_objects <- ls(envir = .GlobalEnv)
+    new_objects <- setdiff(current_objects, existing_objects)
+    
+    if (length(new_objects) == 0) {
+      message("No new objects to save")
+      return()
+    }
+    
+    dir.create(here(output_dir), showWarnings = FALSE)
+    
+    for (obj_name in new_objects) {
+      obj <- get(obj_name)
+      
+      if (inherits(obj, c("SpatRaster", "SpatVector", "SpatExtent"))) {
+        # Check if SpatRaster has values
+        if (inherits(obj, "SpatRaster") && !terra::hasValues(obj)) {
+          warning("Object ", obj_name, " is a SpatRaster with no values")
+          next
+        }
+        
+        file_name <- paste0(obj_name, ".rds")
+        file_path <- here(output_dir, file_name)
+        saveRDS(obj, file_path)
+        message("Saved NEW spatial object: ", obj_name)
+      }
+    }
+    
+    # Save non-spatial new objects separately
+    new_non_spatial <- new_objects[!sapply(new_objects, function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+    
+    if (length(new_non_spatial) > 0) {
+      save(list = new_non_spatial, file = here(output_dir, "create_habitat_grid_workspace.RData"))
+      message("Saved ", length(new_non_spatial), " new non-spatial objects to create_habitat_grid_workspace.RData")
     }
   }
   

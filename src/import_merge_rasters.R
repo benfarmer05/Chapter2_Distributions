@@ -2,10 +2,18 @@
   # .rs.restartR(clean = TRUE)
   
   library(here)
-  library(terra) #this requires (at least for me on M1 Macbook in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389). could cause issues with macports installation of other things for QGIS but we'll see. lastly, install.packages("terra", type = "source") was required to get terra to work after Sequioa update
+  library(terra)
   library(sf)
   
-  #this was temporarily needed after updating M1 Macbook to Sequoia OS. not currently needed
+  # NOTE - loading & use of 'terra' with reading of geodatabase rasters requires (at least for me on M1 Macbook
+  #         in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389).
+  #         could cause issues with macports installation of other things for QGIS but we'll see
+  
+  # #must run this after updating spatial packages in homebrew, for spatial packages to link properly
+  # install.packages("terra", type = "source") 
+  # install.packages("sf", type = "source") 
+  
+  # # this was temporarily needed after updating M1 Macbook to Sequoia OS. not currently needed
   # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj")
   # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal")
   
@@ -171,6 +179,7 @@
   bathy_crm_2024_agg <- resample(bathy_crm_2024_clipped, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
   bathy_PR_East_agg <- resample(bathy_PR_East_clipped, template_raster, method = "average")
   bathy_crm_2019_agg = resample(bathy_crm_2019_clipped, template_raster, method = 'average')
+  rm(template_raster) #drop this raster after it is no longer needed, since it is empty and messed up object saving function
   
   #plot briefly
   bathy_crm_2024_agg_reefdepth <- clamp(bathy_crm_2024_agg, lower=-50, upper=0, values=TRUE) #limit depth to 0 m; eliminate land elevation
@@ -294,7 +303,20 @@
   
   ################################## Save objects/workspace  ##################################
   
-  # #save terra objects and then workspace for use in downstream scripts
-  # save_spat_objects(output_dir = 'output/output_import_merge_rasters/') #call from functions.R
+  #remove raster files with very large memory which don't work well with saving and re-loading downstream
+  # NOTE - can return to this if direct access to PR East is required!
+  rm(bathy_PR_East_clipped)
+  rm(bathy_PR_East)
+  
+  #save terra objects #and then workspace for use in downstream scripts
+  save_spat_objects(output_dir = 'output/output_import_merge_rasters/') #call from functions.R
   # save.image(file = here("output", 'output_import_merge_rasters/import_merge_rasters_workspace.RData'))
+  
+  # Get all non-spatial objects
+  non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+  
+  # Save only non-spatial objects
+  # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
+  save(list = non_spatial, file = here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData'))
+  
   
