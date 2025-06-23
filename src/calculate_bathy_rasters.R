@@ -210,8 +210,6 @@
   VRM <- vrm(bathy_merged3_crm_reefdepth)
   # VRM_larger <- vrm(bathy_merged3_crm_reefdepth, s = 2)  
   VRM_largest <- vrm(bathy_merged3_crm_reefdepth, s = 9) 
-  plan_curv <- PlanCurv(bathy_merged3_crm_reefdepth)
-  prof_curv <- ProfCurv(bathy_water_only)  
   # NOTE - VRM especially may require sub-50 m resolution
   # Look at these with MultiscaleDTM: TPI, DMV, BPI, RelPos, SAPA (measure of rugosity), VRM
   # MultiscaleDTM measures
@@ -224,14 +222,91 @@
   SAPA_350m <- SAPA(bathy_merged3_crm_reefdepth, w = c(7, 7))
   VRM_multiscale <- VRM(bathy_merged3_crm_reefdepth, w = c(5, 5))
   
-  plot(SAPA_350m,
-       # breaks = seq(1.000, 1.040, by = 0.002),
-       range = c(1.000, 1.020),
-       main = "SAPA (350m window)")
   
-  plot(BPI)
-  plot(slopeofslope)
-  plot(roughness)
+  
+  # TEST
+  
+  bathy_crm_2019_clipped
+  test = clamp(bathy_crm_2019_clipped, lower = -50, upper = 0, values = TRUE)
+  plot(test)
+  
+  slope_test <- terrain(test, v = "slope", unit = 'degrees')
+  slopeofslope_test = terrain(slope, v = "slope", unit = 'degrees')
+  aspect_test <- terrain(test, v = "aspect", unit = 'degrees')
+  flowdir_test <- terrain(test, v = "flowdir")
+  roughness_test = terrain(test, v = "roughness")
+  TPI_test = terrain(test, v = 'TPI') #Wilson 2007 bathymetric-friendly method
+  TRI_test = terrain(test, v = 'TRI')
+  VRM_test <- vrm(test)
+  VRM_largest_test <- vrm(test, s = 9)
+  TPI_multiscale_test <- TPI(test, w = c(5, 5))
+  DMV_test <- DMV(test, w = c(5, 5))
+  BPI_test <- BPI(test, w = c(5, 5))  # BPI is same as TPI for bathymetry
+  RelPos_test <- RelPos(test, w = c(5, 5))
+  SAPA_150m_test <- SAPA(test, w = c(3, 3))
+  SAPA_250m_test <- SAPA(test, w = c(5, 5))  # Surface Area to Planar Area ratio
+  SAPA_350m_test <- SAPA(test, w = c(7, 7))
+  VRM_multiscale_test <- VRM(test, w = c(5, 5))
+
+  
+  
+  plot(test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(slope_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(slopeofslope_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(aspect_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(flowdir_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(roughness_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TPI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TRI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM_largest_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TPI_multiscale_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(DMV_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(BPI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(RelPos_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_150m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_250m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_350m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM_multiscale_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  
+  # TEST
+  
+  plot(bathy_merged3_crm_reefdepth, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(slope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(slopeofslope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(aspect, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(flowdir, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(roughness, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TRI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM_largest, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(TPI_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(DMV, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(BPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(RelPos, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_150m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_250m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(SAPA_350m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(VRM_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))  
+  
+  # plot(slope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(slopeofslope, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
+  # plot(aspect, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
+  # plot(flowdir, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
+  # plot(roughness, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
+  # plot(TPI, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
+  # plot(TRI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(VRM, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(VRM_largest, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(TPI_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(DMV, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(BPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(RelPos, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(SAPA_150m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(SAPA_250m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(SAPA_350m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  # plot(VRM_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
   
   # NOTE - strikes me that BPI, slope of slope, roughness might be the most useful
   #         - remains to be seen whether these are worth calculating at native resolution. probably not, due to 

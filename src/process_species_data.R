@@ -44,6 +44,11 @@
   #         'Coral cover at six sites on the south coast of St. John, USVI from 1992 to 2019', found in
   #         https://www.bco-dmo.org/project/2272, though (from https://coralreefs.csun.edu/data/)
   
+  
+  #TEST
+  load(here('data/NCRMP_STX_2015_23_percent_cover_site.rda'))
+  #TEST
+  
   load(here('data/USVI_2013_benthic_cover.rda'))
   load(here('data/USVI_2015_benthic_cover.rda'))
   load(here('data/USVI_2017_benthic_cover.rda'))
@@ -1566,7 +1571,123 @@
     cat("All species have susceptibility data - SUCCESS!\n")
   }  
   
+  
+  
+  
+  
+  # FILL IN SITES WITH ABSOLUTE ZERO CORAL COVER (these were filtered out upstream for NCRMP)
+  
+  
+  # Read in original NCRMP_benthic data to identify all PSUs
+  # Assuming your original data is stored in a variable called 'NCRMP_benthic'
+  # If it's in a file, you'll need to read it in first
+  
+  # Get all unique PSUs from original NCRMP_benthic data with metadata
+  all_ncrmp_psus <- NCRMP_benthic %>%
+    # Create PSU with region suffix to match combined dataset format
+    mutate(
+      region_suffix = case_when(
+        REGION == "PRICO" ~ "_PR",
+        REGION %in% c("STTSTJ", "STX") ~ "_VI",
+        TRUE ~ "_UNKNOWN"  # Fallback for unexpected regions
+      ),
+      PSU = paste0(PRIMARY_SAMPLE_UNIT, region_suffix)
+    ) %>%
+    # Create date from YEAR, MONTH, DAY
+    mutate(date = as.Date(paste(YEAR, MONTH, DAY, sep = "-"))) %>%
+    group_by(PSU) %>%
+    summarise(
+      lat = first(LAT_DEGREES),
+      lon = first(LON_DEGREES),
+      depth = mean(c(MIN_DEPTH, MAX_DEPTH), na.rm = TRUE),
+      date = first(date),
+      .groups = "drop"
+    ) %>%
+    mutate(dataset = "NCRMP_benthic")
+  
+  # Get PSUs that are already present in the combined dataset (have some coral cover)
+  existing_ncrmp_psus <- combined_benthic_data_complete %>%
+    filter(dataset == "NCRMP_benthic") %>%
+    distinct(PSU)
+  
+  # Identify PSUs with zero coral cover (missing from combined dataset)
+  zero_coral_psus <- all_ncrmp_psus %>%
+    anti_join(existing_ncrmp_psus, by = "PSU")
+  
+  cat("Total NCRMP PSUs in original data:", nrow(all_ncrmp_psus), "\n")
+  cat("NCRMP PSUs with some coral cover:", nrow(existing_ncrmp_psus), "\n")
+  cat("NCRMP PSUs with zero coral cover:", nrow(zero_coral_psus), "\n")
+  
+  # If there are PSUs with zero coral cover, create inferred absences
+  if(nrow(zero_coral_psus) > 0) {
+    
+    # Create complete species data for zero coral sites
+    zero_coral_absences <- zero_coral_psus %>%
+      # Create all combinations of zero coral PSUs and all species
+      crossing(spp = factor(all_species_levels, levels = all_species_levels)) %>%
+      # Add susceptibility data using master lookup
+      left_join(master_susc_lookup, by = "spp") %>%
+      # Add required columns
+      mutate(
+        transect = NA,  # NCRMP doesn't have transect level
+        cover = 0,      # Zero cover for all species
+        inferred_absence = "Y"  # All are inferred absences
+      ) %>%
+      # Reorder columns to match combined dataset
+      select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
+    
+    # Combine with existing complete dataset
+    combined_benthic_data_complete <- bind_rows(
+      combined_benthic_data_complete,
+      zero_coral_absences
+    )
+    
+    cat("Added", nrow(zero_coral_absences), "inferred absence records for zero coral sites\n")
+    
+  } else {
+    cat("No PSUs with zero coral cover found - all sites had at least some coral\n")
+  }
+  
+  # Final verification
+  cat("\nFinal dataset dimensions:", dim(combined_benthic_data_complete), "\n")
+  cat("Total inferred absences:", sum(combined_benthic_data_complete$inferred_absence == "Y"), "\n")
+  
+  # Check NCRMP representation
+  ncrmp_summary <- combined_benthic_data_complete %>%
+    filter(dataset == "NCRMP_benthic") %>%
+    group_by(PSU) %>%
+    summarise(
+      total_cover = sum(cover),
+      n_species = n_distinct(spp),
+      n_inferred = sum(inferred_absence == "Y"),
+      .groups = "drop"
+    )
+  
+  cat("\nNCRMP PSU summary:\n")
+  cat("PSUs with zero total coral cover:", sum(ncrmp_summary$total_cover == 0), "\n")
+  cat("All PSUs should have 24 species. Species counts:\n")
+  print(table(ncrmp_summary$n_species))
+  
+  # Verify susceptibility data is still complete
+  final_susc_check <- combined_benthic_data_complete %>%
+    group_by(spp) %>%
+    summarise(
+      n_na_susc = sum(is.na(susc)),
+      .groups = "drop"
+    )
+  
+  if(any(final_susc_check$n_na_susc > 0)) {
+    cat("WARNING: Some species still have missing susceptibility data!\n")
+    print(final_susc_check[final_susc_check$n_na_susc > 0, ])
+  } else {
+    cat("All species still have complete susceptibility data - SUCCESS!\n")
+  }  
+  
+  
+  
+  
   combined_benthic_data_summed = combined_benthic_data_complete
+  
   
   ################################## spp-grouping ##################################
   
@@ -2349,11 +2470,11 @@
   ################################## Save output ##################################
   
   # # # Save specific combined datasets in an .rda file for stats downstream
-  # save(combined_benthic_data_averaged, 
-  #      combined_benthic_data_averaged_susc, 
+  # save(combined_benthic_data_averaged,
+  #      combined_benthic_data_averaged_susc,
   #      combined_benthic_data_averaged_psu,
-  #      combined_demo_data_averaged, 
-  #      combined_demo_data_averaged_susc, 
+  #      combined_demo_data_averaged,
+  #      combined_demo_data_averaged_susc,
   #      combined_demo_data_averaged_psu,
   #      file = here("output", "all_combined_data.rda"))
   
