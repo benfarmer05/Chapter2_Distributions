@@ -60,28 +60,6 @@
   
   ################################## Bathymetry resampling  ##################################
   
-  # # REDACTED
-  # 
-  # #downscale the resolution of the bathymetry grid
-  # # NOTE - may eventually simply snap the bathymetry to the NCRMP grid itself
-  # #
-  # # Define the aggregation factor
-  # agg_factor <- 25
-  # 
-  # # Aggregate mean of the bathymetry to 50 m resolution (this may change; was doing this for ease of use early on)
-  # bathy_STTSTJ_agg <- aggregate(bathy_STTSTJ, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # bathy_STX_agg <- aggregate(bathy_STX, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # bathy_PR_East_agg <- aggregate(bathy_PR_East, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # bathy_PR_South_agg <- aggregate(bathy_PR_South, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # bathy_PR_West_agg <- aggregate(bathy_PR_West, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # bathy_PR_North_agg <- aggregate(bathy_PR_North, fact = agg_factor, fun = mean, na.rm = TRUE)
-  # # 
-  # # # Merge the aggregated rasters. merge is quicker but maybe mosaic is better?
-  # # agg_rasters <- c(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
-  # # bathy_merged <- mosaic(agg_rasters, fun = mean, na.rm = TRUE)
-  # bathy_merged_50m = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg, bathy_PR_North_agg)
-  # # bathy_merged_2m = merge(bathy_STTSTJ, bathy_STX, bathy_PR_East, bathy_PR_South, bathy_PR_West, bathy_PR_North)
-  
   #pull NOAA crm, produced in ~2019 (maybe ? from Dan Holstein) from presumably NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
   # - CRS: 26920 (NAD83 / UTM zone 20N)
   # - max 30 m resolution

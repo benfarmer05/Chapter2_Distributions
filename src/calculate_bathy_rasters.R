@@ -13,6 +13,7 @@
   library(progress)
   library(spatialEco)
   library(MultiscaleDTM)
+  library(cmocean)
   
   source(here("src/functions.R"))
   
@@ -199,114 +200,241 @@
   
   # Calculate terrain attributes. may consider Benthic Terrain Modeler (but need Arc & potentially arcgisbinding package in R) or MultiscaleDTM package (https://cran.r-project.org/web/packages/MultiscaleDTM/readme/README.html)
   #
-  #derive bathymetry products from already-downsampled (2 m --> 5 m resolution) raster
-  slope <- terrain(bathy_merged3_crm_reefdepth, v = "slope", unit = 'degrees')
-  slopeofslope = terrain(slope, v = "slope", unit = 'degrees')
-  aspect <- terrain(bathy_merged3_crm_reefdepth, v = "aspect", unit = 'degrees')
-  flowdir <- terrain(bathy_merged3_crm_reefdepth, v = "flowdir")
+  slope_terra <- terrain(bathy_merged3_crm_reefdepth, v = "slope", unit = 'degrees')
+  slopeofslope_terra = terrain(slope_terra, v = "slope", unit = 'degrees')
+  aspect_terra <- terrain(bathy_merged3_crm_reefdepth, v = "aspect", unit = 'degrees')
+  TPI_terra = terrain(bathy_merged3_crm_reefdepth, v = 'TPI') #Wilson 2007 bathymetric-friendly method
+  # flowdir <- terrain(bathy_merged3_crm_reefdepth, v = "flowdir")
   roughness = terrain(bathy_merged3_crm_reefdepth, v = "roughness")
-  TPI = terrain(bathy_merged3_crm_reefdepth, v = 'TPI') #Wilson 2007 bathymetric-friendly method
   TRI = terrain(bathy_merged3_crm_reefdepth, v = 'TRI')
+  
+  # TPI_spatialeco = tpi(bathy_merged3_crm_reefdepth)
   VRM <- vrm(bathy_merged3_crm_reefdepth)
-  # VRM_larger <- vrm(bathy_merged3_crm_reefdepth, s = 2)  
-  VRM_largest <- vrm(bathy_merged3_crm_reefdepth, s = 9) 
-  # NOTE - VRM especially may require sub-50 m resolution
-  # Look at these with MultiscaleDTM: TPI, DMV, BPI, RelPos, SAPA (measure of rugosity), VRM
-  # MultiscaleDTM measures
-  TPI_multiscale <- TPI(bathy_merged3_crm_reefdepth, w = c(5, 5))
-  DMV <- DMV(bathy_merged3_crm_reefdepth, w = c(5, 5))
-  BPI <- BPI(bathy_merged3_crm_reefdepth, w = c(5, 5))  # BPI is same as TPI for bathymetry
-  RelPos <- RelPos(bathy_merged3_crm_reefdepth, w = c(5, 5))
-  SAPA_150m <- SAPA(bathy_merged3_crm_reefdepth, w = c(3, 3))
-  SAPA_250m <- SAPA(bathy_merged3_crm_reefdepth, w = c(5, 5))  # Surface Area to Planar Area ratio
-  SAPA_350m <- SAPA(bathy_merged3_crm_reefdepth, w = c(7, 7))
+  # TRI_spatialeco <- tri(bathy_merged3_crm_reefdepth, s = 3)
+  totalcurv = curvature(bathy_merged3_crm_reefdepth, type = 'total')
+  # planformcurv = curvature(bathy_merged3_crm_reefdepth, type = 'planform') #takes too long to run
+  # profilecurv = curvature(bathy_merged3_crm_reefdepth, type = 'profile') #takes too long to run
+  
+  # consider geodiv! (can get fractal dimension)
+  
+  # slope_multiscale <- SlpAsp(r = bathy_merged3_crm_reefdepth, w = 3, metrics = c("slope")) #na.rm = TRUE could be used
+  # slopeofslope_multiscale <- SlpAsp(r = slope_multiscale, w = 3, metrics = c("slope"))
+  # aspect_multiscale <- SlpAsp(r = bathy_merged3_crm_reefdepth, w = 3, metrics = c("aspect"))
+  # TPI_multiscale <- TPI(bathy_merged3_crm_reefdepth, w = c(3, 3))
+  # BPI_multiscale <- BPI(bathy_merged3_crm_reefdepth, w = c(1, 3))  # BPI is similar to TPI for bathymetry
+  # DMV <- DMV(bathy_merged3_crm_reefdepth, w = c(3, 3))
+  # RelPos <- RelPos(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  # SAPA <- SAPA(bathy_merged3_crm_reefdepth, w = c(5, 5))
   VRM_multiscale <- VRM(bathy_merged3_crm_reefdepth, w = c(5, 5))
+  # surfarea = SurfaceArea(bathy_merged3_crm_reefdepth)
+  maxcurv_multiscale = Qfit(r = bathy_merged3_crm_reefdepth, w = 3, metrics = 'maxc')
+  meancurv_multiscale = Qfit(r = bathy_merged3_crm_reefdepth, w = 3, metrics = 'meanc')
+  planformcurv_multiscale = Qfit(r = bathy_merged3_crm_reefdepth, w = 3, metrics = 'planc')
+  profilecurv_multiscale = Qfit(r = bathy_merged3_crm_reefdepth, w = 3, metrics = 'profc')
+  # depth = Qfit(r = bathy_merged3_crm_reefdepth, metrics = 'elev')
+  
+  #spatialeco for curvature?
   
   
+  # NOTE - I think slope, slope of slope, aspect, and TPI, roughness, TRI, and
+  #         VRM are the variables I am likely moving forward with
   
-  # TEST
+  # # TEST
+  # 
+  # bathy_crm_2019_clipped
+  # test = clamp(bathy_crm_2019_clipped, lower = -50, upper = 0, values = TRUE)
+  # plot(test)
+  # 
+  # slope_test <- terrain(test, v = "slope", unit = 'degrees')
+  # slopeofslope_test = terrain(slope, v = "slope", unit = 'degrees')
+  # aspect_test <- terrain(test, v = "aspect", unit = 'degrees')
+  # flowdir_test <- terrain(test, v = "flowdir")
+  # roughness_test = terrain(test, v = "roughness")
+  # TPI_test = terrain(test, v = 'TPI') #Wilson 2007 bathymetric-friendly method
+  # TRI_test = terrain(test, v = 'TRI')
+  # VRM_test <- vrm(test)
+  # VRM_largest_test <- vrm(test, s = 9)
+  # TPI_multiscale_test <- TPI(test, w = c(5, 5))
+  # DMV_test <- DMV(test, w = c(5, 5))
+  # BPI_test <- BPI(test, w = c(5, 5))  # BPI is same as TPI for bathymetry
+  # RelPos_test <- RelPos(test, w = c(5, 5))
+  # SAPA_150m_test <- SAPA(test, w = c(3, 3))
+  # SAPA_250m_test <- SAPA(test, w = c(5, 5))  # Surface Area to Planar Area ratio
+  # SAPA_350m_test <- SAPA(test, w = c(7, 7))
+  # VRM_multiscale_test <- VRM(test, w = c(5, 5))
+  # 
+  # 
+  # 
+  # plot(test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(slope_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(slopeofslope_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(aspect_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(flowdir_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(roughness_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TRI_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_largest_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI_multiscale_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(DMV_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(BPI_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(RelPos_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_150m_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_250m_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_350m_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_multiscale_test, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # 
+  # # TEST
   
-  bathy_crm_2019_clipped
-  test = clamp(bathy_crm_2019_clipped, lower = -50, upper = 0, values = TRUE)
-  plot(test)
+  # plot(bathy_merged3_crm_reefdepth, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(slope, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(slopeofslope, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(aspect, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(flowdir, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(roughness, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TRI, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_largest, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI_spatialeco, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI_multiscale, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(DMV, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(BPI, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(RelPos, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_150m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_250m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_350m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_multiscale, xlim = c(270000, 330000), ylim = c(2010000, 2040000))  
   
-  slope_test <- terrain(test, v = "slope", unit = 'degrees')
-  slopeofslope_test = terrain(slope, v = "slope", unit = 'degrees')
-  aspect_test <- terrain(test, v = "aspect", unit = 'degrees')
-  flowdir_test <- terrain(test, v = "flowdir")
-  roughness_test = terrain(test, v = "roughness")
-  TPI_test = terrain(test, v = 'TPI') #Wilson 2007 bathymetric-friendly method
-  TRI_test = terrain(test, v = 'TRI')
-  VRM_test <- vrm(test)
-  VRM_largest_test <- vrm(test, s = 9)
-  TPI_multiscale_test <- TPI(test, w = c(5, 5))
-  DMV_test <- DMV(test, w = c(5, 5))
-  BPI_test <- BPI(test, w = c(5, 5))  # BPI is same as TPI for bathymetry
-  RelPos_test <- RelPos(test, w = c(5, 5))
-  SAPA_150m_test <- SAPA(test, w = c(3, 3))
-  SAPA_250m_test <- SAPA(test, w = c(5, 5))  # Surface Area to Planar Area ratio
-  SAPA_350m_test <- SAPA(test, w = c(7, 7))
-  VRM_multiscale_test <- VRM(test, w = c(5, 5))
-
+  # p1 <- ggplot() +
+  #   geom_spatraster(data = TPI_spatialeco, maxcell = Inf) +
+  #   scale_fill_cmocean(name = "balance", na.value = "transparent") +
+  #   coord_sf(xlim = c(270000, 330000), ylim = c(2010000, 2040000)) +
+  #   theme_minimal() +
+  #   labs(title = "Terra Raster with cmocean 'balance'")
   
   
-  plot(test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(slope_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(slopeofslope_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(aspect_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(flowdir_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(roughness_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TPI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TRI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM_largest_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TPI_multiscale_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(DMV_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(BPI_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(RelPos_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_150m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_250m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_350m_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM_multiscale_test, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  plot(slope_terra, 
+       col = cmocean("deep")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
   
-  # TEST
+  plot(slopeofslope_terra, 
+       col = cmocean("deep")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
   
-  plot(bathy_merged3_crm_reefdepth, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(slope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(slopeofslope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(aspect, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(flowdir, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(roughness, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TRI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM_largest, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(TPI_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(DMV, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(BPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(RelPos, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_150m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_250m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(SAPA_350m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  plot(VRM_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))  
+  plot(roughness, 
+       col = cmocean("deep")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
   
-  # plot(slope, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(slopeofslope, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
-  # plot(aspect, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
-  # plot(flowdir, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
-  # plot(roughness, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
-  # plot(TPI, xlim = c(280000, 320000), ylim = c(2010000, 2040000))
-  # plot(TRI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(VRM, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(VRM_largest, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(TPI_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(DMV, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(BPI, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(RelPos, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(SAPA_150m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(SAPA_250m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(SAPA_350m, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
-  # plot(VRM_multiscale, xlim = c(270000, 320000), ylim = c(2010000, 2040000))
+  VRM <- clamp(VRM, lower = -0.005, upper = 0.005)
+  plot(VRM, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  # Clamp values to -5 to 5 range for colorbar
+  TPI_spatialeco <- clamp(TPI_spatialeco, lower = -5, upper = 5)
+  plot(TPI_spatialeco, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  TPI_multiscale <- clamp(TPI_multiscale, lower = -5, upper = 5)
+  plot(TPI_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  TPI_terra <- clamp(TPI_terra, lower = -5, upper = 5)
+  plot(TPI_terra, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  BPI_multiscale <- clamp(BPI_multiscale, lower = -10, upper = 10)
+  plot(BPI_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  DMV <- clamp(DMV, lower = -5, upper = 5)
+  plot(DMV, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  # totalcurv <- clamp(totalcurv, lower = -0.006, upper = 0.006)
+  # plot(totalcurv, 
+  #      col = cmocean("balance")(100),
+  #      xlim = c(270000, 330000),
+  #      ylim = c(2010000, 2040000),
+  #      main = "Terra Raster with cmocean balance")
+  
+  planformcurv_multiscale <- clamp(planformcurv_multiscale, lower = -0.004, upper = 0.004)
+  plot(planformcurv_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  profilecurv_multiscale <- clamp(profilecurv_multiscale, lower = -0.01, upper = 0.01)
+  plot(profilecurv_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  meancurv_multiscale <- clamp(meancurv_multiscale, lower = -0.004, upper = 0.004)
+  plot(meancurv_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  maxcurv_multiscale <- clamp(maxcurv_multiscale, lower = -0.002, upper = 0.002)
+  plot(maxcurv_multiscale, 
+       col = cmocean("balance")(100),
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  depth_OG <- clamp(bathy_merged3_crm_reefdepth, lower = -50, upper = 0)
+  plot(depth_OG, 
+       # col = cmocean("deep")(100),
+       col = rev(cmocean("deep")(100)),  # Add rev() to reverse
+       xlim = c(270000, 330000),
+       ylim = c(2010000, 2040000),
+       main = "Terra Raster with cmocean balance")
+  
+  # plot(slope, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(slopeofslope, xlim = c(280000, 330000), ylim = c(2010000, 2040000))
+  # plot(aspect, xlim = c(280000, 330000), ylim = c(2010000, 2040000))
+  # plot(flowdir, xlim = c(280000, 330000), ylim = c(2010000, 2040000))
+  # plot(roughness, xlim = c(280000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI, xlim = c(280000, 330000), ylim = c(2010000, 2040000))
+  # plot(TRI, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_largest, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(TPI_multiscale, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(DMV, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(BPI, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(RelPos, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_150m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_250m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(SAPA_350m, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
+  # plot(VRM_multiscale, xlim = c(270000, 330000), ylim = c(2010000, 2040000))
   
   # NOTE - strikes me that BPI, slope of slope, roughness might be the most useful
   #         - remains to be seen whether these are worth calculating at native resolution. probably not, due to 
@@ -439,189 +567,6 @@
   #       squares with bad CMS exit codes
   #   - SO, all I need to do right now is 1.) move on with getting the CMS in order, and 2.) preparing a new, coarse
   #       grid use once we know the CMS works at all
-  
-  # ################################## LEGACY: Aggregate raster data ##################################
-  # 
-  # # aggregate raster data to polygon data
-  # #https://deepnote.com/@siew-sook-yan/R-Aggregate-raster-to-polygon-data-10a3150c-e88d-4776-bae1-4b6dcb9e3916
-  # #https://stackoverflow.com/questions/56110728/how-to-calculate-slope-and-aspect-ratio-values-by-giving-latitude-longitude-and
-  # # # mys = st_read("mys.gpkg")
-  # st.grid_650m = st_as_sf(grid_650m) #'st_geometry' requires 'sf' package
-  # crs(bathymetry_50m)
-  # crs(bathymetry_650m)
-  # crs(st.grid_650m)
-  # extent(bathymetry_50m)
-  # extent(bathymetry_650m)
-  # extent(st.grid_650m)
-  # 
-  # slope = terrain(bathymetry_50m, opt = 'slope', unit = 'degrees')
-  # aspect = terrain(bathymetry_50m, opt = 'aspect', unit = 'degrees')
-  # flowdir = terrain(bathymetry_50m, opt = 'flowdir')
-  # rugosity = terrain(bathymetry_50m, opt = 'TRI') #using Terrain Ruggedness Index - should also investigate Benthic Terrain Modeler in Arc!
-  # 
-  # #crop raster data to the extent of the habitat grid
-  # bathy_crop = crop(bathymetry_50m, extent(st.grid_650m))
-  # slope_crop = crop(slope, extent(st.grid_650m))
-  # aspect_crop = crop(aspect, extent(st.grid_650m))
-  # flowdir_crop = crop(flowdir, extent(st.grid_650m))
-  # rugosity_crop = crop(rugosity, extent(st.grid_650m))
-  # # df.bathy_crop = as.data.frame(bathy_crop, xy = T)
-  # 
-  # #remove raster pixels outside of polygon - note I want to *keep* those pixels later when extrapolating to unknown space
-  # bathy_crop = mask(bathy_crop, mask = st.grid_650m)
-  # slope_crop = mask(slope_crop, mask = st.grid_650m)
-  # aspect_crop = mask(aspect_crop, mask = st.grid_650m)
-  # flowdir_crop = mask(flowdir_crop, mask = st.grid_650m)
-  # rugosity_crop = mask(rugosity_crop, mask = st.grid_650m)
-  # # ggplot() + #this takes 30ish seconds to run
-  # #   geom_tile(data = df.bathy_crop, aes(x = x, y = y, fill = final_merge_WGS1984)) +
-  # #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(-80, 0)) +
-  # #   theme_bw() +
-  # #   xlim(-65.2, -64.6) +
-  # #   ylim(18.15, 18.45)
-  # 
-  # plot(bathy_crop) #much quicker to run, but less control over plot
-  # plot(st_geometry(st.grid_650m), add = TRUE) #layers on top of previous map. may have issues when zooming in
-  # 
-  # plot(slope_crop); plot(st_geometry(st.grid_650m), add = TRUE)
-  # plot(aspect_crop); plot(st_geometry(st.grid_650m), add = TRUE)
-  # plot(flowdir_crop); plot(st_geometry(st.grid_650m), add = TRUE)
-  # plot(rugosity_crop); plot(st_geometry(st.grid_650m), add = TRUE)
-  # 
-  # #aggregate raster to spatial units. 'cellnumbers' requires 'sf' package, which speeds up processing time GREATLY
-  # # still may take ~1 min at 50 m resolution grid. 650 is basically instant
-  # bathy_cell = cellnumbers(bathy_crop, st.grid_650m)
-  # head(bathy_cell)
-  # 
-  # slope_cell = cellnumbers(slope_crop, st.grid_650m)
-  # aspect_cell = cellnumbers(aspect_crop, st.grid_650m)
-  # flowdir_cell = cellnumbers(flowdir_crop, st.grid_650m)
-  # rugosity_cell = cellnumbers(rugosity_crop, st.grid_650m)
-  # 
-  # #aggregate the values for all cell_ by object_
-  # bathy_agg = bathy_cell %>% mutate(bathy = raster::extract(bathy_crop, bathy_cell$cell_)) %>%
-  #   group_by(object_) %>%
-  #   summarise(bathys = mean(bathy, na.rm = TRUE)) #can choose to median or mean - not sure which is best
-  # nrow(bathy_agg)
-  # head(bathy_agg)
-  # 
-  # slope_agg = slope_cell %>% mutate(slope = raster::extract(slope_crop, slope_cell$cell_)) %>%
-  #   group_by(object_) %>%
-  #   summarise(slopes = mean(slope, na.rm = TRUE))
-  # aspect_agg = aspect_cell %>% mutate(aspect = raster::extract(aspect_crop, aspect_cell$cell_)) %>%
-  #   group_by(object_) %>%
-  #   summarise(aspects = mean(aspect, na.rm = TRUE))
-  # flowdir_agg = flowdir_cell %>% mutate(flowdir = raster::extract(flowdir_crop, flowdir_cell$cell_)) %>%
-  #   group_by(object_) %>%
-  #   summarise(flowdirs = mean(flowdir, na.rm = TRUE))
-  # rugosity_agg = rugosity_cell %>% mutate(rugosity = raster::extract(rugosity_crop, rugosity_cell$cell_)) %>%
-  #   group_by(object_) %>%
-  #   summarise(rugositys = mean(rugosity, na.rm = TRUE))
-  # 
-  # #add new column to data frame
-  # st.grid_650m$bathy = bathy_agg$bathys
-  # st.grid_650m$slope = slope_agg$slopes
-  # st.grid_650m$aspect = aspect_agg$aspects
-  # st.grid_650m$flowdir = flowdir_agg$flowdirs
-  # st.grid_650m$rugosity = rugosity_agg$rugositys
-  # 
-  # #plot average bathymetry by grid square
-  # ggplot(st.grid_650m) +
-  #   geom_sf(aes(fill = bathy)) +
-  #   coord_sf() +
-  #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(-80, 0)) +
-  #   theme_bw()
-  # ggplot(st.grid_650m) +
-  #   geom_sf(aes(fill = slope)) +
-  #   coord_sf() +
-  #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(0, 70)) +
-  #   theme_bw()
-  # ggplot(st.grid_650m) +
-  #   geom_sf(aes(fill = aspect)) +
-  #   coord_sf() +
-  #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(0, 360)) +
-  #   theme_bw()
-  # ggplot(st.grid_650m) +
-  #   geom_sf(aes(fill = flowdir)) +
-  #   coord_sf() +
-  #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(0, 120)) +
-  #   theme_bw()
-  # ggplot(st.grid_650m) +
-  #   geom_sf(aes(fill = rugosity)) +
-  #   coord_sf() +
-  #   scale_fill_gradientn(colors = terrain.colors(50), limits = c(0, 80)) +
-  #   theme_bw()
-  # 
-  # #https://www.rdocumentation.org/packages/raster/versions/3.0-2/topics/terrain
-  # #https://stackoverflow.com/questions/56110728/how-to-calculate-slope-and-aspect-ratio-values-by-giving-latitude-longitude-and
-  # #https://gis.stackexchange.com/questions/3310/seeking-spatial-r-tricks
-  # #https://medium.com/@dannymac_78271/exploring-the-relationship-between-slope-elevation-and-aspect-in-the-presidential-range-nh-fe3ef150f682
-  # #https://www.molecularecologist.com/2015/07/03/marmap/
-  # #https://www.researchgate.net/publication/255708640_Calculation_of_slope_angle_from_bathymetry_data_using_GIS_-_effects_of_computation_algorithms_data_resolution_and_analysis_scale
-  # #https://link.springer.com/referenceworkentry/10.1007/978-90-481-2639-2_141#:~:text=Rugosity%20is%20an%20estimate%20of,textural%20characteristics%20of%20a%20surface.
-  # #https://dusk.geo.orst.edu/djl/samoa/BTM_Exercise.pdf
-  # 
-  # #test to see how R would perform doing the above with 50 m res (ongoing)
-  # st.grid_50m = st_as_sf(STTSTJ_grid) #'st_geometry' requires 'sf' package
-  # st.grid_650m = st.grid_50m
-  # #then run the above again
-  # 
-  # ################################## LEGACY: Test response variable data ##################################
-  # 
-  # STTSTJ_field_species$LAT_DEGREES = as.numeric(STTSTJ_field_species$LAT_DEGREES)
-  # STTSTJ_field_species$LON_DEGREES = as.numeric(STTSTJ_field_species$LON_DEGREES)
-  # 
-  # #calling 'extract_grid_data'
-  # # 'grid' will be a regional NCRMP sampleframe, or custom one
-  # # FUNCTION: extract_grid_data <- function(field_sites, grid, region)
-  # STTSTJ_test2 = extract_grid_data(field_sites = STTSTJ_field_sites, grid = grid_650m, region = "STTSTJ")
-  # # STTSTJ_test = extract_grid_data(field_sites = STTSTJ_field_sites, grid = STTSTJ_grid, region = "STTSTJ")
-  # STTSTJ_test2$unique_ID = as.numeric(STTSTJ_test2$unique_ID)
-  # st.grid_650m$unique_ID = as.numeric(st.grid_650m$unique_ID)
-  # STTSTJ_test2 = dplyr::filter(STTSTJ_test2, cover_group %in% c("HARD CORALS"))
-  # 
-  # #merge new bathymetry values to every row in 'STTSTJ_test2' by the Unique_ID
-  # coral = merge(STTSTJ_test2, st.grid_650m, by = "unique_ID", all.x = TRUE)
-  # saveRDS(coral, file = "coral.rds") #save clean data to an object file for BUGS
-  # coral = readRDS(file = "coral.rds") #used to restore the object file
-  # 
-  # # # manual way to do 'extract_grid_data' (pulled from that script)
-  # # # subset coordinates from site df
-  # # xy  = STTSTJ_field_species[, c("LAT_DEGREES", "LON_DEGREES")]
-  # # # specify coordinates
-  # # sp::coordinates(xy) = ~LON_DEGREES+LAT_DEGREES
-  # #
-  # # # project coordinates to WGS84
-  # # sp::proj4string(xy) = sp::CRS("+init=epsg:4326")
-  # #
-  # # # overlay PR points on the reprojected grid
-  # # overlay_points = sp::over(xy, grid_650m, fn = NULL)
-  # #
-  # # # add rownames to the overlay df and the original df
-  # # overlay_points$rownames = rownames(overlay_points)
-  # # overlay_points$REGION = "STTSTJ"
-  # #
-  # # ## For ALL sampling geographies:
-  # # # add rownames to the original df for subsequent combining
-  # # STTSTJ_field_sites$rownames = rownames(STTSTJ_field_sites)
-  # #
-  # # # merge input sample file with grid overly df by rownames (same order going in)
-  # # samplesites_grid = dplyr::left_join(STTSTJ_field_sites, overlay_points,
-  # #                                      by = c("REGION", "rownames"))
-  # # samplesites_grid = dplyr::filter(samplesites_grid, cover_group %in% c("HARD CORALS"))
-  # 
-  # ### playing with the response variable data ###
-  # 
-  # ### OBJECTIVES ###
-  # # 1.) Retrieve NCRMP grids for PR and STT/STJ/STX (all regions)
-  # #      - Assess overlap (or lack thereof) between repeated measurements
-  # #      - How to move grid file over to GIS?
-  # # 2.) Retrieve benthic cover for all regions
-  # #      - How does this data "talk" to the grid data?
-  # #      - How to move cover raster (or vector) over to GIS?
-  # #      - Pool the grid at different resolutions for testing (e.g., 350 m; 650 m). Might require GIS
-  # #      - See how many "repeated measurements" occur after broadening the grid. May *want* these repeats
-  # 
   
   ################################## Save objects/workspace ##################################
   
