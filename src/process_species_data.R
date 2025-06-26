@@ -76,6 +76,7 @@
   TCRMP_benthic_codes = read_xlsx(here("data/TCRMP_Master_Benthic_Cover_Feb2022.xlsx"), sheet = 'BenthicCodes')
   TCRMP_health_metadata = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'SiteMetadata')
   TCRMP_health_codes = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'HealthCodes')
+  PRCRMP <- read_tsv(here("data/Occurrence.tsv"))
   
   #special case for TCRMP health data; both dates and the width variable are funny
   # NOTE - since we don't have a sample day variable, just setting each 'day' to first of the month of
@@ -119,6 +120,82 @@
       across(-c(site, quadrat, year), as.numeric),
       site = as.factor(site)
     )
+  
+  ################################## wrangle PRCRMP ##################################
+  
+  names(PRCRMP)
+  
+  
+  
+  
+  # Check what's in the habitat field
+  unique(PRCRMP$habitat)
+  
+  # Look for coral-related terms in various text fields
+  grep("coral", PRCRMP$habitat, ignore.case = TRUE, value = TRUE)
+  grep("coral", PRCRMP$locality, ignore.case = TRUE, value = TRUE)
+  grep("coral", PRCRMP$verbatimLocality, ignore.case = TRUE, value = TRUE)
+  
+  # Check organism quantity data
+  summary(PRCRMP$individualCount)
+  summary(PRCRMP$organismQuantity)
+  table(PRCRMP$organismQuantityType)
+  
+  # Look at what organisms are being counted
+  head(PRCRMP$scientificName)
+  table(PRCRMP$basisOfRecord)  # This tells you the type of observation
+  
+  
+  
+  # Select the biological count and coral-related variables
+  PRCRMP_filtered <- PRCRMP %>%
+    select(
+      # ID and basic info
+      id, dataset_id, occurrenceID,
+      
+      # Taxonomic information
+      scientificName, genus, family, class, phylum,
+      
+      # Biological count/abundance variables
+      individualCount, organismQuantity, organismQuantityType,
+      sampleSizeValue, sampleSizeUnit,
+      
+      # Location variables
+      decimalLatitude, decimalLongitude, locality, verbatimLocality,
+      country, stateProvince,
+      
+      # Habitat/environment variables
+      habitat, marine, waterBody,
+      depth, minimumDepthInMeters, maximumDepthInMeters, bathymetry,
+      
+      # Record type and date info
+      basisOfRecord, eventDate, date_year,
+      
+      # Additional potentially useful fields
+      occurrenceStatus, occurrenceRemarks,
+      
+      decimalLatitude, decimalLongitude
+    )
+  
+  
+  
+  
+  
+  
+  
+  # # For comma-separated
+  # data <- read_delim(here("data/extendedmeasurementorfact.txt", delim = ","))
+  # 
+  # # For tab-separated
+  # data <- read_delim(here("data/extendedmeasurementorfact.txt", delim = "\t"))
+  
+  # Let readr guess the delimiter
+  data <- read_delim(here("data/extendedmeasurementorfact.txt"))
+  
+  # # For fixed-width files
+  # data <- read_fwf(here("data/extendedmeasurementorfact.txt"))
+  
+  otherdata = read_delim(here('data/occurrence.txt'))
   
   ################################## wrangle DeepLion ##################################
   
