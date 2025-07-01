@@ -76,7 +76,10 @@
   TCRMP_benthic_codes = read_xlsx(here("data/TCRMP_Master_Benthic_Cover_Feb2022.xlsx"), sheet = 'BenthicCodes')
   TCRMP_health_metadata = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'SiteMetadata')
   TCRMP_health_codes = read_xlsx(here("data/TCRMP_Master_Coral_Health_Jan2022.xlsx"), sheet = 'HealthCodes')
-  PRCRMP <- read_tsv(here("data/Occurrence.tsv"))
+  PRCRMP = read_csv(here('data/PRCRMP/Townsend/PRCRMP_Benthic-sessile_data_1999-2021-dataonly.csv'),
+                    guess_max = 2000, locale = locale(encoding = 'latin1')) #to ensure NAs in 'Pavement' are read in properly
+  PRCRMP_metadata = read_csv(here('data/PRCRMP/Townsend/PRCRMP_Site_Classification_Database_(1-24-2022).csv'),
+                             locale = locale(encoding = "latin1")) #to account for wonky column name
   
   #special case for TCRMP health data; both dates and the width variable are funny
   # NOTE - since we don't have a sample day variable, just setting each 'day' to first of the month of
@@ -123,79 +126,55 @@
   
   ################################## wrangle PRCRMP ##################################
   
-  names(PRCRMP)
+  # Identify metadata columns for PRCRMP
+  metadata_cols <- c("SAMPLE CODE", "YEAR", "REGION", "LOCATION", "SITE NAME", "DEPTH ZONE", "TRANSECT")
   
+  # Transform to long format
+  PRCRMP_long <- PRCRMP %>%
+    pivot_longer(
+      cols = -all_of(metadata_cols),
+      names_to = "species_code", 
+      values_to = "cover"
+    ) %>%
+    # Convert cover to numeric and filter out NA values
+    mutate(cover = as.numeric(cover)) %>%
+    filter(!is.na(cover))
   
+  PRCRMP_long <- PRCRMP_long %>%
+    rename_with(tolower) %>%
+    rename_with(~ tolower(gsub(" ", "", .))) %>% # Replace spaces with underscores
+    rename(
+      PSU = sitename,
+      spp = species_code
+    ) %>%
+    select(-samplecode, -region, -location, -depthzone) %>%
+    arrange(PSU, spp)
   
+  #bring in lat/lons
+  PRCRMP_long <- PRCRMP_long %>%
+    left_join(PRCRMP_metadata %>% select(`Site Name`, Latitude, Longitude, `Mean Depth_(m)`),
+              by = c("PSU" = 'Site Name')) %>%
+    rename(lat = Latitude, lon = Longitude, depth = `Mean Depth_(m)`) %>%
+    mutate(lat = as.numeric(lat),
+           lon = as.numeric(lon)) %>%
+    # Special adjustment for Mujeres site coordinates; these had a double entry in the csv
+    mutate(lat = ifelse(PSU == "Mujeres", 18.07169, lat),
+           lon = ifelse(PSU == "Mujeres", -67.93698, lon))
   
-  # Check what's in the habitat field
-  unique(PRCRMP$habitat)
+  # Convert to factor after the join if you still want it as a factor
+  PRCRMP_long <- PRCRMP_long %>%
+    mutate(PSU = as.factor(PSU))
+  levels(PRCRMP_long$PSU)
   
-  # Look for coral-related terms in various text fields
-  grep("coral", PRCRMP$habitat, ignore.case = TRUE, value = TRUE)
-  grep("coral", PRCRMP$locality, ignore.case = TRUE, value = TRUE)
-  grep("coral", PRCRMP$verbatimLocality, ignore.case = TRUE, value = TRUE)
+  #simply set 'date' as January 1st of the sampling year, since date information is not present
+  PRCRMP_long <- PRCRMP_long %>%
+    mutate(date = as.POSIXct(paste(year, "01", "01", sep = "-"), 
+                             format = "%Y-%m-%d", 
+                             tz = "UTC"))
   
-  # Check organism quantity data
-  summary(PRCRMP$individualCount)
-  summary(PRCRMP$organismQuantity)
-  table(PRCRMP$organismQuantityType)
-  
-  # Look at what organisms are being counted
-  head(PRCRMP$scientificName)
-  table(PRCRMP$basisOfRecord)  # This tells you the type of observation
-  
-  
-  
-  # Select the biological count and coral-related variables
-  PRCRMP_filtered <- PRCRMP %>%
-    select(
-      # ID and basic info
-      id, dataset_id, occurrenceID,
-      
-      # Taxonomic information
-      scientificName, genus, family, class, phylum,
-      
-      # Biological count/abundance variables
-      individualCount, organismQuantity, organismQuantityType,
-      sampleSizeValue, sampleSizeUnit,
-      
-      # Location variables
-      decimalLatitude, decimalLongitude, locality, verbatimLocality,
-      country, stateProvince,
-      
-      # Habitat/environment variables
-      habitat, marine, waterBody,
-      depth, minimumDepthInMeters, maximumDepthInMeters, bathymetry,
-      
-      # Record type and date info
-      basisOfRecord, eventDate, date_year,
-      
-      # Additional potentially useful fields
-      occurrenceStatus, occurrenceRemarks,
-      
-      decimalLatitude, decimalLongitude
-    )
-  
-  
-  
-  
-  
-  
-  
-  # # For comma-separated
-  # data <- read_delim(here("data/extendedmeasurementorfact.txt", delim = ","))
-  # 
-  # # For tab-separated
-  # data <- read_delim(here("data/extendedmeasurementorfact.txt", delim = "\t"))
-  
-  # Let readr guess the delimiter
-  data <- read_delim(here("data/extendedmeasurementorfact.txt"))
-  
-  # # For fixed-width files
-  # data <- read_fwf(here("data/extendedmeasurementorfact.txt"))
-  
-  otherdata = read_delim(here('data/occurrence.txt'))
+  # PRCRMP_test = PRCRMP_long
+  # PRCRMP_test = PRCRMP_test %>%
+  #   mutate(spp = as.factor(spp))
   
   ################################## wrangle DeepLion ##################################
   
@@ -887,8 +866,7 @@
   
   ################################## collate benthic data ##################################
   
-  # NOTE - eventually may need to consider meters completed for coral cover surveys, and/or #/points
-  #   used for CPCe analysis
+  # NOTE - eventually may consider #/points used for CPCe analysis
   
   # Function to standardize datasets
   standardize_benthic_dataset <- function(df, dataset_name) {
@@ -932,6 +910,7 @@
   SESAP_std <- standardize_benthic_dataset(SESAP_long, "SESAP")
   TCRMP_std <- standardize_benthic_dataset(TCRMP_benthic_long, "TCRMP_benthic")
   NCRMP_std = standardize_benthic_dataset(NCRMP_benthic_long, "NCRMP_benthic")
+  PRCRMP_std = standardize_benthic_dataset(PRCRMP_long, 'PRCRMP') 
   
   # Combine all datasets
   combined_benthic_data <- bind_rows(
@@ -940,19 +919,21 @@
     NODICE_std,
     SESAP_std,
     TCRMP_std,
-    NCRMP_std
+    NCRMP_std,
+    PRCRMP_std
   )
   
   # Convert spp to factor
   combined_benthic_data$spp <- as.factor(combined_benthic_data$spp)
   
   # Show all species levels
+  #   NOTE - this became less useful after adding in PRCMRP data, which includes non-corals
   print("\nAll species levels:")
   spp_levels <- levels(combined_benthic_data$spp)
   print(spp_levels)
   print(paste("Total number of species:", length(spp_levels)))
   
-  ### check duplicates - should just be TCRMP
+  ### check duplicates - should just be TCRMP (and PRCRMP)
   duplicates <- combined_benthic_data %>%
     group_by(dataset, PSU, date, lat, lon, spp) %>%
     summarise(count = n(), cover_values = paste(cover, collapse = ", "), .groups = "drop") %>%
@@ -1034,6 +1015,16 @@
   cat("\n=== END MULTIPLE VISITS CHECK ===\n")  
   
   ################################## check incomplete benthic absences ##################################
+  
+  
+  # NOTE / STOPPING POINT - 30 June 2025
+  #   - will need to account for the fact that, in my current code, spp levels are not identical
+  #       among sampling events in PRCRMP. this may simply be due to how the data are being read in, though
+  #   - for instance, since initially spp is in column wide format, there is likely some loss happening
+  #       from NA's
+  #   - shoot. also now realizing this could have been the case for TCRMP (looks like it was) and the other
+  #       datasets as well. ugh
+  
   
   ### Check for incomplete absences by sampling event (fewer than 61 species per sampling event)
   # NOTE - everything looks good! only NCRMP had true missing absences in the first place
@@ -1137,6 +1128,95 @@
   print(paste("Total number of species:", length(spp_levels)))
   
   ################################## define susceptibility ##################################
+  
+  
+  
+  
+  
+  # STOPPING POINT - 30 JUNE 2025
+  combined_benthic_data_trimmed = combined_benthic_data
+  combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
+    # Remove non-specific coral categories
+    filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.',
+                       'Scleractinia spp', 'Stony Coral spp.', 'Recently dead coral (total)',
+                       'Partially bleached coral (total)', 'Stony Corals (total)', 
+                       'Stony Corals (total # bleached col.)', 'Stony Corals (total # diseased col.)',
+                       'Stony Corals (total #col.)')) %>%
+    # Remove hydrozoans (fire corals)
+    filter(!grepl('Millepora', spp)) %>%
+    # Remove all abiotic/substrate categories
+    filter(!spp %in% c('Abiotic (total)', 'Rubble', 'Sand', 'Sand and rubble', 'Pavement',
+                       'Gaps/Holes', 'Reef overhang', 'Rugosity (m)')) %>%
+    # Remove sponges
+    filter(!grepl('sponge|Sponge', spp)) %>%
+    filter(!spp %in% c('Agelas citrina', 'Agelas clathrodes', 'Agelas conifera', 'Agelas dispar',
+                       'Agelas sceptrum', 'Agelas spp.', 'Agelas sventres', 'Agelas tubulata',
+                       'Aiolochroia crassa', 'Amphimedon caribica', 'Amphimedon compressa',
+                       'Amphimedon viridis', 'Aplysina archeri', 'Aplysina cauliformis',
+                       'Aplysina fistularis', 'Aplysina fulva', 'Aplysina insularis',
+                       'Aplysina lacunosa', 'Aplysina spp.', 'Biemna caribea', 'Biemna spp.',
+                       'Callyspongia armigera', 'Callyspongia fallax', 'Callyspongia plicifera',
+                       'Callyspongia spp.', 'Callyspongia tenerrima', 'Callyspongia vaginalis',
+                       'Chondrilla caribensis', 'Chondrosia collectrix', 'Cinachyrella apion',
+                       'Cinachyrella kuekenthali', 'Clathria spp.', 'Clathria venosa',
+                       'Cliona aprica', 'Cliona caribbaea', 'Cliona delitrix', 'Cliona laticavicola',
+                       'Cliona spp.', 'Cliona tenuis', 'Cliona varians', 'Cribrochalina vasculum',
+                       'Desmapsamma anchorata', 'Desmapsamma spp.', 'Dictyonella funicularis',
+                       'Dictyonella spp.', 'Diplastrella spp.', 'Dragmacidon reticulatum',
+                       'Dysidea etheria', 'Dysidea janiae', 'Ectyoplasia ferox', 'Geodia neptuni',
+                       'Haliclona spp.', 'Halisarca caerulea', 'Halisarca spp.',
+                       'Iotrochota arenosa', 'Iotrochota birotulata', 'Ircinia campana',
+                       'Ircinia felix', 'Ircinia spp.', 'Ircinia strobilina', 'Mycale laevis',
+                       'Mycale laxissima', 'Neofibularia nolitangere', 'Neopetrosia carbonaria',
+                       'Neopetrosia proxima', 'Neopetrosia rosariensis', 'Neopetrosia spp.',
+                       'Niphates alba', 'Niphates caycedoi', 'Niphates digitalis', 'Niphates erecta',
+                       'Niphates spp.', 'Oceanapia bartschi', 'Petrosia pellasarca', 'Petrosia spp.',
+                       'Petrosia weinbergi', 'Phorbas amaranthus', 'Plakortis angulospiculatus',
+                       'Plakortis halichondrioides', 'Plakortis spp.', 'Prosuberites laughlini',
+                       'Ptilocaulis walpersii', 'Scopalina ruetzleri', 'Smenospongia aurea',
+                       'Smenospongia conulosa', 'Spheciospongia vesparium', 'Spirastrella coccinea',
+                       'Spirastrella hartmani', 'Sponges (total)', 'Suberea spp.',
+                       'Tedania klausi', 'Timea micraster', 'Topsentia ophiraphidites',
+                       'Topsentia spp.', 'Verongula reiswigi', 'Verongula rigida', 'Verongula spp.',
+                       'Xestospongia muta')) %>%
+    # Remove soft corals/octocorals (gorgonians)
+    filter(!grepl('col\\.|col)', spp)) %>%  # Remove anything with colony counts
+    filter(!spp %in% c('Antillogorgia acerosa', 'Antillogorgia americana', 'Antillogorgia bipinnata',
+                       'Antillogorgia rigida', 'Briareum asbestinum', 'Erythropodium caribaeorum',
+                       'Eunicea asperula', 'Eunicea calyculata', 'Eunicea flexuosa', 'Eunicea laciniata',
+                       'Eunicea laxispica', 'Eunicea mammosa', 'Eunicea pallida', 'Eunicea spp.',
+                       'Eunicea succinea', 'Eunicea tourneforti', 'Gorgonia mariae', 'Gorgonia ventalina',
+                       'Muricea atlantica', 'Muricea elongata', 'Muricea laxa', 'Muricea muricata',
+                       'Muricea pinnata', 'Muricea spp.', 'Muriceopsis flavida', 'Octocoral spp.',
+                       'Octocoral spp.(encrusting)', 'Octocorals (total encrusting)', 'Octocorals (total erect)',
+                       'Octocoral (total # col.)', 'Plexaura homomalla', 'Plexaura kukenthali',
+                       'Plexaura kuna', 'Plexaura spp.', 'Plexaurella dichotoma', 'Plexaurella nutans',
+                       'Plexaurella spp.', 'Pseudoplexaura flagellosa', 'Pseudoplexaura porosa',
+                       'Pseudoplexaura spp.', 'Pseudoplexaura wagenaari', 'Pterogorgia citrina',
+                       'Pterogorgia guadalupensis', 'Pterogorgia spp.')) %>%
+    # Remove algae
+    filter(!grepl('algae|Algae', spp)) %>%
+    filter(!spp %in% c('Amphiroa spp.', 'Asparagopsis taxiformis', 'Asparagopsis taxiformis on Ramicrusta',
+                       'Caulerpa racemosa', 'Caulerpa spp.', 'Caulerpa spp. on Ramicrusta',
+                       'CCA (total)', 'Cyanobacteria (total)', 'Dichotomaria marginata',
+                       'Dictyota spp.', 'Dictyota spp. on Ramicrusta', 'Galaxaura spp.',
+                       'Galaxaura spp. on Ramicrusta', 'Gracilaria spp.', 'Halimeda discoidea',
+                       'Halimeda spp.', 'Halimeda spp. on Ramicrusta', 'Halimeda tuna',
+                       'Jania spp.', 'Lobophora spp.', 'Lobophora variegata', 'Lobophora variegatus on Ramicrusta',
+                       'Macroalgae (total)', 'Macroalgae spp.', 'Martensia pavonia', 'Padina spp.',
+                       'Peyssonnelia spp.', 'Peyssonneliaceae (total)', 'Ramicrusta spp.',
+                       'Sargassum hystrix', 'Sargassum natans', 'Stypopodium spp.', 'Stypopodium zonale',
+                       'Turf (mixed)', 'Turf (mixed) on Ramicrusta', 'Turf (mixed) with sediment',
+                       'Turf Algae (total)', 'Udotea spp.', 'Valonia ventricosa', 'Wrangelia bicuspidata')) %>%
+    # Remove other non-coral organisms
+    filter(!spp %in% c('Anemone spp.', 'Anemones (total)', 'Bartholomea annulata', 'Lebrunia neglecta',
+                       'Phymanthus crucifer', 'Ricordea florida', 'Rhodactis osculifera',
+                       'Ascidian spp.', 'Eudistoma spp.', 'Trididemnum solidum', 'Tunicata (total)',
+                       'Condominium spp.', 'Palythoa caribaeorum', 'Palythoa grandis',
+                       'Seagrass (total)', 'Thalassia testudinum', 'Stylaster roseus',
+                       'Svenzea zeai', 'Tubastraea coccinea', 'Zoanthids (total)', 'Helioceris cucullata')) %>%
+    mutate(spp = droplevels(spp))
+  
   
   ## BENTHIC
   #

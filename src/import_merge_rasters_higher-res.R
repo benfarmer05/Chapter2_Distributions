@@ -95,7 +95,7 @@
   # bathy_crm_2024_clipped <- mask(bathy_crm_2024_clipped, hydro_extent_proj)
   
   # VERSION WHERE MODELING COVERS ENTIRE US CARIBBEAN
-
+  #
   # First crop to reduce processing time (gets the right dimensions)
   bathy_STTSTJ_clipped <- bathy_STTSTJ
   bathy_STX_clipped <- bathy_STX
@@ -156,22 +156,10 @@
                              bathy_PR_North_agg)
   
   
-  # STOPPING POINT - 24 JUNE 2025
-  #   - So, somewhat of a complicated stopping point today. I realized that the Blondeau 2-m
-  #       data might be much more viable than I initially thought. To correct for the mosaicing errors and
-  #       artifacts, really can just resample to 50 m. this seems to produce a product with much greater
-  #       sharpness in seafloor detail. it isn't of course as "good" as the base 2 m resolution product, but
-  #       it really cuts down on the artifact issues. it also is a much easier set of data to work with at that
-  #       resolution!
-  #   - if I'm going to use this data, I need to consider splicing in crm / Holstein data too, for the BVI
-  #       extrapolations
-  #   - also if I go this route, we now have WAAAY better bathy for eastern St John - should really consider
-  #       bringing in Edmunds / CSUN data
-  #   - aaaand will need to overlay the landmask from crm / Holstein, since it is messed up in the Blondeau product,
-  #       particularly in southern St John
-  #   - lastly, should find a way to splice in crm / Holstein data south of STT before the south drop.
-  #       it is much better
-  #   - should consider splicing in fix for the "pit" in the MCD, and also the tear between PR & STT
+  # STOPPING POINT - 30 JUNE 2025
+  #   1.) splice in Holstein bathy for BVI
+  #   2.) consider Edmunds / CSUN coral data
+  #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
   
   #plot briefly
   bathy_Blondeau_agg_plot = clamp(bathy_Blondeau_agg, lower = -50, upper = 0, values = TRUE)

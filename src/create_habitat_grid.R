@@ -16,54 +16,10 @@
   
   ################################## setup ##################################
   
-  load_spat_objects(directory = 'output/output_import_merge_rasters/') #call function
-  load(here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData')) #load workspace from upstream script
+  load_spat_objects(directory = 'output/output_import_merge_rasters_higher-res/') #call function
+  load(here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData')) #load workspace from upstream script
   
   existing_objects <- ls(envir = .GlobalEnv)
-  
-  # # all various things I tried to get things working. not currently required on my M1 Macbook, newly updated
-  # install.packages("sf", dependencies = TRUE) #this may be required after updating to Sequoia (I reinstalled R via homebrew due to issues with Sequoia and it broke some more things)
-  # tools::package_dependencies(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), recursive = TRUE) #check all dependencies for below packages
-  # install.packages(c("sf", "here", "terra", "tidyterra", "ggplot2", "tmap", "rayshader", "scico", "RColorBrewer"), dependencies = TRUE) #more dependency installs, if required
-  # Sys.getenv("LD_LIBRARY_PATH")
-  # Sys.setenv(LD_LIBRARY_PATH = "/opt/homebrew/lib:/opt/homebrew/include:/opt/homebrew/share") #this may also be required, followed by possibly installing sf and terra from source (below)
-  # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj") #this was temporarily needed after updating M1 Macbook to Sequoia OS
-  # Sys.setenv(GDAL_DATA = "/opt/homebrew/share/gdal") #this was temporarily needed after updating M1 Macbook to Sequoia OS
-  
-  # # What I had to do to get R spatial stuff working after updating to Sequoia was:
-  # #   1.) Tried uninstalling everything macports, which was probably dumb because now QGIS has to be entirely reinstalled (and may
-  # #       may not work now anyways through macports yet because of delays in dependency updates after Sequoia - we shall see)
-  # #        - Update Oct 2024: looks like QGIS is working fine after installing the launcher and also macports version of it
-  # #   2.) Tried installing R through homebrew, this was a cluster and most things installed poorly or not at all
-  # #   3.) Tried installing R again through regular Mac ARM, and then installing spatial packages from source as below. this seems to work
-  # # Install from source, forcing R to use the latest versions
-  # install.packages("sf", type = "source") #this might not work yet for Sequoia? also maybe doesn't matter if the code runs I guess. for now
-  # install.packages("terra", type = "source")
-  # #check current R version
-  # R.version.string
-  
-  ################################## Test simple crm-usvi ##################################
-  
-  # STOPPING POINT - 8 April 2025
-  #   - okay new plan!! this might work!!
-  #       - PR comes from crm_USVI which I pulled off NOAA servers in 2024
-  #       - STT/STJ/STX come from crm_USVI which Dan pulled off NOAA servers in (?? 2019?)
-  #       - Chose this because these are the best combination of resolution, no major artifacts, and extent
-  #       - Will just have to figure out how to properly merge them together. this will involve clipping the 2024 crm at the PR/STT edge
-  #
-  #   - okay, end of day update and it's actually even more complicated than I thought
-  #       - this dataviewer (https://www.ncei.noaa.gov/maps/bathymetry/?layers=nos_hydro&minx=-65.5684&maxx=-64.4215&miny=17.8471&maxy=18.906)
-  #           shows CUDEM vs CRM, 3, 10, 30, and 90 m resolutions.
-  #       - 30 m and 90 m res CRM are very solid, and also comprehensive (other than Anegada). I would simply use them for the entire
-  #           domain, except for some slight problems:
-  #         - Dan's crm (where/when did it come from ???) actually has much better resolution, and less artifacts, in the MCD & north drop
-  #         - BUT, the recent 30 m crm has a bit better res south of STJ - sort of? it's a toss up there
-  #         - but DEFINITELY, the recent 30 m crm has far better resolution in Coral Bay & Haulover (STJ). also east end bay Tortola. but mosaicing artifacts introduced at east end
-  #           - question is - is that resolution at Coral Bay / Haulover / East End Bay worth it?? would mean stitching crm-2024 for PR to MCD, with crm-2019 for MCD to Coral Bay, with crm-2024 again for Coral Bay to Anegada
-  #           - is that 3-part stitch even possible? maybe after merging and comprehensive resampling?
-  #           - try it! if that seems impossible though, simply stitch crm-2024 for PR with crm-2019 for USVI
-  #           - and worst case, even that doesn't work well, so I just straight up use crm-2024 for everything (artifacts and all). maybe just with Anegada tacked on with crm-2019
-  #           - remember that, absolute worst case, I can always throw out "training" data at NCRMP / DCRMP points that exist over problematic sections of bathymetry
   
   ################################## Create mask <50 m ##################################
   
