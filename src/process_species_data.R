@@ -1022,9 +1022,7 @@
   #       among sampling events in PRCRMP. this may simply be due to how the data are being read in, though
   #   - for instance, since initially spp is in column wide format, there is likely some loss happening
   #       from NA's
-  #   - shoot. also now realizing this could have been the case for TCRMP (looks like it was) and the other
-  #       datasets as well. ugh
-  
+  #   - double check this isn't the case for any other datasets!
   
   ### Check for incomplete absences by sampling event (fewer than 61 species per sampling event)
   # NOTE - everything looks good! only NCRMP had true missing absences in the first place
@@ -1129,21 +1127,16 @@
   
   ################################## define susceptibility ##################################
   
-  
-  
-  
-  
-  # STOPPING POINT - 30 JUNE 2025
+  ## BENTHIC
+  #
+  #deal with all the extra non-coral entries in PRCRMP
   combined_benthic_data_trimmed = combined_benthic_data
   combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     # Remove non-specific coral categories
-    filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.',
-                       'Scleractinia spp', 'Stony Coral spp.', 'Recently dead coral (total)',
+    filter(!spp %in% c('Stony Coral spp.', 'Recently dead coral (total)',
                        'Partially bleached coral (total)', 'Stony Corals (total)', 
                        'Stony Corals (total # bleached col.)', 'Stony Corals (total # diseased col.)',
                        'Stony Corals (total #col.)')) %>%
-    # Remove hydrozoans (fire corals)
-    filter(!grepl('Millepora', spp)) %>%
     # Remove all abiotic/substrate categories
     filter(!spp %in% c('Abiotic (total)', 'Rubble', 'Sand', 'Sand and rubble', 'Pavement',
                        'Gaps/Holes', 'Reef overhang', 'Rugosity (m)')) %>%
@@ -1166,8 +1159,8 @@
                        'Dysidea etheria', 'Dysidea janiae', 'Ectyoplasia ferox', 'Geodia neptuni',
                        'Haliclona spp.', 'Halisarca caerulea', 'Halisarca spp.',
                        'Iotrochota arenosa', 'Iotrochota birotulata', 'Ircinia campana',
-                       'Ircinia felix', 'Ircinia spp.', 'Ircinia strobilina', 'Mycale laevis',
-                       'Mycale laxissima', 'Neofibularia nolitangere', 'Neopetrosia carbonaria',
+                       'Ircinia felix', 'Ircinia spp.', 'Ircinia strobilina', 'Monanchora arbuscula',
+                       'Mycale laevis', 'Mycale laxissima', 'Neofibularia nolitangere', 'Neopetrosia carbonaria',
                        'Neopetrosia proxima', 'Neopetrosia rosariensis', 'Neopetrosia spp.',
                        'Niphates alba', 'Niphates caycedoi', 'Niphates digitalis', 'Niphates erecta',
                        'Niphates spp.', 'Oceanapia bartschi', 'Petrosia pellasarca', 'Petrosia spp.',
@@ -1217,11 +1210,10 @@
                        'Svenzea zeai', 'Tubastraea coccinea', 'Zoanthids (total)', 'Helioceris cucullata')) %>%
     mutate(spp = droplevels(spp))
   
+  levels(combined_benthic_data_trimmed$spp)
   
-  ## BENTHIC
-  #
   #filter out corals simply marked as 'juvenile' or 'Coral' - since we don't know what species they were
-  combined_benthic_data_trimmed = combined_benthic_data
+  # combined_benthic_data_trimmed = combined_benthic_data
   combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     filter(!spp %in% c('Juvenile coral spp.', 'Coral spp.', 'Coral juvenile', 'Hard Coral, unknown spp.',
                        'Scleractinia spp')) %>%
@@ -1274,16 +1266,18 @@
         spp %in% c('Agaricia agaricites', 'Agaricia fragilis', 'Agaricia grahamae', 'Agaricia humilis',
                    'Agaricia lamarcki', 'Agaricia species', 'Agaricia spp', 'Agaricia spp.',
                    'Agaricia tenuifolia', 'Agaricia undata', 'Branching Porites spp.', 'Madracis auretenra',
-                    'Madracis decactis', 'Madracis formosa', 'Madracis mirabilis', 'Madracis pharensis',
-                   'Madracis spp', 'Madracis spp.', 'Porites astreoides', 'Porites branching species',
-                   'Porites branneri', 'Porites colonensis', 'Porites divaricata', 'Porites furcata',
-                   'Porites porites', 'Porites spp', 'Siderastrea radians', 'Siderastrea siderea',
-                   'Siderastrea species', 'Siderastrea spp', 'Siderastrea spp.',
+                   'Madracis decactis', 'Madracis formosa', 'Madracis mirabilis', 'Madracis pharensis',
+                   'Madracis senaria', 'Madracis spp', 'Madracis spp.', 'Madracis carmabi',
+                   'Porites astreoides',
+                   'Porites branching species', 'Porites branneri', 'Porites colonensis', 'Porites divaricata',
+                   'Porites furcata', 'Porites porites', 'Porites spp', 'Siderastrea radians',
+                   'Siderastrea siderea', 'Siderastrea species', 'Siderastrea spp', 'Siderastrea spp.',
                    'Stephanocoenia intercepta', 'Stephanocoenia intersepta',
                    'Helioceris cucullata', 'Helioseris cucullata', 'Leptoseris cucullata') ~ 'low',
         spp %in% c('Montastraea annularis', 'Montastraea annularis complex', 'Montastraea cavernosa',
                    'Montastraea faveolata', 'Montastraea franksi', 'Montastraea species',
                    'Montastraea spp.', 'Orbicella annularis', 'Orbicella annularis species complex',
+                   'Orbicella annularis (complex)',
                    'Orbicella faveolata', 'Orbicella franksi', 'Orbicella franksii',
                    'Orbicella species complex', 'Orbicella spp', 'Solenastrea bournoni',
                    'Solenastrea hyades', 'Solenastrea spp') ~ 'moderate',
@@ -1294,6 +1288,7 @@
                    'Mycetophyllia lamarckiana', 'Mycetophyllia reesi', 'Mycetophyllia species',
                    'Mycetophyllia spp.', 'Pseudodiploria clivosa', 'Pseudodiploria spp', 'Diploria strigosa',
                    'Diploria clivosa', 'Pseudodiploria strigosa', 'Isophyllastrea rigida',
+                   'Isophyllia rigida',
                    'Isopyhyllastrea rigida', 'Isophyllia sinuosa', 'Manicina areolata',
                    'Mussa angulosa', 'Scolymia cubensis', 'Scolymia lacera', 'Scolymia species', 'Scolymia spp',
                    'Scolymia spp.', 'Manicina areolata', 'Favia fragum') ~ 'high',
@@ -1320,15 +1315,14 @@
         spp == 'Isophyllastrea rigida' ~ 'Isophyllia rigida',
         spp == 'Montastraea annularis' ~ 'Orbicella annularis',
         spp == 'Montastraea annularis' ~ 'Orbicella annularis',
-        spp == 'Montastraea annularis complex' ~ 'Orbicella annularis',
-        spp == 'Orbicella annularis species complex' ~ 'Orbicella annularis',
-        spp == 'Montastraea faveolata' ~ 'Orbicella comp.',
-        spp == 'Montastraea franksi' ~ 'Orbicella comp.',
+        spp == 'Montastraea annularis complex' ~ 'Orbicella comp.',
+        spp == 'Orbicella annularis species complex' ~ 'Orbicella comp.',
+        spp == 'Orbicella annularis (complex)' ~ 'Orbicella comp.',
+        spp == 'Montastraea faveolata' ~ 'Orbicella faveolata',
+        spp == 'Montastraea franksi' ~ 'Orbicella franksi',
         spp == 'Orbicella species complex' ~ 'Orbicella comp.',
         spp == 'Orbicella spp' ~ 'Orbicella comp.',
-        spp == 'Orbicella faveolata' ~ 'Orbicella comp.',
-        spp == 'Orbicella franksi' ~ 'Orbicella comp.',
-        spp == 'Orbicella franksii' ~ 'Orbicella comp.',
+        spp == 'Orbicella franksii' ~ 'Orbicella franksi',
         spp == 'Diploria clivosa' ~ 'Pseudodiploria clivosa',
         spp == 'Diploria strigosa' ~ 'Pseudodiploria strigosa',
         spp == 'Helioceris cucullata' ~ 'Helioseris cucullata',
@@ -1356,6 +1350,7 @@
         grepl('Madracis', spp) ~ 'Madracis spp',
         grepl('Meandrina', spp) ~ 'Meandrina spp',
         grepl('Mycetophyllia', spp) ~ 'Mycetophyllia spp',
+        grepl('Orbicella', spp) ~ 'Orbicella spp',
         grepl('Pseudodiploria', spp) ~ 'Pseudodiploria spp',
         grepl('Scolymia', spp) ~ 'Scolymia spp',
         grepl('Siderastrea', spp) ~ 'Siderastrea spp',
@@ -1394,7 +1389,6 @@
   #   - that said, I should still be able to use the 10, 50, and/or 100 cm belt transect data!
   #       - a consideration here though is that belts were only used in situations with already-low density.
   #         so, may bias a bit towards low surface area estimates. still seems like a better solution
-  #
   
   #filter only 2013 to November 2018 pre-SCTLD
   combined_demo_data = combined_demo_data %>%
@@ -1611,11 +1605,11 @@
   
   ################################## absences: benthic ##################################
   
-  # Get all unique species levels (should be 24)
+  # Get all unique species levels (should be 23)
   all_species_levels <- levels(combined_benthic_data_trimmed$spp)
   
-  # Create master susceptibility lookup BEFORE splitting datasets
-  master_susc_lookup <- combined_benthic_data_trimmed %>% 
+  # Create main susceptibility lookup BEFORE splitting datasets
+  main_susc_lookup <- combined_benthic_data_trimmed %>% 
     select(spp, susc) %>% 
     distinct()
   
@@ -1671,8 +1665,8 @@
     # Create complete grid of all combinations
     complete_grid <- sampling_units %>%
       crossing(spp = factor(all_species_levels, levels = all_species_levels)) %>%
-      # Use the MASTER susceptibility lookup instead of dataset-specific one
-      left_join(master_susc_lookup, by = "spp") %>%
+      # Use the MAIN susceptibility lookup instead of dataset-specific one
+      left_join(main_susc_lookup, by = "spp") %>%
       # Left join with original data to get actual cover values
       left_join(cover_data, by = join_vars) %>%
       # Fill in missing values
@@ -1782,8 +1776,8 @@
     zero_coral_absences <- zero_coral_psus %>%
       # Create all combinations of zero coral PSUs and all species
       crossing(spp = factor(all_species_levels, levels = all_species_levels)) %>%
-      # Add susceptibility data using master lookup
-      left_join(master_susc_lookup, by = "spp") %>%
+      # Add susceptibility data using main lookup
+      left_join(main_susc_lookup, by = "spp") %>%
       # Add required columns
       mutate(
         transect = NA,  # NCRMP doesn't have transect level
@@ -1881,7 +1875,7 @@
   # Sum cover values with dataset-specific grouping by susceptibility group
   combined_benthic_data_summed_susc = combined_benthic_data_summed %>%
     group_by(dataset, PSU, date,
-             transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_),
+             transect = if_else(dataset %in% c("TCRMP_benthic", "PRCRMP"), transect, NA_real_),
              susc  # Group by susceptibility instead of species
     ) %>%
     summarise(
@@ -2117,10 +2111,6 @@
   
   ################################## site-level grouping ##################################
   
-  # NOTE - there are zero NCRMP PSU's with absolute zero coral coverage. I am wondering if some were
-  #         in fact recorded but filtered before hosting on Github? if so, would be very useful to retrieve
-  #         missing absence data
-  
   # BENTHIC
   #
   #summation by PSU only, pooling all species together
@@ -2133,7 +2123,7 @@
       # # Keep original date column for grouping, but handle NAs properly
       # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
       # Keep original transect, but set to NA for non-TCRMP datasets
-      transect = if_else(dataset == "TCRMP_benthic", transect, NA_real_)
+      transect = if_else(dataset %in% c("TCRMP_benthic", "PRCRMP"), transect, NA_real_),
       # No species or susceptibility grouping - pooling all species
     ) %>%
     summarise(
@@ -2176,7 +2166,8 @@
     ) %>%
     # Reorder columns
     select(dataset, date, PSU, transect, lat, lon, cover, depth,
-           total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
+           total_species_count, high_susc_count, moderate_susc_count, low_susc_count) %>%
+    mutate(PSU = as.factor(PSU))
   
   # DEMO
   #
@@ -2523,6 +2514,14 @@
       axis.text.x = element_text(angle = 45, hjust = 1)
     )
   
+  
+  # NOTE / stopping point 2 JULY 2025 - might consider keeping Acropora in mapping, due to just how crazy abundant it is in some of the
+  #         PR sites (e.g., Aurora, Gallardo). but if we do, how do we handle the fact that Hurricanes
+  #         Irma and Maria may have had significant effects?
+  #       1.) maybe keep acropora out, and just be clear about why
+  #       2.) leave acropora in, and consider really restricting the data more. e.g., for LTR datasets
+  #             (PRCRMP & TCRMP), take only the data that occurred post-Irma & Maria ?
+  
   ################################## plot by susceptibility ##################################
 
   # Summary statistics by susceptibility group
@@ -2622,6 +2621,112 @@
     theme(
       axis.text.x = element_text(angle = 45, hjust = 1)
     )
+  
+  
+  
+  
+  
+  ################################## Plot site maps ##################################
+  
+  # Get unique PSU locations from combined_benthic_data_averaged_psu
+  psu_locations <- combined_benthic_data_averaged_psu %>%
+    select(PSU, lat, lon, dataset) %>%
+    distinct(PSU, .keep_all = TRUE)  # Keep one row per unique PSU
+  
+  # Create color palette for different datasets
+  unique_datasets <- unique(psu_locations$dataset)
+  colors <- RColorBrewer::brewer.pal(min(length(unique_datasets), 11), "Spectral")
+  color_pal <- colorFactor(colors, domain = unique_datasets)
+  
+  # Create the interactive leaflet map
+  map <- leaflet(psu_locations) %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addProviderTiles(providers$CartoDB.Positron, group = "Light") %>%
+    addCircleMarkers(
+      lng = ~lon, 
+      lat = ~lat,
+      popup = ~paste0(
+        "<b>PSU:</b> ", PSU, "<br>",
+        "<b>Dataset:</b> ", dataset, "<br>",
+        "<b>Latitude:</b> ", round(lat, 5), "<br>",
+        "<b>Longitude:</b> ", round(lon, 5)
+      ),
+      label = ~paste0(PSU, " (", dataset, ")"),
+      radius = 7,
+      color = ~color_pal(dataset),
+      fillColor = ~color_pal(dataset),
+      fillOpacity = 0.8,
+      weight = 2,
+      stroke = TRUE
+    ) %>%
+    addLegend(
+      "bottomright",
+      pal = color_pal,
+      values = ~dataset,
+      title = "Dataset",
+      opacity = 1
+    ) %>%
+    addLayersControl(
+      baseGroups = c("OpenStreetMap", "Satellite", "Light"),
+      options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    fitBounds(
+      lng1 = min(psu_locations$lon, na.rm = TRUE) - 0.1,
+      lat1 = min(psu_locations$lat, na.rm = TRUE) - 0.1,
+      lng2 = max(psu_locations$lon, na.rm = TRUE) + 0.1,
+      lat2 = max(psu_locations$lat, na.rm = TRUE) + 0.1
+    )
+  
+  # Display the map
+  map
+  
+  # Print summary statistics
+  cat("Summary of PSU locations:\n")
+  cat("Total unique PSUs:", nrow(psu_locations), "\n")
+  cat("Datasets represented:\n")
+  print(table(psu_locations$dataset))
+  
+  # Show coordinate ranges
+  cat("\nCoordinate ranges:\n")
+  cat("Latitude range:", round(min(psu_locations$lat, na.rm = TRUE), 4), "to", 
+      round(max(psu_locations$lat, na.rm = TRUE), 4), "\n")
+  cat("Longitude range:", round(min(psu_locations$lon, na.rm = TRUE), 4), "to", 
+      round(max(psu_locations$lon, na.rm = TRUE), 4), "\n")
+  
+  static_map <- ggplot(psu_locations, aes(x = lon, y = lat, color = dataset)) +
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_brewer(type = "qual", palette = "Set2") +
+    coord_fixed() +
+    theme_minimal() +
+    labs(
+      title = "All Unique PSU Locations",
+      subtitle = "Combined Benthic Data - Averaged by PSU",
+      x = "Longitude",
+      y = "Latitude",
+      color = "Dataset"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+      plot.subtitle = element_text(hjust = 0.5, size = 12),
+      legend.position = "bottom"
+    )
+  
+  # Display static plot
+  print(static_map)
+  
+  # Optional: Create a summary table of PSUs by dataset
+  psu_summary <- psu_locations %>%
+    group_by(dataset) %>%
+    summarise(
+      n_PSUs = n(),
+      lat_range = paste(round(min(lat, na.rm = TRUE), 3), "to", round(max(lat, na.rm = TRUE), 3)),
+      lon_range = paste(round(min(lon, na.rm = TRUE), 3), "to", round(max(lon, na.rm = TRUE), 3)),
+      .groups = 'drop'
+    )
+  
+  print("PSU Summary by Dataset:")
+  print(psu_summary)
   
   
   ################################## Save output ##################################
