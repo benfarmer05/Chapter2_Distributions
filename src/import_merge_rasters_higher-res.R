@@ -156,9 +156,9 @@
                              bathy_PR_North_agg)
   
   
-  # STOPPING POINT - 30 JUNE 2025
+  # STOPPING POINT - 3 JULY 2025
   #   1.) splice in Holstein bathy for BVI
-  #   2.) consider Edmunds / CSUN coral data
+  #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
   #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
   
   #plot briefly
@@ -439,19 +439,19 @@
   
   ################################## Save objects/workspace  ##################################
   
-  #remove raster files with very large memory which don't work well with saving and re-loading downstream
-  # NOTE - can return to this if direct access to PR East is required!
-  rm(bathy_PR_East_clipped)
-  rm(bathy_PR_East)
-  
-  #save terra objects #and then workspace for use in downstream scripts
-  save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
-  
-  # Get all non-spatial objects
-  non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
-  
-  # Save only non-spatial objects
-  # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
-  save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
+  # #remove raster files with very large memory which don't work well with saving and re-loading downstream
+  # # NOTE - can return to this if direct access to PR East is required!
+  # rm(bathy_PR_East_clipped)
+  # rm(bathy_PR_East)
+  # 
+  # #save terra objects #and then workspace for use in downstream scripts
+  # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
+  # 
+  # # Get all non-spatial objects
+  # non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+  # 
+  # # Save only non-spatial objects
+  # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
+  # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
   
   

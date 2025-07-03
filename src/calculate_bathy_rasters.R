@@ -23,8 +23,8 @@
   # load(here("output/create_habitat_grid_workspace.RData")) #load workspace from upstream script
   
   #load initial set of objects
-  load_spat_objects(directory = 'output/output_import_merge_rasters/')
-  load(here('output', 'output_import_merge_rasters/import_merge_rasters_workspace.RData'))
+  load_spat_objects(directory = 'output/output_import_merge_rasters_higher-res/')
+  load(here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
   
   #load next set
   load_spat_objects(directory = 'output/output_create_habitat_grid/')
@@ -42,39 +42,40 @@
        main = "Bathymetry (50m Resolution)",
        legend = TRUE)
   
-  # Reproject to NAD83 (geographic)
-  bathy_merged_geo <- project(bathy_merged3_crm_reefdepth, common_crs)
-  
-  #note the slight shift in orientation
-  # NOTE - after looking at this, I think maybe we SHOULD project earlier in the pipeline. mesophotic ridge loses
-  #         significant detail
-  plot(bathy_merged_geo,
-       col = color_palette,
-       # zlim = c(-50, 0), #redundant
-       main = "Bathymetry (50m Resolution)",
-       legend = TRUE)
+  # # redacted - projected earlier on. can return to this if need to
+  # # Reproject to NAD83 (geographic)
+  # bathy_merged_geo <- project(bathy_merged3_crm_reefdepth, common_crs)
+  # 
+  # #note the slight shift in orientation
+  # # NOTE - after looking at this, I think maybe we SHOULD project earlier in the pipeline. mesophotic ridge loses
+  # #         significant detail
+  # plot(bathy_merged_geo,
+  #      col = color_palette,
+  #      # zlim = c(-50, 0), #redundant
+  #      main = "Bathymetry (50m Resolution)",
+  #      legend = TRUE)
   
   #plot just north of STT to verify clamping function above worked correctly
   #
   # Define the extent for the region north of St. Thomas up to latitude 19°
   extent_area <- ext(c(-65.1, -64.75, 18.25, 18.6))
-
+  
   # Crop the raster to the defined extent
-  bathy_cropped <- crop(bathy_merged_geo, extent_area)
-
+  bathy_cropped <- crop(bathy_merged3_crm_reefdepth, extent_area)
+  
   # Define a color palette for the plot
   color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100)
-
+  
   # Plot the cropped raster
   plot(bathy_cropped,
        col = color_palette,
        main = "Bathymetry North of St. Thomas Up to Latitude 19°",
        legend = TRUE)
-
+  
   #verify that the clamp worked and introduced NAs
   values <- values(bathy_cropped)
   deeper_than_50m <- any(values < -50, na.rm = TRUE)
-
+  
   if (deeper_than_50m) {
     cat("There are values deeper than 50 meters in the raster.")
   } else {

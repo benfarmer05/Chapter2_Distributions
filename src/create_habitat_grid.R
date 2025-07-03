@@ -437,10 +437,6 @@
   
   ################################## Save objects/workspace ##################################
   
-  # # #save terra objects and then workspace for use in downstream scripts
-  # # save_spat_objects() #call from functions.R
-  # # save.image(file = here("output", "create_habitat_grid_workspace.RData"))
-  # 
   # #updated way to handle saving of new objects
   # save_new_objects("output/output_create_habitat_grid", existing_objects)
   

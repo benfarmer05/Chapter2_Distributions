@@ -6,6 +6,7 @@
   library(tidyverse)
   library(readxl)
   library(terra)
+  library(leaflet)
   
   ################################## setup ##################################
   
@@ -2515,15 +2516,12 @@
     )
   
   
-  # NOTE / stopping point 2 JULY 2025 - might consider keeping Acropora in mapping, due to just how crazy abundant it is in some of the
-  #         PR sites (e.g., Aurora, Gallardo). but if we do, how do we handle the fact that Hurricanes
-  #         Irma and Maria may have had significant effects?
-  #       1.) maybe keep acropora out, and just be clear about why
-  #       2.) leave acropora in, and consider really restricting the data more. e.g., for LTR datasets
-  #             (PRCRMP & TCRMP), take only the data that occurred post-Irma & Maria ?
+  # NOTE / stopping point 2 JULY 2025
+  #       1.) keep acropora out, and just be clear about why
+  #       2.) leave datasets as-is (pool from 2013-2018)
   
   ################################## plot by susceptibility ##################################
-
+  
   # Summary statistics by susceptibility group
   susc_summary <- combined_benthic_data_averaged_susc %>%
     mutate(susc = factor(susc, levels = c("low", "moderate", "high"))) %>%
@@ -2731,7 +2729,7 @@
   
   ################################## Save output ##################################
   
-  # # # Save specific combined datasets in an .rda file for stats downstream
+  # # Save specific combined datasets in an .rda file for stats downstream
   # save(combined_benthic_data_averaged,
   #      combined_benthic_data_averaged_susc,
   #      combined_benthic_data_averaged_psu,
@@ -2739,6 +2737,7 @@
   #      combined_demo_data_averaged_susc,
   #      combined_demo_data_averaged_psu,
   #      file = here("output", "all_combined_data.rda"))
-  
+  # 
   # #pass workspace to downstream script
   # save.image(file = here("output", "process_species_data.RData"))
+  

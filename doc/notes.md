@@ -1,5 +1,6 @@
 # Chain sequence for running scripts:
-#   - import_merge_rasters.R
+#   - import_merge_rasters_higher-res.R
+#   - create_habitat_grid.R
 #   - calculate_bathy_rasters.R
 
 
