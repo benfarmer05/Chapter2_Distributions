@@ -23,7 +23,14 @@
   
   ################################## Create mask <50 m ##################################
   
-  seamask <- app(bathy_merged3_crm_reefdepth, fun = function(x) {
+  # #redacted - not using that merge. may need to apply hydro extent differently now ?
+  # seamask <- app(bathy_merged3_crm_reefdepth, fun = function(x) {
+  #   ifelse(x < 0 & x > -50, 0, 1)
+  # })
+  
+  # NOTE / STOPPING POINT - 4 JULY 2025
+  #   - return to this if we want to project deeper than 50 m
+  seamask <- app(bathy_Blondeau_final, fun = function(x) {
     ifelse(x < 0 & x > -50, 0, 1)
   })
   
@@ -59,10 +66,20 @@
   # Create a color palette for bathymetry - blues from light to dark
   bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
   
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
+  plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
+  # plot_extents = ext(290000, 330000, 2040000, 2080000) #for investigating St Thomas
+  # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
+
   # Plot the bathymetry first
-  plot(bathy_merged3_crm_reefdepth, 
+  plot(bathy_Blondeau_final,  #bathy_merged3_crm_reefdepth
        main="Bathymetry with Sea Mask and Hydrological Extent", 
        col=bathy_colors,
+       # ext = plot_extents, #e_crm,
        legend=TRUE)
   
   # # Add the seamask with transparency

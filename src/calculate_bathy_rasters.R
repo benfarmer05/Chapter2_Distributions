@@ -42,18 +42,20 @@
        main = "Bathymetry (50m Resolution)",
        legend = TRUE)
   
-  # # redacted - projected earlier on. can return to this if need to
-  # # Reproject to NAD83 (geographic)
-  # bathy_merged_geo <- project(bathy_merged3_crm_reefdepth, common_crs)
-  # 
-  # #note the slight shift in orientation
-  # # NOTE - after looking at this, I think maybe we SHOULD project earlier in the pipeline. mesophotic ridge loses
-  # #         significant detail
-  # plot(bathy_merged_geo,
-  #      col = color_palette,
-  #      # zlim = c(-50, 0), #redundant
-  #      main = "Bathymetry (50m Resolution)",
-  #      legend = TRUE)
+  # Reproject to NAD83 (geographic)
+  # NOTE / STOPPING POINT - 4 JULY 2025
+  #   - will need to go back upstream and project to geographic earlier,
+  #       to avoid loss of resolution
+  bathy_merged_geo <- project(bathy_merged3_crm_reefdepth, "EPSG:4269")
+  
+  #note the slight shift in orientation
+  # NOTE - after looking at this, I think maybe we SHOULD project earlier in the pipeline. mesophotic ridge loses
+  #         significant detail
+  plot(bathy_merged_geo,
+       col = color_palette,
+       # zlim = c(-50, 0), #redundant
+       main = "Bathymetry (50m Resolution)",
+       legend = TRUE)
   
   #plot just north of STT to verify clamping function above worked correctly
   #
@@ -61,7 +63,7 @@
   extent_area <- ext(c(-65.1, -64.75, 18.25, 18.6))
   
   # Crop the raster to the defined extent
-  bathy_cropped <- crop(bathy_merged3_crm_reefdepth, extent_area)
+  bathy_cropped <- crop(bathy_merged_geo, extent_area)
   
   # Define a color palette for the plot
   color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100)
@@ -144,12 +146,12 @@
   #   geom_raster(aes(x = x, y = y))
   
   #tmap method
-  tm_shape(bathy_merged3_crm_reefdepth) +
+  tm_shape(bathy_merged_geo) +
     tm_raster(style = 'cont', palette = color_palette) #this is outdated as of tmap v4, but works for continuous gradient
   # tm_shape(bathy_merged_50m) +
   #   tm_raster() +
   #   tm_scale_continuous(values = color_palette) #this doesn't seem right, but makes a discrete contoured depth gradient
-
+  
   # bathy_map = tm_shape(merged_bathy) +
   #   tm_raster(style = 'cont')
 
@@ -161,20 +163,20 @@
   # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
   # output_file = file.path(here('output'), "bathy_50m.tiff")
   # tmap_save(bathy_map, filename=output_file, height=8.5, width=11, units="in", dpi=300)
-
+  
   # # Save the merged raster
   # output_dir <- here("output")
   # output_file <- file.path(output_dir, "bathy_50m.tif")
   # writeRaster(merged_bathy, filename = output_file, overwrite = TRUE)
-
+  
   #rayshader method
   # in 2D
   # elmat = raster_to_matrix(merged_bathy)
   # elmat %>%
   #   sphere_shade(texture = "desert") %>%
   #   plot_map()
-  raster_to_matrix(bathy_merged3_crm_reefdepth) |> height_shade() |> plot_map()
-
+  raster_to_matrix(bathy_merged_geo) |> height_shade() |> plot_map()
+  
   # # in 3D
   # elmat %>%
   #   # sphere_shade(texture = "desert") %>%
@@ -187,17 +189,10 @@
   
   ################################## Test resolution/artifacts ##################################
   
-  # STOPPING POINT - 17 Oct 2024
-  #   - A few issues
-  #   - 1.) No matter whether I use 2-m or downsampled 50-m resolution bathy raster, all derived products have issues. some of these are
-  #           major, like at the MCD and along coastlines. Should figure out if it would be easier to simply use VI_Shapes bathy or reach
-  #           out to Katharine Egan to simply re-use what she had. But she also had a far more limited domain...probably not helpful.
-  #           I guess just try and get QGIS working again and take a look at the geodatabase to see what I can do with it. My gut is that
-  #           a combination of VI_Shapes and other bathy I can mosaic together from NOAA sources will be the best route forward
-  #   - 2.) Once the above is figured out, a lot is in place, but I still unfortunately need to consider how much that 50-m downsampling
-  #           negatively impacts our capabilities for inference. Egan (2021) I'm pretty sure downsampled before deriving (Check), but
-  #           studies I really like, like Young and Carr, did not do this and I think benefited from it. Will have to see
-  #     3.) Final thing is assembling all the parts in terms of predictor layers - that will take some serious effort
+  # NOTE / STOPPING POINT - 4 JULY 2025
+  #   - looks like there are actually a few spots still where the inland water is not sealed in ...
+  #       check upstream ?
+  #   - but also why is Anegada there, I didn't think I spliced it back in yet?
   
   # Calculate terrain attributes. may consider Benthic Terrain Modeler (but need Arc & potentially arcgisbinding package in R) or MultiscaleDTM package (https://cran.r-project.org/web/packages/MultiscaleDTM/readme/README.html)
   #

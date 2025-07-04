@@ -40,6 +40,7 @@
   bathy_PR_North = rast(gdb_path, subds = "PuertoRico_North_2m")
   
   projected_crs = crs(bathy_STTSTJ)
+  geographic_crs = crs("EPSG:4269")
   
   ################################## Bathymetry resampling  ##################################
   
@@ -54,6 +55,8 @@
   describe(crm_path)
   bathy_crm_2019 = rast(crm_path)
   bathy_crm_2019 <- project(bathy_crm_2019, projected_crs)
+  # bathy_crm_2019 <- project(bathy_crm_2019, geographic_crs)
+  bathy_crm_2019 = clamp(bathy_crm_2019, lower = -200, upper = 0, values = TRUE) #make the bathy sensible - eliminates fill values
   
   #pull NOAA 1 arc-second crm, downloaded in 2024 from NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
   # - CRS: 4326 (WGS 84; requires reprojection)
@@ -71,6 +74,7 @@
   bathy_crm_2024 = rast(crm_path)
   res(bathy_crm_2024)
   bathy_crm_2024 <- project(bathy_crm_2024, projected_crs)
+  # bathy_crm_2024 <- project(bathy_crm_2024, geographic_crs)
   
   # # VERSION WHERE MODELING IS LIMITED TO VIEQUES EASTWARD
   # #read the CMS-formatted hydrodynamic domain extent
@@ -112,7 +116,7 @@
   e_pr_south <- ext(bathy_PR_South_clipped)
   e_pr_west <- ext(bathy_PR_West_clipped)
   e_pr_north <- ext(bathy_PR_North_clipped)
-
+  
   # Find the maximum combined extent of all five rasters
   xmin_combined <- min(e_crm$xmin, e_pr_east$xmin, e_pr_south$xmin, e_pr_west$xmin, e_pr_north$xmin)
   xmax_combined <- max(e_crm$xmax, e_pr_east$xmax, e_pr_south$xmax, e_pr_west$xmax, e_pr_north$xmax)
@@ -155,9 +159,7 @@
   bathy_Blondeau_agg = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg,
                              bathy_PR_North_agg)
   
-  
   # STOPPING POINT - 3 JULY 2025
-  #   1.) splice in Holstein bathy for BVI
   #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
   #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
   
@@ -203,19 +205,6 @@
   landmask_USCarib <- bathy_crm_USCarib
   landmask_USCarib[landmask_USCarib > 0] <- NA
   
-
-  # # Extend the landmask to match the full extent of bathy_Blondeau_agg
-  # # This fills the extended areas with NA, which won't mask the Blondeau data
-  # landmask_extended <- extend(landmask_USCarib, bathy_Blondeau_agg)
-  # 
-  # # Resample to match resolution
-  # landmask_resampled <- resample(landmask_extended, bathy_Blondeau_agg, method = "near")
-  # 
-  # # Apply the mask - areas where landmask is NA (land) will be masked out,
-  # # areas where landmask was extended (also NA) will remain unmasked
-  # bathy_Blondeau_masked <- mask(bathy_Blondeau_agg, landmask_resampled, maskvalue = NA, updatevalue = NA)
-  
-  
   # Extend the landmask to match the full extent of bathy_Blondeau_agg
   # BUT fill the extended areas with a water value (e.g., -999) instead of NA
   landmask_extended <- extend(landmask_USCarib, bathy_Blondeau_agg, fill = -999)
@@ -226,8 +215,6 @@
   # Now mask only where landmask has actual NA values (land areas)
   # Areas with -999 (extended water areas) won't be masked
   bathy_Blondeau_masked <- mask(bathy_Blondeau_agg, landmask_resampled, maskvalue = NA)
-  
-  
   
   bathy_Blondeau_masked_plot = clamp(bathy_Blondeau_masked, lower = -50, upper = 0, values = TRUE)
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
@@ -241,56 +228,6 @@
        # ext = e_pr,
        ext = plot_extents, #e_crm,
        legend = TRUE)
-  
-  
-  ################################## seal off inland bathy ##################################
-  
-  # Create a binary land/water raster (1 = water, NA = land)
-  water_binary <- bathy_Blondeau_masked
-  water_binary[water_binary > 0] <- NA  # land = NA
-  water_binary[water_binary <= 0] <- 1  # water = 1
-  
-  # Find connected water patches
-  water_patches <- patches(water_binary, directions = 8, allowGaps = FALSE)
-  
-  # Get patch frequencies
-  patch_freq <- freq(water_patches)
-  
-  # Keep the largest patch AND any patches above a size threshold
-  min_patch_size <- 1000  # adjust this threshold as needed (number of cells)
-  large_patches <- patch_freq[patch_freq$count >= min_patch_size, "value"]
-  
-  # Create mask: keep large water bodies, fill small ones
-  ocean_mask <- water_patches
-  ocean_mask[!water_patches %in% large_patches] <- NA  # small water becomes NA
-  ocean_mask[water_patches %in% large_patches] <- 1    # large water remains
-  
-  # Apply mask
-  bathy_sealed <- mask(bathy_Blondeau_masked, ocean_mask)
-  
-  bathy_sealed_plot = clamp(bathy_sealed, lower = -50, upper = 0, values = TRUE)
-  plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
-  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
-  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
-  # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
-  # plot_extents = ext(290000, 330000, 2040000, 2080000) #for investigating St Thomas
-  # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-  plot(bathy_sealed_plot,
-       main = 'Blondeau',
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
-  
-  # # Sometimes a simple morphological operation works well
-  # # Create land mask (areas > 0)
-  # land_mask <- bathy_Blondeau_masked > 0
-  # 
-  # # Buffer land areas inward to close small water gaps
-  # land_buffered <- buffer(land_mask, width = 100)  # adjust width as needed
-  # 
-  # # Apply buffered land mask
-  # bathy_sealed <- mask(bathy_Blondeau_masked, land_buffered, inverse = TRUE)
   
   ################################## Splice "good" bathy to Blondeau ##################################
   
@@ -307,21 +244,17 @@
   # Resample to 50m grid using the template
   south_of_STT_agg <- resample(south_of_STT_clipped, template_raster, method = "average")
   
-  # Clean up template
-  rm(template_raster)
+  # bathy_Blondeau_spliced <- merge(south_of_STT_clipped, bathy_Blondeau_masked)
+  bathy_Blondeau_spliced <- mosaic(south_of_STT_agg, bathy_Blondeau_masked, fun = "first")
   
-  # bathy_Blondeau_final <- merge(south_of_STT_clipped, bathy_sealed)
-  bathy_Blondeau_final <- mosaic(south_of_STT_agg, bathy_sealed, fun = "first")
-  
-  
-  bathy_Blondeau_final_plot = clamp(bathy_Blondeau_final, lower = -50, upper = 0, values = TRUE)
+  bathy_Blondeau_spliced_plot = clamp(bathy_Blondeau_spliced, lower = -50, upper = 0, values = TRUE)
   plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-  plot(bathy_Blondeau_final_plot,
+  plot(bathy_Blondeau_spliced_plot,
        main = 'Blondeau',
        # ext = e_pr,
        ext = plot_extents, #e_crm,
@@ -340,109 +273,389 @@
        ext = plot_extents, #e_crm,
        legend = TRUE)
   
+  ################################## Tack BVI to Blondeau ##################################
   
-  ################################## Merge 1: PR to MCD ##################################
+  # # METHOD WHICH FILLS IN - EVEN AT MESOPHOTIC RIDGE SOUTH OF STT
+  # #
+  # plot(bathy_Blondeau_final)
+  # plot(bathy_crm_2019_agg)
+  # blondeau_depth_range <- range(values(bathy_Blondeau_final), na.rm = TRUE)
+  # bathy_crm_filtered <- bathy_crm_2019_agg
+  # bathy_crm_filtered[bathy_crm_filtered < blondeau_depth_range[1] |
+  #                      bathy_crm_filtered > blondeau_depth_range[2]] <- NA
+  # bathy_Blondeau_final = mosaic(bathy_Blondeau_final, bathy_crm_filtered, fun = 'first')
+  # plot(bathy_Blondeau_final)
   
-  # NOTE - the below 3 merges are for a "back-up" version of merged bathymetry that doesn't have the artifact
-  #         issues the Blondeau set does
+  # METHOD WHICH ONLY ADDS NORTH/EAST (BVI) - NO FILLING OF EXISTING DATA
+  #
+  # Clean up the CRM data before clipping
+  # Find the deepest value in Bl# METHOD WHICH ONLY ADDS NORTH/EAST (BVI) - NO FILLING OF EXISTING DATA
+  #
+  # Clean up the CRM data before clipping
+  # Find the deepest value in Blondeau (most negative for bathymetry)
+  deepest_blondeau <- min(values(bathy_Blondeau_spliced), na.rm = TRUE)
+  print(paste("Deepest value in Blondeau:", deepest_blondeau))
   
+  # Set CRM values deeper than Blondeau's deepest to NA
+  # Also set values of 0 (land) to NA
+  # ADDITIONAL: Set shallow values (> -2m) to NA as these are likely land/very shallow areas
+  bathy_crm_cleaned <- bathy_crm_2019_agg
+  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) < deepest_blondeau] <- NA
+  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= -2] <- NA  # Remove land and very shallow areas
   
-  #eliminate fill values at edge of MCD
-  bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
+  # Create a binary mask where Blondeau has non-NA data
+  blondeau_has_data <- !is.na(bathy_Blondeau_spliced)
   
-  bathy_merge1_crm = merge(bathy_crm_2019_agg_nofill, bathy_crm_2024_agg)
+  # Apply this mask to remove CRM data where Blondeau has data
+  # We want to KEEP CRM data where blondeau_has_data is FALSE (purple areas)
+  # So we mask where blondeau_has_data is TRUE (yellow areas) - NO inverse needed
+  bathy_crm_clipped <- mask(bathy_crm_cleaned, blondeau_has_data, inverse = FALSE, maskvalue = TRUE)
+  plot(bathy_crm_clipped)
   
-  #plot briefly
-  bathy_merged_crm_reefdepth <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged_crm_reefdepth, 
-       main="Merge #1",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
+  # SPATIAL CLEANUP: Remove CRM data south and west of intended extension area
+  # Based on your image, keep only CRM data that is:
+  # - East of approximately 330000 UTM AND/OR
+  # - North of approximately 2070000 UTM
+  # Get coordinates for each cell
+  coords <- xyFromCell(bathy_crm_clipped, 1:ncell(bathy_crm_clipped))
+  x_coords <- coords[, 1]  # Easting
+  y_coords <- coords[, 2]  # Northing
+  
+  # Create a logical mask: keep only areas that are sufficiently east OR north
+  # Adjust these coordinates based on your specific area
+  # keep_mask <- (x_coords > 335500) | (y_coords > 2070000)
+  # keep_mask <- (x_coords > 330000) | (y_coords > 2070000)
+  keep_mask <- (x_coords > 330000) | (y_coords > 2065000)
+  
+  # Apply the spatial mask
+  values(bathy_crm_clipped)[!keep_mask] <- NA
+  plot(bathy_crm_clipped)
+  
+  # Merge the datasets
+  # The merge function will use Blondeau data where available, cleaned CRM data elsewhere
+  bathy_Blondeau_BVI <- merge(bathy_Blondeau_spliced, bathy_crm_clipped)
+  
+  ################################## patch in USGS Anegada LIDAR ##################################
+  
+  #read in version of 90m crm that spans entire US Caribbean. has a mostly normal landmask; some inland water needs to be filled
+  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/USGS_Anegada/ANGD2014_EAARLB_z20_v09g12A_mosaic/ANGD2014_EAARLB_z20_v09g12A_mosaic.tif"
+  describe(crm_path)
+  Anegada_LIDAR = rast(crm_path)
+  Anegada_LIDAR <- project(Anegada_LIDAR, projected_crs)
+  
+  #drop fill values and land
+  values(Anegada_LIDAR)[values(Anegada_LIDAR) < deepest_blondeau] <- NA
+  values(Anegada_LIDAR)[values(Anegada_LIDAR) > 0] <- NA
+  
+  #resample to 50 m res
+  Anegada_LIDAR_agg <- resample(Anegada_LIDAR, template_raster, method = "average")
+  
+  # # Clean up template
+  # rm(template_raster)
+  
+  plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
+  
+  # Plot the bathymetry first
+  plot(Anegada_LIDAR_agg,  #bathy_merged3_crm_reefdepth
+       main="Bathymetry with Sea Mask and Hydrological Extent", 
+       col=bathy_colors,
        ext = plot_extents, #e_crm,
        legend=TRUE)
   
-  ################################## Merge 2: MCD to Coral Bay ##################################
-  
-  #eliminate fill values at edge of MCD
-  bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
-  
-  bathy_crm_2024_agg_reefdepth_nofill <- ifel(bathy_crm_2024_agg_plot == 0, NA, bathy_crm_2024_agg_plot)
-  
-  kiddel_point_lon = -64.71987
-  kiddel_point_lat = 18.30761
-  point_wgs84 <- st_sfc(st_point(c(kiddel_point_lon, kiddel_point_lat)), crs = 4326)
-  point_utm <- st_transform(point_wgs84, 26920)
-  kiddel_point_east_x <- st_coordinates(point_utm)[1]
-  cat("Converted longitude", kiddel_point_lon, "to UTM x-coordinate:", kiddel_point_east_x, "\n")
-  
-  lon_rast <- init(bathy_crm_2024_agg_reefdepth_nofill, "x")
-  west_mask <- lon_rast >= kiddel_point_east_x
-  STJ_clip <- bathy_crm_2024_agg_reefdepth_nofill
-  STJ_clip[!west_mask] <- NA
-  
-  lon_rast <- init(STJ_clip, "x")
-  east_non_na <- max(values(lon_rast)[!is.na(values(STJ_clip))], na.rm = TRUE)
-  east_trim_limit <- east_non_na - 1000  # trim 1 km west of easternmost valid value
-  east_mask <- lon_rast <= east_trim_limit
-  STJ_clip[!east_mask] <- NA
-  
-  bathy_merge2_crm = merge(STJ_clip, bathy_merged_crm_reefdepth)
-  
-  bathy_merge2_crm_nofill = ifel(bathy_merge2_crm == 0, NA, bathy_merge2_crm)
-  
-  #plot briefly
-  bathy_merged2_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged2_crm_reefdepth, 
-       main="Merge #2",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
+  plot(Anegada_LIDAR,  #bathy_merged3_crm_reefdepth
+       main="Bathymetry with Sea Mask and Hydrological Extent", 
+       col=bathy_colors,
        ext = plot_extents, #e_crm,
        legend=TRUE)
   
-  ################################## Merge 3: STX ##################################
+  #merge with main
+  bathy_Blondeau_BVI_Anegada <- merge(Anegada_LIDAR_agg, bathy_Blondeau_BVI)
   
-  VI_trough_lon = -64.767128
-  VI_trough_lat = 18.046230
-  point_wgs84 <- st_sfc(st_point(c(VI_trough_lon, VI_trough_lat)), crs = 4326)
-  point_utm <- st_transform(point_wgs84, 26920)
-  VI_trough_north_y <- st_coordinates(point_utm)[2]
-  cat("Converted latitude", VI_trough_lat, "to UTM y-coordinate:", VI_trough_north_y, "\n")
-  
-  lat_rast <- init(bathy_crm_2019_agg_plot, "y")
-  south_mask <- lat_rast <= VI_trough_north_y
-  STX_clip <- bathy_crm_2019_agg_plot
-  STX_clip[!south_mask] <- NA
-  
-  bathy_merge3_crm = merge(STX_clip, bathy_merged2_crm_reefdepth)
-  
-  bathy_merge2_crm_nofill = ifel(bathy_merge3_crm == 0, NA, bathy_merge3_crm)
-  
-  #plot briefly
-  bathy_merged3_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(xmin, xmax, ymin, ymax)
-  plot(bathy_merged3_crm_reefdepth, 
-       main="Merge #3",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
+  plot(bathy_Blondeau_BVI,  #bathy_merged3_crm_reefdepth
+       main="Bathymetry with Sea Mask and Hydrological Extent", 
+       col=bathy_colors,
        ext = plot_extents, #e_crm,
        legend=TRUE)
   
-  # #compare with 2019 bathy
-  # bathy_crm_2019_agg_reefdepth_nofill = ifel(bathy_crm_2019_agg_plot == 0, NA, bathy_crm_2019_agg_plot)
-  # plot(bathy_crm_2019_agg_reefdepth_nofill, #this shows that the 2019 crm is the clear winner, for MCD
-  #      main = 'CRM 2019',
-  #      # ext = e_pr,
+  plot(bathy_Blondeau_BVI_Anegada,  #bathy_merged3_crm_reefdepth
+       main="Bathymetry with Sea Mask and Hydrological Extent", 
+       col=bathy_colors,
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
+  
+  ################################## seal off inland bathy ##################################
+  
+  # # Sometimes a simple morphological operation works well
+  # # Create land mask (areas > 0)
+  # land_mask <- bathy_Blondeau_masked > 0
+  # 
+  # # Buffer land areas inward to close small water gaps
+  # land_buffered <- buffer(land_mask, width = 100)  # adjust width as needed
+  # 
+  # # Apply buffered land mask
+  # bathy_sealed <- mask(bathy_Blondeau_masked, land_buffered, inverse = TRUE)
+  
+  # Create a binary land/water raster (1 = water, NA = land)
+  water_binary <- bathy_Blondeau_BVI_Anegada #bathy_Blondeau_masked
+  water_binary[water_binary > 0] <- NA  # land = NA
+  water_binary[water_binary <= 0] <- 1  # water = 1
+  
+  # Function to process raster in tiles with overlap to avoid boundary artifacts
+  process_patches_in_chunks <- function(raster_data, chunk_size = 5000, overlap = 200) {
+    
+    # Get raster dimensions
+    nr <- nrow(raster_data)
+    nc <- ncol(raster_data)
+    
+    # Calculate number of chunks
+    n_chunks_row <- ceiling(nr / chunk_size)
+    n_chunks_col <- ceiling(nc / chunk_size)
+    
+    print(paste("Processing", n_chunks_row * n_chunks_col, "chunks with overlap"))
+    
+    # Create empty result raster
+    result <- raster_data
+    values(result) <- NA
+    
+    chunk_id <- 1
+    for (i in 1:n_chunks_row) {
+      for (j in 1:n_chunks_col) {
+        
+        # Calculate chunk boundaries WITH overlap
+        row_start_overlap <- max(1, (i - 1) * chunk_size + 1 - overlap)
+        row_end_overlap <- min(nr, i * chunk_size + overlap)
+        col_start_overlap <- max(1, (j - 1) * chunk_size + 1 - overlap)
+        col_end_overlap <- min(nc, j * chunk_size + overlap)
+        
+        # Calculate CORE boundaries (what we actually want to keep)
+        row_start_core <- (i - 1) * chunk_size + 1
+        row_end_core <- min(nr, i * chunk_size)
+        col_start_core <- (j - 1) * chunk_size + 1
+        col_end_core <- min(nc, j * chunk_size)
+        
+        # Extract overlapping chunk
+        chunk_ext_overlap <- ext(
+          xFromCol(raster_data, col_start_overlap),
+          xFromCol(raster_data, col_end_overlap),
+          yFromRow(raster_data, row_end_overlap),
+          yFromRow(raster_data, row_start_overlap)
+        )
+        
+        chunk_overlap <- crop(raster_data, chunk_ext_overlap)
+        
+        if (any(!is.na(values(chunk_overlap)))) {
+          # Process overlapping chunk
+          chunk_patches_overlap <- patches(chunk_overlap, directions = 8, allowGaps = FALSE)
+          
+          # Extract only the CORE area (remove overlap edges)
+          chunk_ext_core <- ext(
+            xFromCol(raster_data, col_start_core),
+            xFromCol(raster_data, col_end_core),
+            yFromRow(raster_data, row_end_core),
+            yFromRow(raster_data, row_start_core)
+          )
+          
+          chunk_patches_core <- crop(chunk_patches_overlap, chunk_ext_core)
+          
+          # Add unique offset to patch IDs to avoid conflicts
+          if (!all(is.na(values(chunk_patches_core)))) {
+            values(chunk_patches_core) <- values(chunk_patches_core) + (chunk_id * 10000)
+          }
+          
+          # FIXED: Use mosaic instead of merge for proper handling
+          # Create a temporary raster for this chunk that covers the full extent
+          temp_result <- result
+          values(temp_result) <- NA
+          
+          # Insert the core chunk values at the correct location
+          temp_chunk <- crop(temp_result, chunk_ext_core)
+          values(temp_chunk) <- values(chunk_patches_core)
+          
+          # Use mosaic to combine (this handles overlaps properly)
+          result <- mosaic(result, temp_chunk, fun = "max")
+        }
+        
+        chunk_id <- chunk_id + 1
+        
+        # Progress indicator
+        if (chunk_id %% 10 == 0) {
+          print(paste("Processed chunk", chunk_id, "of", n_chunks_row * n_chunks_col))
+        }
+      }
+    }
+    
+    print("Chunks processed with overlap - should eliminate boundary artifacts!")
+    
+    return(result)
+  }
+  
+  # Use the improved chunked approach
+  water_patches_chunked <- process_patches_in_chunks(water_binary, chunk_size = 3000, overlap = 200)
+  water_patches <- water_patches_chunked
+  
+  # STOPPING POINT - 4 JULY 2025
+  #   -  legitimately devastating...I had this working so that somehow, a sealed bathy was created without there
+  #       issues with merging chunks in the final product. idk if I was accidentally just running the straight-up 'patches'
+  #       function and that was what was working, or if I ditched a chunking version that was actually working. UGHUGUGUHUGHJGJHGJHGJHJGHJGHj
+  
+  # # Find connected water patches
+  # water_patches <- patches(water_binary, directions = 8, allowGaps = FALSE)
+  
+  # Get patch frequencies
+  patch_freq <- freq(water_patches)
+  
+  # Keep the largest patch AND any patches above a size threshold
+  min_patch_size <- 5000 # 1000  # adjust this threshold as needed (number of cells)
+  large_patches <- patch_freq[patch_freq$count >= min_patch_size, "value"]
+  
+  # Create mask: keep large water bodies, fill small ones
+  ocean_mask <- water_patches
+  ocean_mask[!water_patches %in% large_patches] <- NA  # small water becomes NA
+  ocean_mask[water_patches %in% large_patches] <- 1    # large water remains
+  
+  # Apply mask
+  bathy_sealed <- mask(bathy_Blondeau_BVI_Anegada, ocean_mask)
+  
+  bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
+  
+  bathy_sealed_plot = clamp(bathy_sealed, lower = -50, upper = 0, values = TRUE)
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(260000, 290000, 2000000, 2040000) #for investigating MCD
+  # plot_extents = ext(305000, 330000, 2020000, 2035000) #for investigating STJ
+  # plot_extents = ext(317000, 350000, 2030000, 2050000) #for investigating Tortola
+  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
+  # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
+  # plot_extents = ext(279000, 310000, 2010000, 2050000) #for investigating St Thomas
+  # plot_extents = ext(240000, 275000, 2000000, 2040000) #for investigating Culebra
+  # plot_extents = ext(120000, 220000, 2020000, 2060000) #for investigating northern PR
+  
+  plot(bathy_sealed,
+       main = 'bathy_sealed',
+       col = bathy_colors,
+       # ext = e_pr,
+       ext = plot_extents, #e_crm,
+       legend = TRUE)
+  
+  plot(bathy_Blondeau_BVI_Anegada,
+       main = 'Original',
+       col = bathy_colors,
+       # ext = e_pr,
+       ext = plot_extents, #e_crm,
+       legend = TRUE)
+  
+  plot(water_patches_chunked,  #bathy_merged3_crm_reefdepth
+       main="water_patches_chunked", 
+       col=bathy_colors,
+       ext = plot_extents, #e_crm,
+       legend=TRUE)
+  
+  #finalize
+  bathy_final = bathysealed
+  
+  # ################################## Merge 1: PR to MCD ##################################
+  # 
+  # # NOTE - the below 3 merges are for a "back-up" version of merged bathymetry that doesn't have the artifact
+  # #         issues the Blondeau set does
+  # 
+  # 
+  # #eliminate fill values at edge of MCD
+  # bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
+  # 
+  # bathy_merge1_crm = merge(bathy_crm_2019_agg_nofill, bathy_crm_2024_agg)
+  # 
+  # #plot briefly
+  # bathy_merged_crm_reefdepth <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
+  # plot_extents = ext(xmin, xmax, ymin, ymax)
+  # plot(bathy_merged_crm_reefdepth, 
+  #      main="Merge #1",
+  #      # col=hcl.colors(50, "Blues", rev=TRUE),
+  #      # ext = e_pr, #e_crm,
   #      ext = plot_extents, #e_crm,
-  #      legend = TRUE)
-  
+  #      legend=TRUE)
+  # 
+  # ################################## Merge 2: MCD to Coral Bay ##################################
+  # 
+  # #eliminate fill values at edge of MCD
+  # bathy_crm_2019_agg_nofill <- ifel(bathy_crm_2019_agg < -100000, NA, bathy_crm_2019_agg)
+  # 
+  # bathy_crm_2024_agg_reefdepth_nofill <- ifel(bathy_crm_2024_agg_plot == 0, NA, bathy_crm_2024_agg_plot)
+  # 
+  # kiddel_point_lon = -64.71987
+  # kiddel_point_lat = 18.30761
+  # point_wgs84 <- st_sfc(st_point(c(kiddel_point_lon, kiddel_point_lat)), crs = 4326)
+  # point_utm <- st_transform(point_wgs84, 26920)
+  # kiddel_point_east_x <- st_coordinates(point_utm)[1]
+  # cat("Converted longitude", kiddel_point_lon, "to UTM x-coordinate:", kiddel_point_east_x, "\n")
+  # 
+  # lon_rast <- init(bathy_crm_2024_agg_reefdepth_nofill, "x")
+  # west_mask <- lon_rast >= kiddel_point_east_x
+  # STJ_clip <- bathy_crm_2024_agg_reefdepth_nofill
+  # STJ_clip[!west_mask] <- NA
+  # 
+  # lon_rast <- init(STJ_clip, "x")
+  # east_non_na <- max(values(lon_rast)[!is.na(values(STJ_clip))], na.rm = TRUE)
+  # east_trim_limit <- east_non_na - 1000  # trim 1 km west of easternmost valid value
+  # east_mask <- lon_rast <= east_trim_limit
+  # STJ_clip[!east_mask] <- NA
+  # 
+  # bathy_merge2_crm = merge(STJ_clip, bathy_merged_crm_reefdepth)
+  # 
+  # bathy_merge2_crm_nofill = ifel(bathy_merge2_crm == 0, NA, bathy_merge2_crm)
+  # 
+  # #plot briefly
+  # bathy_merged2_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
+  # plot_extents = ext(xmin, xmax, ymin, ymax)
+  # plot(bathy_merged2_crm_reefdepth, 
+  #      main="Merge #2",
+  #      # col=hcl.colors(50, "Blues", rev=TRUE),
+  #      # ext = e_pr, #e_crm,
+  #      ext = plot_extents, #e_crm,
+  #      legend=TRUE)
+  # 
+  # ################################## Merge 3: STX ##################################
+  # 
+  # VI_trough_lon = -64.767128
+  # VI_trough_lat = 18.046230
+  # point_wgs84 <- st_sfc(st_point(c(VI_trough_lon, VI_trough_lat)), crs = 4326)
+  # point_utm <- st_transform(point_wgs84, 26920)
+  # VI_trough_north_y <- st_coordinates(point_utm)[2]
+  # cat("Converted latitude", VI_trough_lat, "to UTM y-coordinate:", VI_trough_north_y, "\n")
+  # 
+  # lat_rast <- init(bathy_crm_2019_agg_plot, "y")
+  # south_mask <- lat_rast <= VI_trough_north_y
+  # STX_clip <- bathy_crm_2019_agg_plot
+  # STX_clip[!south_mask] <- NA
+  # 
+  # bathy_merge3_crm = merge(STX_clip, bathy_merged2_crm_reefdepth)
+  # 
+  # bathy_merge2_crm_nofill = ifel(bathy_merge3_crm == 0, NA, bathy_merge3_crm)
+  # 
+  # #plot briefly
+  # bathy_merged3_crm_reefdepth <- clamp(bathy_merge2_crm_nofill, lower = -50, upper = 0, values = TRUE) #limit depth to 0 m; eliminate land elevation
+  # plot_extents = ext(xmin, xmax, ymin, ymax)
+  # plot(bathy_merged3_crm_reefdepth, 
+  #      main="Merge #3",
+  #      # col=hcl.colors(50, "Blues", rev=TRUE),
+  #      # ext = e_pr, #e_crm,
+  #      ext = plot_extents, #e_crm,
+  #      legend=TRUE)
+  # 
+  # # #compare with 2019 bathy
+  # # bathy_crm_2019_agg_reefdepth_nofill = ifel(bathy_crm_2019_agg_plot == 0, NA, bathy_crm_2019_agg_plot)
+  # # plot(bathy_crm_2019_agg_reefdepth_nofill, #this shows that the 2019 crm is the clear winner, for MCD
+  # #      main = 'CRM 2019',
+  # #      # ext = e_pr,
+  # #      ext = plot_extents, #e_crm,
+  # #      legend = TRUE)
+  # 
   ################################## Save objects/workspace  ##################################
   
-  # #remove raster files with very large memory which don't work well with saving and re-loading downstream
-  # # NOTE - can return to this if direct access to PR East is required!
-  # rm(bathy_PR_East_clipped)
-  # rm(bathy_PR_East)
+  # # #remove raster files with very large memory which don't work well with saving and re-loading downstream
+  # # # NOTE - can return to this if direct access to PR East is required!
+  # # rm(bathy_PR_East_clipped)
+  # # rm(bathy_PR_East)
   # 
   # #save terra objects #and then workspace for use in downstream scripts
   # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
@@ -453,5 +666,4 @@
   # # Save only non-spatial objects
   # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
   # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
-  
   
