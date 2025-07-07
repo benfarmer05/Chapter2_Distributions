@@ -153,13 +153,12 @@
   bathy_PR_North_agg <- resample(bathy_PR_North_clipped, template_raster, method = "average")
   bathy_crm_2019_agg = resample(bathy_crm_2019_clipped, template_raster, method = 'average')
   bathy_crm_2024_agg <- resample(bathy_crm_2024_clipped, template_raster, method = "average") #NOTE - resampling was done because 'aggregate' could not produce exact discrete 50 x 50 m resolution
-  rm(template_raster) #drop this raster after it is no longer needed, since it is empty and messes up object saving function
   
   #combine Blondeau raster chunks
   bathy_Blondeau_agg = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg,
                              bathy_PR_North_agg)
   
-  # STOPPING POINT - 3 JULY 2025
+  # NOTE - 3 JULY 2025
   #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
   #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
   
@@ -350,8 +349,8 @@
   #resample to 50 m res
   Anegada_LIDAR_agg <- resample(Anegada_LIDAR, template_raster, method = "average")
   
-  # # Clean up template
-  # rm(template_raster)
+  # Clean up template
+  rm(template_raster)
   
   plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
   bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
@@ -389,126 +388,87 @@
   # # Sometimes a simple morphological operation works well
   # # Create land mask (areas > 0)
   # land_mask <- bathy_Blondeau_masked > 0
-  # 
+  #
   # # Buffer land areas inward to close small water gaps
   # land_buffered <- buffer(land_mask, width = 100)  # adjust width as needed
-  # 
+  #
   # # Apply buffered land mask
   # bathy_sealed <- mask(bathy_Blondeau_masked, land_buffered, inverse = TRUE)
+
+
+  # NOTE - since the below is done POST-resampling to 50 m, some inland water bodies that
+  #         truly are connected to the ocean might appear to be disconnected. I think the
+  #         below actually doesn't do a good job of dropping those from the seamask anyways
+  #         (which is good ??), but worth considering. running this on raw bathy might be very
+  #         resource intensive and not worth it. because at the end of the day, resampling
+  #         will introduce some artifacts no matter what - really more of a visual issue than
+  #         anything. depends how "realistic" we want the final coral cover maps
+
+  solution_1_no_chunking <- function(water_binary) {
+    # Set terra options for memory management
+    terraOptions(memfrac = 0.8, tempdir = tempdir())
+    
+    # Try processing without chunking - terra is more memory efficient than raster
+    water_patches <- patches(water_binary, directions = 8, allowGaps = FALSE)
+    
+    return(water_patches)
+  }
   
   # Create a binary land/water raster (1 = water, NA = land)
-  water_binary <- bathy_Blondeau_BVI_Anegada #bathy_Blondeau_masked
+  water_binary <- bathy_Blondeau_BVI_Anegada 
   water_binary[water_binary > 0] <- NA  # land = NA
   water_binary[water_binary <= 0] <- 1  # water = 1
   
-  # Function to process raster in tiles with overlap to avoid boundary artifacts
-  process_patches_in_chunks <- function(raster_data, chunk_size = 5000, overlap = 200) {
-    
-    # Get raster dimensions
-    nr <- nrow(raster_data)
-    nc <- ncol(raster_data)
-    
-    # Calculate number of chunks
-    n_chunks_row <- ceiling(nr / chunk_size)
-    n_chunks_col <- ceiling(nc / chunk_size)
-    
-    print(paste("Processing", n_chunks_row * n_chunks_col, "chunks with overlap"))
-    
-    # Create empty result raster
-    result <- raster_data
-    values(result) <- NA
-    
-    chunk_id <- 1
-    for (i in 1:n_chunks_row) {
-      for (j in 1:n_chunks_col) {
-        
-        # Calculate chunk boundaries WITH overlap
-        row_start_overlap <- max(1, (i - 1) * chunk_size + 1 - overlap)
-        row_end_overlap <- min(nr, i * chunk_size + overlap)
-        col_start_overlap <- max(1, (j - 1) * chunk_size + 1 - overlap)
-        col_end_overlap <- min(nc, j * chunk_size + overlap)
-        
-        # Calculate CORE boundaries (what we actually want to keep)
-        row_start_core <- (i - 1) * chunk_size + 1
-        row_end_core <- min(nr, i * chunk_size)
-        col_start_core <- (j - 1) * chunk_size + 1
-        col_end_core <- min(nc, j * chunk_size)
-        
-        # Extract overlapping chunk
-        chunk_ext_overlap <- ext(
-          xFromCol(raster_data, col_start_overlap),
-          xFromCol(raster_data, col_end_overlap),
-          yFromRow(raster_data, row_end_overlap),
-          yFromRow(raster_data, row_start_overlap)
-        )
-        
-        chunk_overlap <- crop(raster_data, chunk_ext_overlap)
-        
-        if (any(!is.na(values(chunk_overlap)))) {
-          # Process overlapping chunk
-          chunk_patches_overlap <- patches(chunk_overlap, directions = 8, allowGaps = FALSE)
-          
-          # Extract only the CORE area (remove overlap edges)
-          chunk_ext_core <- ext(
-            xFromCol(raster_data, col_start_core),
-            xFromCol(raster_data, col_end_core),
-            yFromRow(raster_data, row_end_core),
-            yFromRow(raster_data, row_start_core)
-          )
-          
-          chunk_patches_core <- crop(chunk_patches_overlap, chunk_ext_core)
-          
-          # Add unique offset to patch IDs to avoid conflicts
-          if (!all(is.na(values(chunk_patches_core)))) {
-            values(chunk_patches_core) <- values(chunk_patches_core) + (chunk_id * 10000)
-          }
-          
-          # FIXED: Use mosaic instead of merge for proper handling
-          # Create a temporary raster for this chunk that covers the full extent
-          temp_result <- result
-          values(temp_result) <- NA
-          
-          # Insert the core chunk values at the correct location
-          temp_chunk <- crop(temp_result, chunk_ext_core)
-          values(temp_chunk) <- values(chunk_patches_core)
-          
-          # Use mosaic to combine (this handles overlaps properly)
-          result <- mosaic(result, temp_chunk, fun = "max")
-        }
-        
-        chunk_id <- chunk_id + 1
-        
-        # Progress indicator
-        if (chunk_id %% 10 == 0) {
-          print(paste("Processed chunk", chunk_id, "of", n_chunks_row * n_chunks_col))
-        }
-      }
-    }
-    
-    print("Chunks processed with overlap - should eliminate boundary artifacts!")
-    
-    return(result)
-  }
-  
-  # Use the improved chunked approach
-  water_patches_chunked <- process_patches_in_chunks(water_binary, chunk_size = 3000, overlap = 200)
-  water_patches <- water_patches_chunked
-  
-  # STOPPING POINT - 4 JULY 2025
-  #   -  legitimately devastating...I had this working so that somehow, a sealed bathy was created without there
-  #       issues with merging chunks in the final product. idk if I was accidentally just running the straight-up 'patches'
-  #       function and that was what was working, or if I ditched a chunking version that was actually working. UGHUGUGUHUGHJGJHGJHGJHJGHJGHj
-  
-  # # Find connected water patches
-  # water_patches <- patches(water_binary, directions = 8, allowGaps = FALSE)
+  # Find connected water patches
+  water_patches <- solution_1_no_chunking(water_binary)
   
   # Get patch frequencies
   patch_freq <- freq(water_patches)
   
-  # Keep the largest patch AND any patches above a size threshold
-  min_patch_size <- 5000 # 1000  # adjust this threshold as needed (number of cells)
-  large_patches <- patch_freq[patch_freq$count >= min_patch_size, "value"]
+  # DEPTH-BASED FUNCTION (add this function definition somewhere above)
+  preserve_ocean_patches_depth <- function(water_patches, bathy_Blondeau_BVI_Anegada, 
+                                           min_patch_size = 10000, depth_threshold = -10) {
+    
+    patch_freq <- freq(water_patches)
+    
+    # Large patches are kept automatically (regardless of depth)
+    large_patches <- patch_freq[patch_freq$count >= min_patch_size, "value"]
+    
+    # Smaller patches: keep only if they have deep water (real ocean)
+    smaller_patches <- patch_freq[patch_freq$count < min_patch_size & 
+                                    patch_freq$count > 100, "value"]
+    
+    patches_to_keep <- large_patches
+    
+    for (patch_id in smaller_patches) {
+      patch_mask <- water_patches == patch_id
+      
+      # Check depth - if it has deep water, it's ocean (not inland lake)
+      patch_depths <- mask(bathy_Blondeau_BVI_Anegada, patch_mask)
+      min_depth <- global(patch_depths, "min", na.rm = TRUE)$min
+      
+      if (!is.na(min_depth) && min_depth <= depth_threshold) {
+        patches_to_keep <- c(patches_to_keep, patch_id)
+        print(paste("Keeping patch", patch_id, "- deep water (min depth:", round(min_depth, 1), "m)"))
+      } else {
+        print(paste("Removing patch", patch_id, "- shallow/inland (min depth:", round(min_depth, 1), "m)"))
+      }
+    }
+    
+    return(patches_to_keep)
+  }
   
+  # REPLACE THIS LINE:
+  # large_patches <- patch_freq[patch_freq$count >= min_patch_size, "value"]
+  
+  # WITH THIS:
+  min_patch_size <- 10000  # or whatever threshold you want
+  large_patches <- preserve_ocean_patches_depth(water_patches, 
+                                                bathy_Blondeau_BVI_Anegada,
+                                                min_patch_size = min_patch_size, 
+                                                depth_threshold = -10)
+  
+  # Rest of your workflow stays the same:
   # Create mask: keep large water bodies, fill small ones
   ocean_mask <- water_patches
   ocean_mask[!water_patches %in% large_patches] <- NA  # small water becomes NA
@@ -517,42 +477,28 @@
   # Apply mask
   bathy_sealed <- mask(bathy_Blondeau_BVI_Anegada, ocean_mask)
   
-  bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
   
-  bathy_sealed_plot = clamp(bathy_sealed, lower = -50, upper = 0, values = TRUE)
-  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
-  # plot_extents = ext(260000, 290000, 2000000, 2040000) #for investigating MCD
-  # plot_extents = ext(305000, 330000, 2020000, 2035000) #for investigating STJ
-  # plot_extents = ext(317000, 350000, 2030000, 2050000) #for investigating Tortola
-  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
-  # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
-  plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
-  # plot_extents = ext(279000, 310000, 2010000, 2050000) #for investigating St Thomas
-  # plot_extents = ext(240000, 275000, 2000000, 2040000) #for investigating Culebra
-  # plot_extents = ext(120000, 220000, 2020000, 2060000) #for investigating northern PR
   
-  plot(bathy_sealed,
-       main = 'bathy_sealed',
-       col = bathy_colors,
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
   
-  plot(bathy_Blondeau_BVI_Anegada,
-       main = 'Original',
-       col = bathy_colors,
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
   
-  plot(water_patches_chunked,  #bathy_merged3_crm_reefdepth
-       main="water_patches_chunked", 
-       col=bathy_colors,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
   
-  #finalize
-  bathy_final = bathysealed
+  
+  
+  
+  
+  
+  # NOTE / STOPPING POINT - 7 JULY 2025
+  #   - ideally would be able to define where the sealed "coastline" contours are, and just "fill in"
+  #       anything within those contours. this may be harder than expected, though. would also be nice
+  #       if I end up looking at "distance from coastline", etc. but I guess could just use landmask for
+  #       that
+
+  
+  
+  
+  
+  
+  bathy_final = bathy_sealed
   
   # ################################## Merge 1: PR to MCD ##################################
   # 

@@ -30,15 +30,31 @@
   
   # NOTE / STOPPING POINT - 4 JULY 2025
   #   - return to this if we want to project deeper than 50 m
-  seamask <- app(bathy_Blondeau_final, fun = function(x) {
-    ifelse(x < 0 & x > -50, 0, 1)
+  # seamask <- app(bathy_final, fun = function(x) {
+  #   ifelse(x < 0 & x > -50, 0, 1)
+  # })
+  seamask <- app(bathy_final, fun = function(x) {
+    ifelse(x < 0, 0, 1)
   })
   
+  
   unique(values(seamask)) #0 is reefy depths, 1 is deep ocean, white is land
-
+  
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(260000, 290000, 2000000, 2040000) #for investigating MCD
+  # plot_extents = ext(305000, 330000, 2020000, 2035000) #for investigating STJ
+  # plot_extents = ext(317000, 350000, 2030000, 2050000) #for investigating Tortola
+  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
+  # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
+  plot_extents = ext(320000, 322000, 1962000, 1964000) #for investigating Altona Lagoon, STX
+  # plot_extents = ext(279000, 310000, 2010000, 2050000) #for investigating St Thomas
+  # plot_extents = ext(240000, 275000, 2000000, 2040000) #for investigating Culebra
+  # plot_extents = ext(120000, 220000, 2020000, 2060000) #for investigating northern PR
+  
   plot(seamask, 
        main="Merge #2",
-       ext = plot_extents, #e_crm,
+       # ext = plot_extents, #e_crm,
        legend=TRUE)
   
   # ### TESTING ###
@@ -76,7 +92,7 @@
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
 
   # Plot the bathymetry first
-  plot(bathy_Blondeau_final,  #bathy_merged3_crm_reefdepth
+  plot(bathy_final,  #bathy_merged3_crm_reefdepth
        main="Bathymetry with Sea Mask and Hydrological Extent", 
        col=bathy_colors,
        # ext = plot_extents, #e_crm,
@@ -88,11 +104,18 @@
   #      legend=FALSE, 
   #      add=TRUE)
   
-  # Add the polygon outline on top
-  plot(hydro_extent_proj, 
-       add=TRUE, 
-       border="darkred", 
-       lwd=2)
+  # #redacted - if want this, check upstream in import_merge_rasters_higher-res.R
+  # # Add the polygon outline on top
+  # plot(hydro_extent_proj, 
+  #      add=TRUE, 
+  #      border="darkred", 
+  #      lwd=2)
+  # # Add a legend
+  # legend("topright", 
+  #        legend=c("Bathymetry", "Sea Mask", "Hydro Extent"),
+  #        fill=c("deepskyblue", rgb(0, 0, 1, 0.3), NA),
+  #        border=c(NA, NA, "darkred"),
+  #        lwd=c(NA, NA, 2))
   
   # # Add the landmask
   # plot(landmask, 
@@ -100,12 +123,6 @@
   #      border="darkgreen", 
   #      lwd=2)
   
-  # Add a legend
-  legend("topright", 
-         legend=c("Bathymetry", "Sea Mask", "Hydro Extent"),
-         fill=c("deepskyblue", rgb(0, 0, 1, 0.3), NA),
-         border=c(NA, NA, "darkred"),
-         lwd=c(NA, NA, 2))
   
   ################################## Create habitat grid ##################################
   
@@ -116,8 +133,8 @@
   
   # Create a 650 x 650 m grid that spans the extent of seamask
   # First, get the extent of the seamask
-  # ext_habitat <- ext(seamask)
-  ext_habitat <- ext(hydro_extent_proj)
+  ext_habitat <- ext(seamask)
+  # ext_habitat <- ext(hydro_extent_proj)
   
   # Define the grid resolution (650 m)
   grid_res <- 650
@@ -184,6 +201,20 @@
   
   # Create a standalone plot of just the final clipped grid
   plot(grid_reefy, col="lightgreen", border="red", main="650m Grid Clipped to Reefy Depths")
+  
+  
+  
+  
+  
+  # STOPPING POINT - 7 JULY 2025
+  #     - nearly there. next steps are making sure the below still work fine, then bringing the grid/bathy in with the
+  #         species data and assembling them in GAM format
+  
+  
+  
+  
+  
+  
   
   # compare with April 2025 operational 650-m resolution grid from QGIS
   polys_apr2025_operational <- vect(here("output", "polys_apr2025_operational.shp"))
