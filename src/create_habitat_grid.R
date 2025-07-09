@@ -23,20 +23,26 @@
   
   ################################## Create mask <50 m ##################################
   
+  #read the CMS-formatted hydrodynamic domain extent
+  hydro_extent = vect(here("output/", "hydro_domain_extent.shp"))
+  hydro_extent <- project(hydro_extent, projected_crs)
+  
   # #redacted - not using that merge. may need to apply hydro extent differently now ?
   # seamask <- app(bathy_merged3_crm_reefdepth, fun = function(x) {
   #   ifelse(x < 0 & x > -50, 0, 1)
   # })
   
-  # NOTE / STOPPING POINT - 4 JULY 2025
-  #   - return to this if we want to project deeper than 50 m
-  # seamask <- app(bathy_final, fun = function(x) {
-  #   ifelse(x < 0 & x > -50, 0, 1)
-  # })
+  # NOTE - 4 JULY 2025
+  #   - return to this if we want to limit depth range for computational reasons (at least for CMS version)
   seamask <- app(bathy_final, fun = function(x) {
     ifelse(x < 0, 0, 1)
   })
+  # seamask <- app(bathy_final, fun = function(x) {
+  #   ifelse(x < 0 & x > -50, 0, 1)
+  # })
   
+  seamask <- crop(seamask, hydro_extent)
+  seamask <- mask(seamask, hydro_extent)
   
   unique(values(seamask)) #0 is reefy depths, 1 is deep ocean, white is land
   
@@ -57,28 +63,6 @@
        # ext = plot_extents, #e_crm,
        legend=TRUE)
   
-  # ### TESTING ###
-  # # # Plot the raster first
-  # # plot(seamask, main="Sea Mask with Hydrological Extent Overlay",
-  # #      col=c("white", "lightblue"), legend=FALSE)
-  # # 
-  # # # Add the polygon on top with borders only, no fill
-  # # plot(hydro_extent_proj, add=TRUE, border="darkblue", lwd=2)
-  # 
-  # # reverse
-  # plot(hydro_extent_proj, main = "Sea Mask with Hydrological Extent Overlay",
-  #      col=c("white", "lightblue"), legend = FALSE)
-  # # plot(seamask, add = TRUE, border = 'darkblue', lwd = 2)
-  # # plot(bathy_PR_East_cropped, add = TRUE, border = 'darkblue', lwd = 2)
-  # plot(bathy_PR_East_clipped, add = TRUE, border = 'darkblue', lwd = 2)
-  # 
-  # # Add a legend
-  # legend("topright", 
-  #        legend=c("Sea (value=1)", "Land (value=0)", "Hydro Extent"),
-  #        fill=c("lightblue", "white", NA),
-  #        border=c(NA, NA, "darkblue"),
-  #        lwd=c(NA, NA, 2))
-  
   # Create a color palette for bathymetry - blues from light to dark
   bathy_colors <- colorRampPalette(c("lightcyan", "cyan", "deepskyblue", "royalblue", "navy"))(100)
   
@@ -95,34 +79,8 @@
   plot(bathy_final,  #bathy_merged3_crm_reefdepth
        main="Bathymetry with Sea Mask and Hydrological Extent", 
        col=bathy_colors,
-       # ext = plot_extents, #e_crm,
+       ext = plot_extents, #e_crm,
        legend=TRUE)
-  
-  # # Add the seamask with transparency
-  # plot(seamask, 
-  #      col=c(NA, rgb(0, 0, 1, 0.3)), # NA for 0 values, transparent blue for 1 values
-  #      legend=FALSE, 
-  #      add=TRUE)
-  
-  # #redacted - if want this, check upstream in import_merge_rasters_higher-res.R
-  # # Add the polygon outline on top
-  # plot(hydro_extent_proj, 
-  #      add=TRUE, 
-  #      border="darkred", 
-  #      lwd=2)
-  # # Add a legend
-  # legend("topright", 
-  #        legend=c("Bathymetry", "Sea Mask", "Hydro Extent"),
-  #        fill=c("deepskyblue", rgb(0, 0, 1, 0.3), NA),
-  #        border=c(NA, NA, "darkred"),
-  #        lwd=c(NA, NA, 2))
-  
-  # # Add the landmask
-  # plot(landmask, 
-  #      add=TRUE, 
-  #      border="darkgreen", 
-  #      lwd=2)
-  
   
   ################################## Create habitat grid ##################################
   
@@ -207,12 +165,10 @@
   
   
   # STOPPING POINT - 7 JULY 2025
-  #     - nearly there. next steps are making sure the below still work fine, then bringing the grid/bathy in with the
-  #         species data and assembling them in GAM format
-  
-  
-  
-  
+  # 1.) don't think I need 650-m "SDM" version at all. just work with native 50-m grid
+  # 2.) but here, should be clipping to hydro extent for "CMS" version
+  # 3.) may need to consider depth range again - extending to 50 m already introduces some problems. 90 m
+  #       is even worse
   
   
   
@@ -236,7 +192,7 @@
   ggplot() +
     geom_sf(data = reefy_poly_sf, fill = "lightblue", color = NA, alpha = 0.8) +
     geom_sf(data = grid_reefy_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
-    # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
+    geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
     scale_fill_identity() +
     scale_color_identity() +
     labs(
@@ -252,24 +208,27 @@
   ################################## Shave off points completely on land ##################################
   
   landmask <- vect(here("output", "landmask_dissolved.shp"))
-  
-  # Ensure CRS matches
-  #  NOTE - come back to this if projection issues are suspected
-  if (crs(landmask) != crs(projected_crs)) {
-    landmask <- project(landmask, crs(projected_crs))
-    cat("Reprojected landmask to match CRS of grid_reefy\n")
-  }
+  landmask <- project(landmask, projected_crs)
   
   # Convert terra SpatVector objects to sf for plotting
   landmask_sf <- st_as_sf(landmask)
-  hydro_extent_proj_sf = st_as_sf(hydro_extent_proj)
+  # hydro_extent_proj_sf = st_as_sf(hydro_extent_proj)
+  
+  # plot_extents <- list(xmin = 280000, xmax = 310000, ymin = 2000000, ymax = 2040000)  # south of STT
+  # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
+  # plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
+  plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  # plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
+  # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
   
   ggplot() +
     # geom_spatraster(data = seamask_binary) +
     geom_sf(data = reefy_poly_sf, fill = "purple", color = NA, alpha = 0.8) +
     geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
     geom_sf(data = grid_reefy_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
-    geom_sf(data = hydro_extent_proj_sf, fill = "lightpink", color = "red", size = 0.1, alpha = 0.1) +
+    # geom_sf(data = hydro_extent_proj_sf, fill = "lightpink", color = "red", size = 0.1, alpha = 0.1) +
     # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
     scale_fill_identity() +
     scale_color_identity() +
@@ -278,6 +237,8 @@
       caption = "Source: Spatial data in terra SpatVector format"
     ) +
     theme_minimal() +
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax),
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     theme(
       legend.position = "none",
       panel.grid = element_blank()
@@ -330,19 +291,27 @@
   # Convert both to sf for ggplot
   centroids_sf <- st_as_sf(centroids)
   
+  # plot_extents <- list(xmin = 280000, xmax = 310000, ymin = 2000000, ymax = 2040000)  # south of STT
+  # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
+  # plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
+  # plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
+  # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
+  
   #plot centroids
   ggplot() +
     geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
     geom_sf(data = grid_reefy_no_land_sf, fill = NA, color = "gray30", size = 0.3) +
     geom_sf(data = centroids_sf, color = "red", size = 0.3, alpha = 0.5) +  # small dots
     theme_minimal() +
-    coord_sf(xlim = c(300000, 320000), ylim = c(1960000, 1970000)) +
+    # coord_sf(xlim = c(300000, 320000), ylim = c(1960000, 1970000)) +
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     labs(title = "Habitat Grid with Centroids")  
   
   ################################## Push centroids away from land ##################################
-  
-  # NOTE - need to update "push" function so that points that started on land don't sometimes get
-  #         pushed INTO land. they need to get pushed out to sea
   
   # Step 1: Identify grid cells that touch land
   touches_land <- relate(grid_reefy_no_land, landmask, relation = "intersects") #|> lengths() > 0
@@ -421,13 +390,23 @@
   # convert to sf and plot
   centroids_all_sf <- st_as_sf(centroids_all)
   
+  # plot_extents <- list(xmin = 280000, xmax = 310000, ymin = 2000000, ymax = 2040000)  # south of STT
+  # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
+  plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
+  # plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  # plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
+  # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
+  
   ggplot() +
     geom_sf(data = landmask_sf, fill = "tan", color = NA, alpha = 0.5) +
     geom_sf(data = grid_reefy_no_land_sf, fill = NA, color = "gray70", alpha = 0.5) +
     # geom_sf(data = centroids_all_sf, color = "red", size = 1.5, alpha = 0.5) +
     geom_sf(data = centroids_all_sf, color = "red", size = 0.3, alpha = 0.5) +
     theme_minimal() +
-    # coord_sf(xlim = c(300000, 320000), ylim = c(1960000, 1970000)) +
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     labs(title = "Repositioned Centroids Away from Land")
   
   ggplot() +
@@ -436,7 +415,8 @@
     # geom_sf(data = centroids_sf, color = "red", size = 1.5, alpha = 0.5) +
     geom_sf(data = centroids_sf, color = "red", size = 0.3, alpha = 0.5) +
     theme_minimal() +
-    # coord_sf(xlim = c(300000, 320000), ylim = c(1960000, 1970000)) +
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     labs(title = "Repositioned Centroids Away from Land")
   
   #visualize repositioning with arrows if desired
@@ -457,12 +437,12 @@
     x_end = st_coordinates(repositioned_centroids_sf)[,1],
     y_end = st_coordinates(repositioned_centroids_sf)[,2]
   )
-
+  
   # Only show arrows where there was actual movement (distance > small threshold)
   movement_distance <- sqrt((arrow_data$x_end - arrow_data$x_start)^2 +
                               (arrow_data$y_end - arrow_data$y_start)^2)
   arrow_data <- arrow_data[movement_distance > 10, ]  # Adjust threshold as needed
-
+  
   # Create the zoomed plot with arrows
   ggplot() +
     geom_sf(data = landmask_sf, fill = "tan", color = NA, alpha = 0.5) +
@@ -478,10 +458,10 @@
     geom_sf(data = repositioned_centroids_sf, color = "red", size = 0.3, alpha = 0.5) +
     # Add original centroids (optional - might make plot too busy)
     geom_sf(data = original_centroids_sf, color = "green", size = 0.2, alpha = 0.3) +
-    theme_minimal() +
-    labs(title = "Centroid Movement Away from Land - Vieques Focus") +
-    # Set limits to focus on Vieques
-    coord_sf(xlim = c(300000, 320000), ylim = c(1960000, 1970000))
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
+    theme_minimal()
+  
   
   ################################## Save objects/workspace ##################################
   

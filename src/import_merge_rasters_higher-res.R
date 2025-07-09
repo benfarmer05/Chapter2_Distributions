@@ -477,26 +477,11 @@
   # Apply mask
   bathy_sealed <- mask(bathy_Blondeau_BVI_Anegada, ocean_mask)
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
   # NOTE / STOPPING POINT - 7 JULY 2025
   #   - ideally would be able to define where the sealed "coastline" contours are, and just "fill in"
   #       anything within those contours. this may be harder than expected, though. would also be nice
   #       if I end up looking at "distance from coastline", etc. but I guess could just use landmask for
   #       that
-
-  
-  
-  
-  
   
   bathy_final = bathy_sealed
   
@@ -598,11 +583,11 @@
   # 
   ################################## Save objects/workspace  ##################################
   
-  # # #remove raster files with very large memory which don't work well with saving and re-loading downstream
-  # # # NOTE - can return to this if direct access to PR East is required!
-  # # rm(bathy_PR_East_clipped)
-  # # rm(bathy_PR_East)
-  # 
+  # #remove raster files with very large memory which don't work well with saving and re-loading downstream
+  # # NOTE - can return to this if direct access to PR East is required!
+  # rm(bathy_PR_East_clipped)
+  # rm(bathy_PR_East)
+
   # #save terra objects #and then workspace for use in downstream scripts
   # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
   # 
@@ -612,4 +597,3 @@
   # # Save only non-spatial objects
   # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
   # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
-  
