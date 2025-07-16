@@ -240,7 +240,7 @@
   # BPI_multiscale <- BPI(bathy_final, w = c(1, 3))  # BPI is similar to TPI for bathymetry
   # DMV <- DMV(bathy_final, w = c(3, 3))
   # RelPos <- RelPos(bathy_final, w = c(5, 5))
-  # SAPA <- SAPA(bathy_final, w = c(5, 5))
+  SAPA <- SAPA(bathy_final, w = c(3, 3))
   VRM_multiscale <- VRM(bathy_final, w = c(5, 5))
   # surfarea = SurfaceArea(bathy_final)
   maxcurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'maxc')
@@ -255,12 +255,12 @@
   # ################################## plots ##################################
   # 
   # # Define plot extent options
-  # # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
-  # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
+  # # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
   # # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
   # # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
   # 
@@ -306,11 +306,11 @@
   # #      main = "TPI multiscale - Terra Raster with cmocean balance")
   # 
   # # TPI terra
-  # TPI_terra_clamp <- clamp(TPI_terra, lower = -10, upper = 10)
+  # TPI_terra_clamp <- clamp(TPI_terra, lower = -40, upper = 40)
   # # plot(TPI_terra,
   # plot(TPI_terra_clamp,
   #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
+  #      # ext = plot_extents,
   #      main = "TPI terra - Terra Raster with cmocean balance")
   # 
   # # # BPI multiscale
@@ -368,8 +368,8 @@
   # 
   # # Bathymetry
   # depth_OG_clamp <- clamp(bathy_final, lower = -50, upper = 0)
-  # plot(bathy_final,
-  # # plot(depth_OG_clamp,
+  # # plot(bathy_final,
+  # plot(depth_OG_clamp,
   #      col = rev(cmocean("deep")(100)),  # Reversed color scheme
   #      ext = plot_extents,
   #      main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
@@ -409,18 +409,227 @@
   # #   - SO, all I need to do right now is 1.) move on with getting the CMS in order, and 2.) preparing a new, coarse
   # #       grid use once we know the CMS works at all
   # 
+  ################################## Import waves & SST data ##################################
+  
+  # STOPPING POINT - 16 July 2025
+  #   - great day! now need to do something similar to below for bringing in SST data
+  
+  # Load SWAN Wave Data in R
+  # Script to read MATLAB-exported wave data and create visualizations
+  
+  # 1. Load the main summary data (long format)
+  cat("Loading summary data...\n")
+  wave_summary <- read.csv(here("output", "swan_wave_summary_for_R.csv"))
+  
+  # 2. Load coordinate information
+  lon_vec <- read.csv(here("output", "swan_longitude.csv"))$longitude
+  lat_vec <- read.csv(here("output", "swan_latitude.csv"))$latitude
+  grid_info <- read.csv(here("output", "swan_grid_info.csv"))
+  
+  # Get grid dimensions
+  nlon <- length(lon_vec)
+  nlat <- length(lat_vec)
+  lon_range <- range(lon_vec)
+  lat_range <- range(lat_vec)
+  
+  cat(sprintf("Grid: %d x %d\n", nlon, nlat))
+  cat(sprintf("Longitude: %.3f to %.3f\n", lon_range[1], lon_range[2]))
+  cat(sprintf("Latitude: %.3f to %.3f\n", lat_range[1], lat_range[2]))
+  
+  # 3. Basic summary statistics
+  cat("\nSummary of wave data:\n")
+  print(summary(wave_summary))
+  
+  # 4. Create plots using ggplot2 (long format data)
+  cat("\nCreating ggplot2 visualizations...\n")
+  
+  # Mean Significant Wave Height
+  p1 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hsig)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Hsig (m)", option = "plasma") +
+    labs(title = "Mean Significant Wave Height (2017-2018)",
+         x = "Longitude (°W)", y = "Latitude (°N)") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(size = 14, hjust = 0.5)) +
+    coord_fixed()
+  
+  print(p1)
+  
+  # Maximum Significant Wave Height
+  p2 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = max_hsig)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Max Hsig (m)", option = "inferno") +
+    labs(title = "Maximum Significant Wave Height (2017-2018)",
+         x = "Longitude (°W)", y = "Latitude (°N)") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(size = 14, hjust = 0.5)) +
+    coord_fixed()
+  
+  print(p2)
+  
+  # Mean Swell Wave Height
+  p3 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hswell)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Hswell (m)", option = "viridis") +
+    labs(title = "Mean Swell Wave Height (2017-2018)",
+         x = "Longitude (°W)", y = "Latitude (°N)") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(size = 14, hjust = 0.5)) +
+    coord_fixed()
+  
+  print(p3)
+  
+  # Wave Direction (using circular colors)
+  p4 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_dir)) +
+    geom_tile() +
+    scale_fill_gradientn(colors = rainbow(8), name = "Direction (°)", 
+                         breaks = c(0, 90, 180, 270, 360)) +
+    labs(title = "Mean Wave Direction (2017-2018)",
+         x = "Longitude (°W)", y = "Latitude (°N)") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(size = 14, hjust = 0.5)) +
+    coord_fixed()
+  
+  print(p4)
+  
+  # Wave Period
+  p5 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_per)) +
+    geom_tile() +
+    scale_fill_viridis_c(name = "Period (s)", option = "cividis") +
+    labs(title = "Mean Wave Period (2017-2018)",
+         x = "Longitude (°W)", y = "Latitude (°N)") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(size = 14, hjust = 0.5)) +
+    coord_fixed()
+  
+  print(p5)
+  
+  # 5. Create rasters from matrix files
+  cat("\nCreating raster objects...\n")
+  
+  # Function to load matrix and create raster
+  create_raster <- function(filename, var_name) {
+    cat(sprintf("Loading %s...\n", filename))
+    matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
+    
+    # Flip matrix vertically to match MATLAB orientation
+    matrix_data <- matrix_data[nrow(matrix_data):1, ]
+    
+    # Create raster
+    r <- raster(matrix_data,
+                xmn = min(lon_vec), xmx = max(lon_vec),
+                ymn = min(lat_vec), ymx = max(lat_vec),
+                crs = CRS("+proj=longlat +datum=WGS84"))
+    
+    names(r) <- var_name
+    return(r)
+  }
+  
+  # Create rasters for key variables
+  mean_hsig_raster <- create_raster("mean_hsig_matrix.csv", "Mean_Hsig")
+  max_hsig_raster <- create_raster("max_hsig_matrix.csv", "Max_Hsig")
+  mean_hswell_raster <- create_raster("mean_hswell_matrix.csv", "Mean_Hswell")
+  mean_dir_raster <- create_raster("mean_dir_matrix.csv", "Mean_Direction")
+  mean_per_raster <- create_raster("mean_per_matrix.csv", "Mean_Period")
+  
+  # Plot rasters
+  cat("\nPlotting rasters...\n")
+  
+  # Set up plotting parameters
+  par(mfrow = c(2, 3), mar = c(4, 4, 3, 6))
+  
+  plot(mean_hsig_raster, main = "Mean Significant Wave Height", 
+       col = viridis(50), axes = TRUE)
+  
+  plot(max_hsig_raster, main = "Maximum Significant Wave Height", 
+       col = plasma(50), axes = TRUE)
+  
+  plot(mean_hswell_raster, main = "Mean Swell Wave Height", 
+       col = viridis(50), axes = TRUE)
+  
+  plot(mean_dir_raster, main = "Mean Wave Direction", 
+       col = rainbow(50), axes = TRUE)
+  
+  plot(mean_per_raster, main = "Mean Wave Period", 
+       col = cividis(50), axes = TRUE)
+  
+  # Reset plotting parameters
+  par(mfrow = c(1, 1))
+  
+  # 6. Load and plot time series data
+  cat("\nLoading time series data...\n")
+  ts_data <- read.csv(here("output", "swan_timeseries_sample.csv"))
+  ts_data$datetime <- as.POSIXct(ts_data$datetime)
+  
+  # Time series plots
+  p6 <- ggplot(ts_data, aes(x = datetime, y = hsig)) +
+    geom_line(color = "blue", alpha = 0.7) +
+    labs(title = "Significant Wave Height Time Series (Sample Location)",
+         x = "Date", y = "Wave Height (m)") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p6)
+  
+  # Multiple variables time series
+  ts_long <- ts_data %>%
+    select(datetime, hsig, hswell, period) %>%
+    pivot_longer(cols = c(hsig, hswell, period), 
+                 names_to = "variable", values_to = "value")
+  
+  p7 <- ggplot(ts_long, aes(x = datetime, y = value, color = variable)) +
+    geom_line(alpha = 0.7) +
+    facet_wrap(~variable, scales = "free_y", ncol = 1) +
+    labs(title = "Wave Variables Time Series (Sample Location)",
+         x = "Date", y = "Value") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none")
+  
+  print(p7)
+  
+  # 7. Create a summary comparison plot
+  cat("\nCreating comparison plots...\n")
+  
+  # Four-panel comparison
+  library(gridExtra)
+  
+  comparison_plots <- list(
+    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hsig)) +
+      geom_tile() + scale_fill_viridis_c(option = "plasma") +
+      labs(title = "Mean Hsig", x = "", y = "Latitude") + 
+      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+    
+    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = max_hsig)) +
+      geom_tile() + scale_fill_viridis_c(option = "inferno") +
+      labs(title = "Max Hsig", x = "", y = "") + 
+      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+    
+    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hswell)) +
+      geom_tile() + scale_fill_viridis_c(option = "viridis") +
+      labs(title = "Mean Hswell", x = "Longitude", y = "Latitude") + 
+      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+    
+    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_per)) +
+      geom_tile() + scale_fill_viridis_c(option = "cividis") +
+      labs(title = "Mean Period", x = "Longitude", y = "") + 
+      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed()
+  )
+  
+  grid.arrange(grobs = comparison_plots, ncol = 2, 
+               top = "SWAN Wave Data Summary (2017-2018)")
+  
+  cat("\nAnalysis complete!\n")
+  cat("Data loaded successfully with", nrow(wave_summary), "grid points\n")
+  
+  
   ################################## Save objects/workspace ##################################
-  
-  # STOPPING POINT - 9 July 2025
-  #   - need to have a grid, then snap the biological layers
-  #       to it. then a matter of running the GAMs, and making predictions
-  #   - how to make grid ???
-  
-  # #save terra objects and then workspace for use in downstream scripts
-  # save_spat_objects() #call from functions.R
-  # save.image(file = here("output", "calculate_bathy_rasters_workspace.RData"))
-  
   
   # #updated way to handle saving of new objects
   # save_new_objects("output/output_calculate_bathy_rasters", existing_objects)
-  
+    

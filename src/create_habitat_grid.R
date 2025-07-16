@@ -74,7 +74,7 @@
   # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
   # plot_extents = ext(290000, 330000, 2040000, 2080000) #for investigating St Thomas
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-
+  
   # Plot the bathymetry first
   plot(bathy_final,  #bathy_merged3_crm_reefdepth
        main="Bathymetry with Sea Mask and Hydrological Extent", 
@@ -218,8 +218,8 @@
   # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
   # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
   # plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
-  plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
-  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  # plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
+  plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
   # plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
   # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
   

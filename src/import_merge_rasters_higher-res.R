@@ -180,9 +180,12 @@
   bathy_Blondeau_agg = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg,
                              bathy_PR_North_agg)
   
-  bathy_Blondeau_native_agg = merge(bathy_STTSTJ_clipped, bathy_STX_clipped, bathy_PR_East_clipped, bathy_PR_South_clipped,
-                                    bathy_PR_West_clipped, bathy_PR_North_clipped)
+  # bathy_Blondeau_native_agg = merge(bathy_STTSTJ_clipped, bathy_STX_clipped, bathy_PR_East_clipped, bathy_PR_South_clipped,
+  #                                   bathy_PR_West_clipped, bathy_PR_North_clipped)
   
+  #drop very large rasters so they don't break the save later
+  rm(bathy_STTSTJ_clipped, bathy_STX_clipped, bathy_PR_East_clipped, bathy_PR_South_clipped,
+     bathy_PR_West_clipped, bathy_PR_North_clipped)
   
   # NOTE - 3 JULY 2025
   #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
@@ -290,28 +293,24 @@
   # (You can reuse the same extent calculations if they're still in memory)
   new_ext <- ext(xmin, xmax, ymin, ymax)
   template_raster <- rast(new_ext, resolution = 50, crs = crs(projected_crs))
-  # template_native_raster <- rast(new_ext, resolution = 2, crs = crs(projected_crs))
-  
+
   # Resample to 50m grid using the template
   south_of_STT_agg <- resample(south_of_STT_clipped, template_raster, method = "average")
-  # south_of_STT_native_agg <- resample(south_of_STT_clipped, template_native_raster, method = "average")
-  # south_of_STT_extended <- extend(south_of_STT_clipped, bathy_Blondeau_native_agg)
-  south_of_STT_resampled <- resample(south_of_STT_clipped, bathy_Blondeau_native_agg, method = "bilinear")
+  # south_of_STT_resampled <- resample(south_of_STT_clipped, bathy_Blondeau_native_agg, method = "bilinear")
   
   # bathy_Blondeau_spliced <- merge(south_of_STT_clipped, bathy_Blondeau_masked)
   bathy_Blondeau_spliced <- mosaic(south_of_STT_agg, bathy_Blondeau_masked, fun = "first")
-  # bathy_Blondeau_native_spliced <- mosaic(south_of_STT_clipped, bathy_Blondeau_native_agg, fun = "first") # THIS TAKES FOREVER!!
-  bathy_Blondeau_native_spliced <- cover(south_of_STT_resampled, bathy_Blondeau_native_agg)
+  # bathy_Blondeau_native_spliced <- cover(south_of_STT_resampled, bathy_Blondeau_native_agg)
   
   bathy_Blondeau_spliced_plot = clamp(bathy_Blondeau_spliced, lower = -50, upper = 0, values = TRUE)
-  bathy_Blondeau_native_spliced_plot = clamp(bathy_Blondeau_native_spliced, lower = -50, upper = 0, values = TRUE)
+  # bathy_Blondeau_native_spliced_plot = clamp(bathy_Blondeau_native_spliced, lower = -50, upper = 0, values = TRUE)
   plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-  plot(bathy_Blondeau_native_spliced_plot,
+  plot(bathy_Blondeau_spliced_plot,
        main = 'Blondeau',
        # ext = e_pr,
        ext = plot_extents, #e_crm,
@@ -365,7 +364,7 @@
   deepest_crm <- min(values(bathy_crm_2019_agg), na.rm = TRUE)
   print(paste("Deepest value in CRM:", deepest_crm))
   bathy_crm_cleaned <- bathy_crm_2019_agg
-  bathy_crm_native_cleaned <- bathy_crm_2019
+  # bathy_crm_native_cleaned <- bathy_crm_2019
   # values(bathy_crm_cleaned)[values(bathy_crm_cleaned) < deepest_blondeau] <- NA
   # values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= -2] <- NA  # Remove land and very shallow areas
   values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= 0] <- NA  # Remove land and very shallow areas
@@ -373,13 +372,13 @@
   
   # Create a binary mask where Blondeau has non-NA data
   blondeau_has_data <- !is.na(bathy_Blondeau_spliced)
-  blondeau_native__has_data <- !is.na(bathy_Blondeau_native_spliced)
+  # blondeau_native__has_data <- !is.na(bathy_Blondeau_native_spliced)
   
   # Apply this mask to remove CRM data where Blondeau has data
   # We want to KEEP CRM data where blondeau_has_data is FALSE (purple areas)
   # So we mask where blondeau_has_data is TRUE (yellow areas) - NO inverse needed
   bathy_crm_clipped <- mask(bathy_crm_cleaned, blondeau_has_data, inverse = FALSE, maskvalue = TRUE)
-  bathy_crm_native_clipped <- mask(bathy_crm_cleaned, blondeau_native__has_data, inverse = FALSE, maskvalue = TRUE)
+  # bathy_crm_native_clipped <- mask(bathy_crm_cleaned, blondeau_native__has_data, inverse = FALSE, maskvalue = TRUE)
   plot(bathy_crm_clipped)
   
   # # SPATIAL CLEANUP: Remove CRM data south and west of intended extension area
@@ -404,7 +403,7 @@
   # Merge the datasets
   # The merge function will use Blondeau data where available, cleaned CRM data elsewhere
   bathy_Blondeau_BVI <- merge(bathy_Blondeau_spliced, bathy_crm_clipped)
-  bathy_Blondeau_native_BVI <- merge(bathy_Blondeau_native_spliced, bathy_crm_native_clipped)
+  # bathy_Blondeau_native_BVI <- merge(bathy_Blondeau_native_spliced, bathy_crm_native_clipped)
   plot(bathy_Blondeau_BVI)
   
   ################################## patch in USGS Anegada LIDAR ##################################
@@ -677,18 +676,13 @@
   # 
   ################################## Save objects/workspace  ##################################
   
-  # #remove raster files with very large memory which don't work well with saving and re-loading downstream
-  # # NOTE - can return to this if direct access to PR East is required!
-  # rm(bathy_PR_East_clipped)
-  # rm(bathy_PR_East)
-  
-  #save terra objects #and then workspace for use in downstream scripts
-  save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
-  
-  # Get all non-spatial objects
-  non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
-  
-  # Save only non-spatial objects
-  # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
-  save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
+  # #save terra objects #and then workspace for use in downstream scripts
+  # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
+  # 
+  # # Get all non-spatial objects
+  # non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+  # 
+  # # Save only non-spatial objects
+  # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
+  # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
   
