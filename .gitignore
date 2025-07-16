@@ -189,6 +189,9 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
+# folder byproduct of MATLAB scripts
+resources/project/
+
 # archive
 archive
 
