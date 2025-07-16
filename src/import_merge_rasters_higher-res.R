@@ -25,22 +25,34 @@
   
   ################################## Load geodatabase rasters ##################################
   
-  # Specify the path to ESRI geodatabase provided by Jeremiah Blondeau
-  gdb_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb"
+  # # 2024 Blondeau
+  # # Specify the path to ESRI geodatabase provided by Jeremiah Blondeau
+  # gdb_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_LIDAR_Blondeau/US_Caribbean_Bathy_Mocaics.gdb"
+  # 
+  # # List all raster layers within the geodatabase
+  # describe(gdb_path, sds = TRUE)
+  # 
+  # # Load specific sub-datasets from the geodatabase
+  # bathy_STTSTJ = rast(gdb_path, subds = "STTSTJ_2m")
+  # bathy_STX <- rast(gdb_path, subds = "STX_2m")
+  # bathy_PR_East <- rast(gdb_path, subds = "PuertoRico_East_2m")
+  # bathy_PR_South = rast(gdb_path, subds = "PuertoRico_South_2m")
+  # bathy_PR_West = rast(gdb_path, subds = "PuertoRico_West_2m")
+  # bathy_PR_North = rast(gdb_path, subds = "PuertoRico_North_2m")
+  # 
+  # projected_crs = crs(bathy_STTSTJ)
+  # geographic_crs = crs("EPSG:4269")
   
-  # List all raster layers within the geodatabase
-  describe(gdb_path, sds = TRUE)
+  # 2025 Blondeau
+  bathy_STTSTJ <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_StTJ2.tif"))
+  bathy_STX <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_stx2.tif"))
+  bathy_PR_East <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_east2.tif"))
+  bathy_PR_North <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_north.tif"))
+  bathy_PR_South <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_south.tif"))
+  bathy_PR_West <- rast(here("data", "NOAA_LIDAR_Blondeau_2025", "PR_bath2m_west.tif"))
   
-  # Load specific sub-datasets from the geodatabase
-  bathy_STTSTJ = rast(gdb_path, subds = "STTSTJ_2m")
-  bathy_STX <- rast(gdb_path, subds = "STX_2m")
-  bathy_PR_East <- rast(gdb_path, subds = "PuertoRico_East_2m")
-  bathy_PR_South = rast(gdb_path, subds = "PuertoRico_South_2m")
-  bathy_PR_West = rast(gdb_path, subds = "PuertoRico_West_2m")
-  bathy_PR_North = rast(gdb_path, subds = "PuertoRico_North_2m")
-  
-  projected_crs = crs(bathy_STTSTJ)
-  geographic_crs = crs("EPSG:4269")
+  projected_crs <- crs(bathy_PR_East)
+  geographic_crs <- crs("EPSG:4269")
   
   ################################## Bathymetry resampling  ##################################
   
@@ -51,12 +63,13 @@
   #   NOTE - also splicing in the "good" bathy south of STT from these data, to the Blondeau data. that area was higher
   #           resolution for some reason than the current product
   # Can also be used for USVI in the backup merge, since it has nice resolution generally, less artifacts than the crm below, and full extent across Anegada
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Holstein_VI_Shapes/VI_Shapes/Bathy/crm_usvi.tif"
-  describe(crm_path)
-  bathy_crm_2019 = rast(crm_path)
+  bathy_crm_2019 = rast(here('data/crm_usvi.tif'))
+  # crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Holstein_VI_Shapes/VI_Shapes/Bathy/crm_usvi.tif"
+  # describe(crm_path)
+  # bathy_crm_2019 = rast(crm_path)
   bathy_crm_2019 <- project(bathy_crm_2019, projected_crs)
   # bathy_crm_2019 <- project(bathy_crm_2019, geographic_crs)
-  bathy_crm_2019 = clamp(bathy_crm_2019, lower = -200, upper = 0, values = TRUE) #make the bathy sensible - eliminates fill values
+  bathy_crm_2019 = clamp(bathy_crm_2019, lower = -300, upper = 0, values = TRUE) #make the bathy sensible - eliminates fill values
   
   #pull NOAA 1 arc-second crm, downloaded in 2024 from NOAA bathymetry database (https://www.ncei.noaa.gov/maps/grid-extract/)
   # - CRS: 4326 (WGS 84; requires reprojection)
@@ -69,9 +82,10 @@
   #   -	South: 16.988
   #   -	East: -64.246
   #   -	West: -68.022
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/exportImage.tiff"
-  describe(crm_path)
-  bathy_crm_2024 = rast(crm_path)
+  bathy_crm_2024 = rast(here('data/exportImage.tiff'))
+  # crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/exportImage.tiff"
+  # describe(crm_path)
+  # bathy_crm_2024 = rast(crm_path)
   res(bathy_crm_2024)
   bathy_crm_2024 <- project(bathy_crm_2024, projected_crs)
   # bathy_crm_2024 <- project(bathy_crm_2024, geographic_crs)
@@ -109,6 +123,14 @@
   bathy_PR_North_clipped <- bathy_PR_North
   bathy_crm_2019_clipped = bathy_crm_2019
   bathy_crm_2024_clipped <- bathy_crm_2024
+  
+  # Filter out bathymetry values deeper than 300m for 2025 Blondeau data only
+  bathy_STTSTJ_clipped <- clamp(bathy_STTSTJ_clipped, lower = -300, upper = 0, values = FALSE)
+  bathy_STX_clipped <- clamp(bathy_STX_clipped, lower = -300, upper = 0, values = FALSE)
+  bathy_PR_East_clipped <- clamp(bathy_PR_East_clipped, lower = -300, upper = 0, values = FALSE)
+  bathy_PR_South_clipped <- clamp(bathy_PR_South_clipped, lower = -300, upper = 0, values = FALSE)
+  bathy_PR_West_clipped <- clamp(bathy_PR_West_clipped, lower = -300, upper = 0, values = FALSE)
+  bathy_PR_North_clipped <- clamp(bathy_PR_North_clipped, lower = -300, upper = 0, values = FALSE)
   
   #retrieve and apply crm raster extents to fresh raster template, then resample to 50 m resolution using template
   e_crm <- ext(bathy_crm_2019_clipped)
@@ -158,62 +180,91 @@
   bathy_Blondeau_agg = merge(bathy_STTSTJ_agg, bathy_STX_agg, bathy_PR_East_agg, bathy_PR_South_agg, bathy_PR_West_agg,
                              bathy_PR_North_agg)
   
+  bathy_Blondeau_native_agg = merge(bathy_STTSTJ_clipped, bathy_STX_clipped, bathy_PR_East_clipped, bathy_PR_South_clipped,
+                                    bathy_PR_West_clipped, bathy_PR_North_clipped)
+  
+  
   # NOTE - 3 JULY 2025
   #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
   #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
   
   #plot briefly
-  bathy_Blondeau_agg_plot = clamp(bathy_Blondeau_agg, lower = -50, upper = 0, values = TRUE)
-  bathy_crm_2019_agg_plot = clamp(bathy_crm_2019_agg, lower = -50, upper = 0, values = TRUE)
-  bathy_crm_2024_agg_plot <- clamp(bathy_crm_2024_agg, lower=-50, upper=0, values=TRUE) #limit depth to 0 m; eliminate land elevation
-  plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
-  plot(bathy_Blondeau_agg_plot,
-       main = 'Blondeau',
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
-  plot(bathy_crm_2019_agg_plot,
-       main = 'CRM 2019',
-       # ext = e_pr,
-       ext = plot_extents, #e_crm,
-       legend = TRUE)
-  plot(bathy_crm_2024_agg_plot, 
-       main="CRM 2024",
-       # col=hcl.colors(50, "Blues", rev=TRUE),
-       # ext = e_pr, #e_crm,
-       ext = plot_extents, #e_crm,
-       legend=TRUE)
-  
-  res(bathy_PR_East_agg)  # Should be exactly [1] 50 50
-  res(bathy_crm_2019_agg)  # Should be exactly [1] 50 50
-  res(bathy_crm_2024_agg)  # Should be exactly [1] 50 50
-  
-  
+   
   
   
   ################################## Apply "good" landmask ##################################
   
+  # NOTE - consider if the methods below needlessly introduce more NAs around land than are necessary
+  
   #read in version of 90m crm that spans entire US Caribbean. has a mostly normal landmask; some inland water needs to be filled
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/PR_wide_90m.tiff"
-  describe(crm_path)
-  bathy_crm_USCarib = rast(crm_path)
+  bathy_crm_USCarib = rast(here('data/PR_wide_90m.tiff'))
+  # crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/NOAA_other_bathy/CRM_export/PR_wide_90m.tiff"
+  # describe(crm_path)
+  # bathy_crm_USCarib = rast(crm_path)
   bathy_crm_USCarib <- project(bathy_crm_USCarib, projected_crs)
   
   # Create landmask: values > 0 become NA (land), values <= 0 remain as water
   landmask_USCarib <- bathy_crm_USCarib
   landmask_USCarib[landmask_USCarib > 0] <- NA
   
-  # Extend the landmask to match the full extent of bathy_Blondeau_agg
-  # BUT fill the extended areas with a water value (e.g., -999) instead of NA
-  landmask_extended <- extend(landmask_USCarib, bathy_Blondeau_agg, fill = -999)
+  # # Extend the landmask to match the full extent of bathy_Blondeau_agg
+  # # BUT fill the extended areas with a water value (e.g., -999) instead of NA
+  # landmask_extended <- extend(landmask_USCarib, bathy_Blondeau_agg, fill = -999)
+  # landmask_native_extended <- extend(landmask_USCarib, bathy_Blondeau_native_agg, fill = -999)
   
-  # Resample to match resolution
-  landmask_resampled <- resample(landmask_extended, bathy_Blondeau_agg, method = "near")
+  # # Resample to match resolution
+  # landmask_resampled <- resample(landmask_extended, bathy_Blondeau_agg, method = "near")
+  # landmask_native_resampled <- resample(landmask_native_extended, bathy_Blondeau_native_agg, method = "near")
+  # 
+  # # apply the mask
+  # real_landmask_area <- !is.na(resample(landmask_USCarib, bathy_Blondeau_agg, method = "near"))
+  # bathy_Blondeau_masked <- bathy_Blondeau_agg
+  # # bathy_Blondeau_masked[real_landmask_area & is.na(landmask_resampled)] <- NA
+  # bathy_Blondeau_masked[landmask_resampled != -999 & is.na(landmask_resampled)] <- NA
+  # 
+  # # bathy_Blondeau_masked <- mask(bathy_Blondeau_agg, landmask_resampled, maskvalue = NA)
+  # bathy_Blondeau_native_masked <- bathy_Blondeau_native_agg
+  # bathy_Blondeau_native_masked[!is.na(landmask_native_resampled) & landmask_native_resampled > 0] <- NA
+  # # bathy_Blondeau_native_masked <- mask(bathy_Blondeau_native_agg, landmask_native_resampled, maskvalue = NA)
   
-  # Now mask only where landmask has actual NA values (land areas)
-  # Areas with -999 (extended water areas) won't be masked
-  bathy_Blondeau_masked <- mask(bathy_Blondeau_agg, landmask_resampled, maskvalue = NA)
+  # Simple approach: just resample the landmask to match Blondeau resolution
+  landmask_resampled <- resample(landmask_USCarib, bathy_Blondeau_agg, method = "near")
+  # landmask_native_resampled <- resample(landmask_USCarib, bathy_Blondeau_native_agg, method = "near")
+  
+  # Apply the mask - only where landmask has data will masking occur
+  bathy_Blondeau_masked <- bathy_Blondeau_agg
+  # bathy_Blondeau_native_masked <- bathy_Blondeau_native_agg
+  
+  # Create a mask for where we actually have landmask coverage
+  has_landmask_coverage <- !is.na(resample(bathy_crm_USCarib, bathy_Blondeau_agg, method = "near"))
+  # has_landmask_coverage_native <- !is.na(resample(bathy_crm_USCarib, bathy_Blondeau_native_agg, method = "near"))
+  
+  # Apply landmask only where we have coverage AND the landmask indicates land
+  bathy_Blondeau_masked[has_landmask_coverage & is.na(landmask_resampled)] <- NA
+  # bathy_Blondeau_native_masked[has_landmask_coverage_native & is.na(landmask_native_resampled)] <- NA
+  
+  # Add Mona Island landmask
+  # Create landmask for Mona Island from bathy_crm_2024
+  landmask_mona <- bathy_crm_2024
+  landmask_mona[landmask_mona > 0] <- NA  # Set land (>0) to NA
+  
+  # Clip to Mona Island area using UTM coordinates
+  mona_extent <- ext(-25000, 0, 2000000, 2020000)  # Adjust coordinates as needed
+  landmask_mona_clipped <- crop(landmask_mona, mona_extent)
+  
+  # Resample Mona landmask
+  landmask_mona_resampled <- resample(landmask_mona_clipped, bathy_Blondeau_agg, method = "near")
+  # landmask_mona_native_resampled <- resample(landmask_mona_clipped, bathy_Blondeau_native_agg, method = "near")
+  
+  # Create a mask for where the clipped Mona landmask has any data at all
+  has_mona_data <- !is.na(crop(bathy_crm_2024, mona_extent))
+  has_mona_data_resampled <- resample(has_mona_data, bathy_Blondeau_agg, method = "near")
+  # has_mona_data_native_resampled <- resample(has_mona_data, bathy_Blondeau_native_agg, method = "near")
+  
+  # Apply Mona landmask only in areas where we have Mona data AND it's land
+  bathy_Blondeau_masked[has_mona_data_resampled & is.na(landmask_mona_resampled)] <- NA
+  # bathy_Blondeau_native_masked[has_mona_data_native_resampled & is.na(landmask_mona_native_resampled)] <- NA
+  
   
   bathy_Blondeau_masked_plot = clamp(bathy_Blondeau_masked, lower = -50, upper = 0, values = TRUE)
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
@@ -225,35 +276,42 @@
   plot(bathy_Blondeau_masked_plot,
        main = 'Blondeau',
        # ext = e_pr,
-       ext = plot_extents, #e_crm,
+       # ext = plot_extents, #e_crm,
        legend = TRUE)
   
   ################################## Splice "good" bathy to Blondeau ##################################
   
   south_of_STT_clipped = rast(here('data/south_of_STT_clipped.tif'))
 
-  # Make sure it's in the same projection as bathy_sealed
+  # Make sure it's in the right projection
   south_of_STT_clipped <- project(south_of_STT_clipped, crs(projected_crs))
   
   # Recreate the template raster using the same approach as upstream
   # (You can reuse the same extent calculations if they're still in memory)
   new_ext <- ext(xmin, xmax, ymin, ymax)
   template_raster <- rast(new_ext, resolution = 50, crs = crs(projected_crs))
+  # template_native_raster <- rast(new_ext, resolution = 2, crs = crs(projected_crs))
   
   # Resample to 50m grid using the template
   south_of_STT_agg <- resample(south_of_STT_clipped, template_raster, method = "average")
+  # south_of_STT_native_agg <- resample(south_of_STT_clipped, template_native_raster, method = "average")
+  # south_of_STT_extended <- extend(south_of_STT_clipped, bathy_Blondeau_native_agg)
+  south_of_STT_resampled <- resample(south_of_STT_clipped, bathy_Blondeau_native_agg, method = "bilinear")
   
   # bathy_Blondeau_spliced <- merge(south_of_STT_clipped, bathy_Blondeau_masked)
   bathy_Blondeau_spliced <- mosaic(south_of_STT_agg, bathy_Blondeau_masked, fun = "first")
+  # bathy_Blondeau_native_spliced <- mosaic(south_of_STT_clipped, bathy_Blondeau_native_agg, fun = "first") # THIS TAKES FOREVER!!
+  bathy_Blondeau_native_spliced <- cover(south_of_STT_resampled, bathy_Blondeau_native_agg)
   
   bathy_Blondeau_spliced_plot = clamp(bathy_Blondeau_spliced, lower = -50, upper = 0, values = TRUE)
+  bathy_Blondeau_native_spliced_plot = clamp(bathy_Blondeau_native_spliced, lower = -50, upper = 0, values = TRUE)
   plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(300000, 340000, 1940000, 1980000) #for investigating St Croix
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-  plot(bathy_Blondeau_spliced_plot,
+  plot(bathy_Blondeau_native_spliced_plot,
        main = 'Blondeau',
        # ext = e_pr,
        ext = plot_extents, #e_crm,
@@ -273,6 +331,12 @@
        legend = TRUE)
   
   ################################## Tack BVI to Blondeau ##################################
+  
+  
+  # STOPPING POINT - 15 JULY 2025
+  #   - tedious work to get very very large rasters to chug and save/load progress...
+  #   - currently figuring out this BVI step. I think there is an issue with extent mismatch for native
+  
   
   # # METHOD WHICH FILLS IN - EVEN AT MESOPHOTIC RIDGE SOUTH OF STT
   # #
@@ -298,48 +362,58 @@
   # Set CRM values deeper than Blondeau's deepest to NA
   # Also set values of 0 (land) to NA
   # ADDITIONAL: Set shallow values (> -2m) to NA as these are likely land/very shallow areas
+  deepest_crm <- min(values(bathy_crm_2019_agg), na.rm = TRUE)
+  print(paste("Deepest value in CRM:", deepest_crm))
   bathy_crm_cleaned <- bathy_crm_2019_agg
-  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) < deepest_blondeau] <- NA
-  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= -2] <- NA  # Remove land and very shallow areas
+  bathy_crm_native_cleaned <- bathy_crm_2019
+  # values(bathy_crm_cleaned)[values(bathy_crm_cleaned) < deepest_blondeau] <- NA
+  # values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= -2] <- NA  # Remove land and very shallow areas
+  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) >= 0] <- NA  # Remove land and very shallow areas
+  values(bathy_crm_cleaned)[values(bathy_crm_cleaned) <= deepest_crm] <- NA  # Remove land and very shallow areas
   
   # Create a binary mask where Blondeau has non-NA data
   blondeau_has_data <- !is.na(bathy_Blondeau_spliced)
+  blondeau_native__has_data <- !is.na(bathy_Blondeau_native_spliced)
   
   # Apply this mask to remove CRM data where Blondeau has data
   # We want to KEEP CRM data where blondeau_has_data is FALSE (purple areas)
   # So we mask where blondeau_has_data is TRUE (yellow areas) - NO inverse needed
   bathy_crm_clipped <- mask(bathy_crm_cleaned, blondeau_has_data, inverse = FALSE, maskvalue = TRUE)
+  bathy_crm_native_clipped <- mask(bathy_crm_cleaned, blondeau_native__has_data, inverse = FALSE, maskvalue = TRUE)
   plot(bathy_crm_clipped)
   
-  # SPATIAL CLEANUP: Remove CRM data south and west of intended extension area
-  # Based on your image, keep only CRM data that is:
-  # - East of approximately 330000 UTM AND/OR
-  # - North of approximately 2070000 UTM
-  # Get coordinates for each cell
-  coords <- xyFromCell(bathy_crm_clipped, 1:ncell(bathy_crm_clipped))
-  x_coords <- coords[, 1]  # Easting
-  y_coords <- coords[, 2]  # Northing
-  
-  # Create a logical mask: keep only areas that are sufficiently east OR north
-  # Adjust these coordinates based on your specific area
-  # keep_mask <- (x_coords > 335500) | (y_coords > 2070000)
-  # keep_mask <- (x_coords > 330000) | (y_coords > 2070000)
-  keep_mask <- (x_coords > 330000) | (y_coords > 2065000)
-  
-  # Apply the spatial mask
-  values(bathy_crm_clipped)[!keep_mask] <- NA
-  plot(bathy_crm_clipped)
+  # # SPATIAL CLEANUP: Remove CRM data south and west of intended extension area
+  # # Based on your image, keep only CRM data that is:
+  # # - East of approximately 330000 UTM AND/OR
+  # # - North of approximately 2070000 UTM
+  # # Get coordinates for each cell
+  # coords <- xyFromCell(bathy_crm_clipped, 1:ncell(bathy_crm_clipped))
+  # x_coords <- coords[, 1]  # Easting
+  # y_coords <- coords[, 2]  # Northing
+  # 
+  # # Create a logical mask: keep only areas that are sufficiently east OR north
+  # # Adjust these coordinates based on your specific area
+  # # keep_mask <- (x_coords > 335500) | (y_coords > 2070000)
+  # # keep_mask <- (x_coords > 330000) | (y_coords > 2070000)
+  # keep_mask <- (x_coords > 330000) | (y_coords > 2065000)
+  # 
+  # # Apply the spatial mask
+  # values(bathy_crm_clipped)[!keep_mask] <- NA
+  # plot(bathy_crm_clipped)
   
   # Merge the datasets
   # The merge function will use Blondeau data where available, cleaned CRM data elsewhere
   bathy_Blondeau_BVI <- merge(bathy_Blondeau_spliced, bathy_crm_clipped)
+  bathy_Blondeau_native_BVI <- merge(bathy_Blondeau_native_spliced, bathy_crm_native_clipped)
+  plot(bathy_Blondeau_BVI)
   
   ################################## patch in USGS Anegada LIDAR ##################################
   
   #read in version of 90m crm that spans entire US Caribbean. has a mostly normal landmask; some inland water needs to be filled
-  crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/USGS_Anegada/ANGD2014_EAARLB_z20_v09g12A_mosaic/ANGD2014_EAARLB_z20_v09g12A_mosaic.tif"
-  describe(crm_path)
-  Anegada_LIDAR = rast(crm_path)
+  Anegada_LIDAR = rast(here('data/ANGD2014_EAARLB_z20_v09g12A_mosaic.tif'))
+  # crm_path <- "/Users/benja/Documents/Farmer_Ben_Dissertation/QGIS_Dissertation/data/Bathymetry/USGS_Anegada/ANGD2014_EAARLB_z20_v09g12A_mosaic/ANGD2014_EAARLB_z20_v09g12A_mosaic.tif"
+  # describe(crm_path)
+  # Anegada_LIDAR = rast(crm_path)
   Anegada_LIDAR <- project(Anegada_LIDAR, projected_crs)
   
   #drop fill values and land
@@ -485,6 +559,26 @@
   
   bathy_final = bathy_sealed
   
+  
+  
+  
+  # # STOPPING POINT - 15 JULY 2025
+  # #   - figuring out how to apply the landmask and filled-in land to the native resolution raster efficiently
+  # # Apply the same landmask pattern from bathy_Blondeau_masked to the native resolution data
+  # bathy_Blondeau_native_masked <- bathy_Blondeau_native_agg
+  # 
+  # # Create a mask from where bathy_Blondeau_masked is NA
+  # landmask_pattern <- is.na(bathy_Blondeau_masked)
+  # 
+  # # Resample this mask to match the native resolution
+  # landmask_pattern_native <- resample(landmask_pattern, bathy_Blondeau_native_agg, method = "near")
+  # 
+  # # Apply the mask to the native data
+  # bathy_Blondeau_native_masked[landmask_pattern_native] <- NA
+  
+  
+  
+  
   # ################################## Merge 1: PR to MCD ##################################
   # 
   # # NOTE - the below 3 merges are for a "back-up" version of merged bathymetry that doesn't have the artifact
@@ -587,13 +681,14 @@
   # # NOTE - can return to this if direct access to PR East is required!
   # rm(bathy_PR_East_clipped)
   # rm(bathy_PR_East)
-
-  # #save terra objects #and then workspace for use in downstream scripts
-  # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
-  # 
-  # # Get all non-spatial objects
-  # non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
-  # 
-  # # Save only non-spatial objects
-  # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
-  # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
+  
+  #save terra objects #and then workspace for use in downstream scripts
+  save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
+  
+  # Get all non-spatial objects
+  non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+  
+  # Save only non-spatial objects
+  # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
+  save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
+  
