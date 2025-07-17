@@ -241,7 +241,7 @@
   # DMV <- DMV(bathy_final, w = c(3, 3))
   # RelPos <- RelPos(bathy_final, w = c(5, 5))
   SAPA <- SAPA(bathy_final, w = c(3, 3))
-  VRM_multiscale <- VRM(bathy_final, w = c(5, 5))
+  VRM_multiscale <- VRM(bathy_final, w = c(3, 3))
   # surfarea = SurfaceArea(bathy_final)
   maxcurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'maxc')
   meancurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'meanc')
@@ -252,173 +252,8 @@
   # NOTE - I think slope, slope of slope, aspect, and TPI, roughness, TRI, and
   #         VRM are the variables I am likely moving forward with
   
-  # ################################## plots ##################################
-  # 
-  # # Define plot extent options
-  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
-  # # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  # # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
-  # # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
-  # # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
-  # # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
-  # # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
-  # # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-  # 
-  # # Slope
-  # plot(slope_terra,
-  #      col = cmocean("deep")(100),
-  #      ext = plot_extents,
-  #      main = "Slope - Terra Raster with cmocean deep")
-  # 
-  # # Slope of Slope
-  # plot(slopeofslope_terra,
-  #      col = cmocean("deep")(100),
-  #      ext = plot_extents,
-  #      main = "Slope of Slope - Terra Raster with cmocean deep")
-  # 
-  # # Roughness
-  # plot(roughness,
-  #      col = cmocean("deep")(100),
-  #      ext = plot_extents,
-  #      main = "Roughness - Terra Raster with cmocean deep")
-  # 
-  # # VRM
-  # VRM_clamp <- clamp(VRM, lower = -0.01, upper = 0.01)
-  # plot(VRM_clamp,
-  # # plot(VRM,
-  #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
-  #      main = "VRM - Terra Raster with cmocean balance")
-  # 
-  # # # TPI spatialeco
-  # # TPI_spatialeco_clamp <- clamp(TPI_spatialeco, lower = -5, upper = 5)
-  # # # plot(TPI_spatialeco_clamp,
-  # # plot(TPI_spatialeco,
-  # #      col = cmocean("balance")(100),
-  # #      ext = plot_extents,
-  # #      main = "TPI spatialeco - Terra Raster with cmocean balance")
-  # #
-  # # # TPI multiscale
-  # # TPI_multiscale <- clamp(TPI_multiscale, lower = -5, upper = 5)
-  # # plot(TPI_multiscale,
-  # #      col = cmocean("balance")(100),
-  # #      ext = plot_extents,
-  # #      main = "TPI multiscale - Terra Raster with cmocean balance")
-  # 
-  # # TPI terra
-  # TPI_terra_clamp <- clamp(TPI_terra, lower = -40, upper = 40)
-  # # plot(TPI_terra,
-  # plot(TPI_terra_clamp,
-  #      col = cmocean("balance")(100),
-  #      # ext = plot_extents,
-  #      main = "TPI terra - Terra Raster with cmocean balance")
-  # 
-  # # # BPI multiscale
-  # # BPI_multiscale_clamp <- clamp(BPI_multiscale, lower = -10, upper = 10)
-  # # plot(BPI_multiscale,
-  # # # plot(BPI_multiscale_clamp,
-  # #      col = cmocean("balance")(100),
-  # #      ext = plot_extents,
-  # #      main = "BPI multiscale - Terra Raster with cmocean balance")
-  # #
-  # # # DMV
-  # # DMV <- clamp(DMV, lower = -5, upper = 5)
-  # # plot(DMV,
-  # #      col = cmocean("balance")(100),
-  # #      ext = plot_extents,
-  # #      main = "DMV - Terra Raster with cmocean balance")
-  # 
-  # # Total curvature (commented out)
-  # # totalcurv <- clamp(totalcurv, lower = -0.006, upper = 0.006)
-  # # plot(totalcurv,
-  # #      col = cmocean("balance")(100),
-  # #      ext = plot_extents,
-  # #      main = "Total Curvature - Terra Raster with cmocean balance")
-  # 
-  # # Planform curvature multiscale
-  # planformcurv_multiscale_clamp <- clamp(planformcurv_multiscale, lower = -0.005, upper = 0.005)
-  # # plot(planformcurv_multiscale,
-  # plot(planformcurv_multiscale_clamp,
-  #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
-  #      main = "Planform Curvature multiscale - Terra Raster with cmocean balance")
-  # 
-  # # Profile curvature multiscale
-  # profilecurv_multiscale <- clamp(profilecurv_multiscale, lower = -0.01, upper = 0.01)
-  # plot(profilecurv_multiscale,
-  #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
-  #      main = "Profile Curvature multiscale - Terra Raster with cmocean balance")
-  # 
-  # # Mean curvature multiscale
-  # meancurv_multiscale_clamp <- clamp(meancurv_multiscale, lower = -0.004, upper = 0.004)
-  # # plot(meancurv_multiscale,
-  # plot(meancurv_multiscale_clamp,
-  #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
-  #      main = "Mean Curvature multiscale - Terra Raster with cmocean balance")
-  # 
-  # # Max curvature multiscale
-  # maxcurv_multiscale_clamp <- clamp(maxcurv_multiscale, lower = -0.002, upper = 0.002)
-  # # plot(maxcurv_multiscale,
-  # plot(maxcurv_multiscale_clamp,
-  #      col = cmocean("balance")(100),
-  #      ext = plot_extents,
-  #      main = "Max Curvature multiscale - Terra Raster with cmocean balance")
-  # 
-  # # Bathymetry
-  # depth_OG_clamp <- clamp(bathy_final, lower = -50, upper = 0)
-  # # plot(bathy_final,
-  # plot(depth_OG_clamp,
-  #      col = rev(cmocean("deep")(100)),  # Reversed color scheme
-  #      ext = plot_extents,
-  #      main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
-  # 
-  # # #TEST
-  # # bathy_merged_crm_forslopes <- clamp(bathy_merge1_crm, lower = -50, upper = 0, values = TRUE)
-  # # # slope_merge1 = terrain(bathy_merge1_crm, v = "slope", unit = 'degrees') # THIS LOOKS CRAZY
-  # # slope_merge1 = terrain(bathy_merged_crm_forslopes, v = "slope", unit = 'degrees')
-  # # slopeofslope_merge1 = terrain(slope_merge1, v = "slope", unit = 'degrees')
-  # # plot(slope_merge1, col = color_palette, main = "Slope (degrees)", legend = TRUE)
-  # # plot(slopeofslope_merge1, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
-  # # #TEST
-  # 
-  # # #derive bathymetry products from original resolution (2 m) raster. clipped to just STTSTJ since even that takes a long time
-  # # slope_STTSTJ = terrain(bathy_STTSTJ, v = "slope", unit = 'degrees')
-  # # slopeofslope_STTSTJ = terrain(slope_STTSTJ, v = "slope", unit = 'degrees')
-  # # slope_PR_East = terrain(bathy_PR_East, v = "slope", unit = 'degrees')
-  # #
-  # # color_palette <- colorRampPalette(rev(brewer.pal(9, "YlGnBu")))(100) #YlGnBu palette, as used by me in QGIS. color ramp reversed, and continuous colors interpolated
-  # # plot(slope_STTSTJ, col = color_palette, main = "Slope (degrees)", legend = TRUE)
-  # # plot(slopeofslope_STTSTJ, col = color_palette, main = "Slope of slope (degrees)", legend = TRUE) #STJ coastline is reef here ?? lord
-  # # plot(slope_PR_East, col = color_palette, main = "Slope (degrees)", legend = TRUE)
-  # 
-  # # NOTES - 18 May 2025
-  # #   - could also take the current 650-m resolution grid and slap a full grid over it, but with grid squares
-  # #       extending out to depths <50 m. This could be useful if we care about lining things up with what we already
-  # #       know "works" in the CMS. I think the part about lining up with NCRMP data matters less, because it's
-  # #       always a mess trying to get PR & USVI grids to be happy with each other anyways. when producing the GAMs,
-  # #       will just need to take *average* of outputted coral cover & tissue SA, rather than *sum*, within each
-  # #       650 x 650 m grid square
-  # #   - SO, I think the game plan is to ideally work with existing 650 m habitat grid, and find a way to *add* to it
-  # #       without adding back squares which were previously deleted because of bad CMS exit codes
-  # #   - ACTUALLY, thinking about this more I think we should just use the existing grid for CMS tests to confirm
-  # #       CMS is "good", then move forward with making a new habitat grid that is completely independent of what was
-  # #       done in the past. will need to nail down a routine to properly handle and whittle down the grid to remove
-  # #       squares with bad CMS exit codes
-  # #   - SO, all I need to do right now is 1.) move on with getting the CMS in order, and 2.) preparing a new, coarse
-  # #       grid use once we know the CMS works at all
-  # 
-  ################################## Import waves & SST data ##################################
+  ################################## Import waves ##################################
   
-  # STOPPING POINT - 16 July 2025
-  #   - great day! now need to do something similar to below for bringing in SST data
-  
-  # Load SWAN Wave Data in R
-  # Script to read MATLAB-exported wave data and create visualizations
-  
-  # 1. Load the main summary data (long format)
-  cat("Loading summary data...\n")
   wave_summary <- read.csv(here("output", "swan_wave_summary_for_R.csv"))
   
   # 2. Load coordinate information
@@ -432,86 +267,6 @@
   lon_range <- range(lon_vec)
   lat_range <- range(lat_vec)
   
-  cat(sprintf("Grid: %d x %d\n", nlon, nlat))
-  cat(sprintf("Longitude: %.3f to %.3f\n", lon_range[1], lon_range[2]))
-  cat(sprintf("Latitude: %.3f to %.3f\n", lat_range[1], lat_range[2]))
-  
-  # 3. Basic summary statistics
-  cat("\nSummary of wave data:\n")
-  print(summary(wave_summary))
-  
-  # 4. Create plots using ggplot2 (long format data)
-  cat("\nCreating ggplot2 visualizations...\n")
-  
-  # Mean Significant Wave Height
-  p1 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hsig)) +
-    geom_tile() +
-    scale_fill_viridis_c(name = "Hsig (m)", option = "plasma") +
-    labs(title = "Mean Significant Wave Height (2017-2018)",
-         x = "Longitude (°W)", y = "Latitude (°N)") +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 10),
-          plot.title = element_text(size = 14, hjust = 0.5)) +
-    coord_fixed()
-  
-  print(p1)
-  
-  # Maximum Significant Wave Height
-  p2 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = max_hsig)) +
-    geom_tile() +
-    scale_fill_viridis_c(name = "Max Hsig (m)", option = "inferno") +
-    labs(title = "Maximum Significant Wave Height (2017-2018)",
-         x = "Longitude (°W)", y = "Latitude (°N)") +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 10),
-          plot.title = element_text(size = 14, hjust = 0.5)) +
-    coord_fixed()
-  
-  print(p2)
-  
-  # Mean Swell Wave Height
-  p3 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hswell)) +
-    geom_tile() +
-    scale_fill_viridis_c(name = "Hswell (m)", option = "viridis") +
-    labs(title = "Mean Swell Wave Height (2017-2018)",
-         x = "Longitude (°W)", y = "Latitude (°N)") +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 10),
-          plot.title = element_text(size = 14, hjust = 0.5)) +
-    coord_fixed()
-  
-  print(p3)
-  
-  # Wave Direction (using circular colors)
-  p4 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_dir)) +
-    geom_tile() +
-    scale_fill_gradientn(colors = rainbow(8), name = "Direction (°)", 
-                         breaks = c(0, 90, 180, 270, 360)) +
-    labs(title = "Mean Wave Direction (2017-2018)",
-         x = "Longitude (°W)", y = "Latitude (°N)") +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 10),
-          plot.title = element_text(size = 14, hjust = 0.5)) +
-    coord_fixed()
-  
-  print(p4)
-  
-  # Wave Period
-  p5 <- ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_per)) +
-    geom_tile() +
-    scale_fill_viridis_c(name = "Period (s)", option = "cividis") +
-    labs(title = "Mean Wave Period (2017-2018)",
-         x = "Longitude (°W)", y = "Latitude (°N)") +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 10),
-          plot.title = element_text(size = 14, hjust = 0.5)) +
-    coord_fixed()
-  
-  print(p5)
-  
-  # 5. Create rasters from matrix files
-  cat("\nCreating raster objects...\n")
-  
   # Function to load matrix and create raster
   create_raster <- function(filename, var_name) {
     cat(sprintf("Loading %s...\n", filename))
@@ -520,11 +275,10 @@
     # Flip matrix vertically to match MATLAB orientation
     matrix_data <- matrix_data[nrow(matrix_data):1, ]
     
-    # Create raster
-    r <- raster(matrix_data,
-                xmn = min(lon_vec), xmx = max(lon_vec),
-                ymn = min(lat_vec), ymx = max(lat_vec),
-                crs = CRS("+proj=longlat +datum=WGS84"))
+    # Create SpatRaster using terra
+    r <- rast(matrix_data,
+              extent = ext(min(lon_vec), max(lon_vec), min(lat_vec), max(lat_vec)),
+              crs = "EPSG:4326")
     
     names(r) <- var_name
     return(r)
@@ -537,97 +291,279 @@
   mean_dir_raster <- create_raster("mean_dir_matrix.csv", "Mean_Direction")
   mean_per_raster <- create_raster("mean_per_matrix.csv", "Mean_Period")
   
-  # Plot rasters
-  cat("\nPlotting rasters...\n")
+  projected_crs = crs(bathy_final)
   
-  # Set up plotting parameters
-  par(mfrow = c(2, 3), mar = c(4, 4, 3, 6))
+  # Reproject to match bathy_final CRS first
+  mean_hsig_raster <- project(mean_hsig_raster, projected_crs)
+  max_hsig_raster <- project(max_hsig_raster, projected_crs)
+  mean_hswell_raster <- project(mean_hswell_raster, projected_crs)
+  mean_dir_raster <- project(mean_dir_raster, projected_crs)
+  mean_per_raster <- project(mean_per_raster, projected_crs)
   
-  plot(mean_hsig_raster, main = "Mean Significant Wave Height", 
-       col = viridis(50), axes = TRUE)
+  # Get extent and properties from bathy_final
+  bathy_ext <- ext(bathy_final)
+  bathy_crs <- crs(bathy_final)
+  bathy_res <- res(bathy_final)
   
-  plot(max_hsig_raster, main = "Maximum Significant Wave Height", 
-       col = plasma(50), axes = TRUE)
+  # Create template raster matching bathy_final exactly
+  template_raster <- rast(bathy_ext, resolution = bathy_res, crs = bathy_crs)
   
-  plot(mean_hswell_raster, main = "Mean Swell Wave Height", 
-       col = viridis(50), axes = TRUE)
+  # Resample wave rasters to match bathy_final
+  mean_hsig_raster <- resample(mean_hsig_raster, template_raster, method = "bilinear")
+  max_hsig_raster <- resample(max_hsig_raster, template_raster, method = "bilinear")
+  mean_hswell_raster <- resample(mean_hswell_raster, template_raster, method = "bilinear")
+  mean_dir_raster <- resample(mean_dir_raster, template_raster, method = "bilinear")
+  mean_per_raster <- resample(mean_per_raster, template_raster, method = "bilinear")
   
-  plot(mean_dir_raster, main = "Mean Wave Direction", 
-       col = rainbow(50), axes = TRUE)
+  ################################## Import SST ##################################
   
-  plot(mean_per_raster, main = "Mean Wave Period", 
-       col = cividis(50), axes = TRUE)
+  sst_summary <- read.csv(here("output", "mur_sst_summary_for_R.csv"))
   
-  # Reset plotting parameters
-  par(mfrow = c(1, 1))
+  # 2. Load coordinate information
+  lon_vec <- read.csv(here("output", "mur_sst_longitude.csv"))$longitude
+  lat_vec <- read.csv(here("output", "mur_sst_latitude.csv"))$latitude
+  grid_info <- read.csv(here("output", "mur_sst_grid_info.csv"))
   
-  # 6. Load and plot time series data
-  cat("\nLoading time series data...\n")
-  ts_data <- read.csv(here("output", "swan_timeseries_sample.csv"))
-  ts_data$datetime <- as.POSIXct(ts_data$datetime)
+  # Get grid dimensions
+  nlon <- length(lon_vec)
+  nlat <- length(lat_vec)
+  lon_range <- range(lon_vec)
+  lat_range <- range(lat_vec)
   
-  # Time series plots
-  p6 <- ggplot(ts_data, aes(x = datetime, y = hsig)) +
-    geom_line(color = "blue", alpha = 0.7) +
-    labs(title = "Significant Wave Height Time Series (Sample Location)",
-         x = "Date", y = "Wave Height (m)") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  print(p6)
-  
-  # Multiple variables time series
-  ts_long <- ts_data %>%
-    select(datetime, hsig, hswell, period) %>%
-    pivot_longer(cols = c(hsig, hswell, period), 
-                 names_to = "variable", values_to = "value")
-  
-  p7 <- ggplot(ts_long, aes(x = datetime, y = value, color = variable)) +
-    geom_line(alpha = 0.7) +
-    facet_wrap(~variable, scales = "free_y", ncol = 1) +
-    labs(title = "Wave Variables Time Series (Sample Location)",
-         x = "Date", y = "Value") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "none")
-  
-  print(p7)
-  
-  # 7. Create a summary comparison plot
-  cat("\nCreating comparison plots...\n")
-  
-  # Four-panel comparison
-  library(gridExtra)
-  
-  comparison_plots <- list(
-    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hsig)) +
-      geom_tile() + scale_fill_viridis_c(option = "plasma") +
-      labs(title = "Mean Hsig", x = "", y = "Latitude") + 
-      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+  # Function to load matrix and create raster
+  create_raster <- function(filename, var_name) {
+    cat(sprintf("Loading %s...\n", filename))
+    matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
     
-    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = max_hsig)) +
-      geom_tile() + scale_fill_viridis_c(option = "inferno") +
-      labs(title = "Max Hsig", x = "", y = "") + 
-      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+    # Flip matrix vertically to match MATLAB orientation
+    matrix_data <- matrix_data[nrow(matrix_data):1, ]
     
-    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_hswell)) +
-      geom_tile() + scale_fill_viridis_c(option = "viridis") +
-      labs(title = "Mean Hswell", x = "Longitude", y = "Latitude") + 
-      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed(),
+    # Create SpatRaster using terra
+    r <- rast(matrix_data,
+              extent = ext(min(lon_vec), max(lon_vec), min(lat_vec), max(lat_vec)),
+              crs = "EPSG:4326")
     
-    ggplot(wave_summary, aes(x = longitude, y = latitude, fill = mean_per)) +
-      geom_tile() + scale_fill_viridis_c(option = "cividis") +
-      labs(title = "Mean Period", x = "Longitude", y = "") + 
-      theme_minimal() + theme(legend.title = element_blank()) + coord_fixed()
-  )
+    names(r) <- var_name
+    return(r)
+  }
   
-  grid.arrange(grobs = comparison_plots, ncol = 2, 
-               top = "SWAN Wave Data Summary (2017-2018)")
+  # Create rasters for SST variables
+  mean_sst_raster <- create_raster("mean_sst_matrix.csv", "Mean_SST")
+  max_sst_raster <- create_raster("max_sst_matrix.csv", "Max_SST")
+  min_sst_raster <- create_raster("min_sst_matrix.csv", "Min_SST")
+  std_sst_raster <- create_raster("std_sst_matrix.csv", "Std_SST")
   
-  cat("\nAnalysis complete!\n")
-  cat("Data loaded successfully with", nrow(wave_summary), "grid points\n")
+  #reproject
+  mean_sst_raster = project(mean_sst_raster, projected_crs)
+  max_sst_raster = project(max_sst_raster, projected_crs)
+  min_sst_raster = project(min_sst_raster, projected_crs)
+  std_sst_raster = project(std_sst_raster, projected_crs)
   
+  # Resample sst rasters to match bathy_final
+  mean_sst_raster <- resample(mean_sst_raster, template_raster, method = "bilinear")
+  max_sst_raster <- resample(max_sst_raster, template_raster, method = "bilinear")
+  min_sst_raster <- resample(min_sst_raster, template_raster, method = "bilinear")
+  std_sst_raster <- resample(std_sst_raster, template_raster, method = "bilinear")
+
+  rm(template_raster)
   
+  ################################## apply landmask ##################################
+  
+  # Create landmask from bathy_final 
+  landmask <- !is.na(bathy_final)
+  
+  # Apply landmask to wave rasters
+  mean_hsig_raster[landmask == 0] <- NA
+  max_hsig_raster[landmask == 0] <- NA
+  mean_hswell_raster[landmask == 0] <- NA
+  mean_dir_raster[landmask == 0] <- NA
+  mean_per_raster[landmask == 0] <- NA
+  
+  # Apply landmask to SST rasters
+  mean_sst_raster[landmask == 0] <- NA
+  max_sst_raster[landmask == 0] <- NA
+  min_sst_raster[landmask == 0] <- NA
+  std_sst_raster[landmask == 0] <- NA
+  
+  #add SST range
+  # NOTE - this should perhaps be done sooner upstream
+  range_sst_raster = max_sst_raster - min_sst_raster
+  
+  ################################## plots ##################################
+  
+  # Define plot extent options
+  plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
+  # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
+  # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
+  # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
+
+  # Slope
+  plot(slope_terra,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "Slope - Terra Raster with cmocean deep")
+
+  # Slope of Slope
+  plot(slopeofslope_terra,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "Slope of Slope - Terra Raster with cmocean deep")
+
+  # Roughness
+  plot(roughness,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "Roughness - Terra Raster with cmocean deep")
+
+  # VRM
+  VRM_clamp <- clamp(VRM, lower = -0.01, upper = 0.01)
+  plot(VRM_clamp,
+  # plot(VRM,
+       col = cmocean("balance")(100),
+       ext = plot_extents,
+       main = "VRM - Terra Raster with cmocean balance")
+
+  # # TPI spatialeco
+  # TPI_spatialeco_clamp <- clamp(TPI_spatialeco, lower = -5, upper = 5)
+  # # plot(TPI_spatialeco_clamp,
+  # plot(TPI_spatialeco,
+  #      col = cmocean("balance")(100),
+  #      ext = plot_extents,
+  #      main = "TPI spatialeco - Terra Raster with cmocean balance")
+  #
+  # # TPI multiscale
+  # TPI_multiscale <- clamp(TPI_multiscale, lower = -5, upper = 5)
+  # plot(TPI_multiscale,
+  #      col = cmocean("balance")(100),
+  #      ext = plot_extents,
+  #      main = "TPI multiscale - Terra Raster with cmocean balance")
+
+  # TPI terra
+  TPI_terra_clamp <- clamp(TPI_terra, lower = -40, upper = 40)
+  # plot(TPI_terra,
+  plot(TPI_terra_clamp,
+       col = cmocean("balance")(100),
+       # ext = plot_extents,
+       main = "TPI terra - Terra Raster with cmocean balance")
+
+  # # BPI multiscale
+  # BPI_multiscale_clamp <- clamp(BPI_multiscale, lower = -10, upper = 10)
+  # plot(BPI_multiscale,
+  # # plot(BPI_multiscale_clamp,
+  #      col = cmocean("balance")(100),
+  #      ext = plot_extents,
+  #      main = "BPI multiscale - Terra Raster with cmocean balance")
+  #
+  # # DMV
+  # DMV <- clamp(DMV, lower = -5, upper = 5)
+  # plot(DMV,
+  #      col = cmocean("balance")(100),
+  #      ext = plot_extents,
+  #      main = "DMV - Terra Raster with cmocean balance")
+
+  # Total curvature (commented out)
+  # totalcurv <- clamp(totalcurv, lower = -0.006, upper = 0.006)
+  # plot(totalcurv,
+  #      col = cmocean("balance")(100),
+  #      ext = plot_extents,
+  #      main = "Total Curvature - Terra Raster with cmocean balance")
+
+  # Planform curvature multiscale
+  planformcurv_multiscale_clamp <- clamp(planformcurv_multiscale, lower = -0.005, upper = 0.005)
+  # plot(planformcurv_multiscale,
+  plot(planformcurv_multiscale_clamp,
+       col = cmocean("balance")(100),
+       ext = plot_extents,
+       main = "Planform Curvature multiscale - Terra Raster with cmocean balance")
+
+  # Profile curvature multiscale
+  profilecurv_multiscale <- clamp(profilecurv_multiscale, lower = -0.01, upper = 0.01)
+  plot(profilecurv_multiscale,
+       col = cmocean("balance")(100),
+       ext = plot_extents,
+       main = "Profile Curvature multiscale - Terra Raster with cmocean balance")
+
+  # Mean curvature multiscale
+  meancurv_multiscale_clamp <- clamp(meancurv_multiscale, lower = -0.004, upper = 0.004)
+  # plot(meancurv_multiscale,
+  plot(meancurv_multiscale_clamp,
+       col = cmocean("balance")(100),
+       ext = plot_extents,
+       main = "Mean Curvature multiscale - Terra Raster with cmocean balance")
+
+  # Max curvature multiscale
+  maxcurv_multiscale_clamp <- clamp(maxcurv_multiscale, lower = -0.002, upper = 0.002)
+  # plot(maxcurv_multiscale,
+  plot(maxcurv_multiscale_clamp,
+       col = cmocean("balance")(100),
+       ext = plot_extents,
+       main = "Max Curvature multiscale - Terra Raster with cmocean balance")
+
+  # Bathymetry
+  depth_OG_clamp <- clamp(bathy_final, lower = -50, upper = 0)
+  # plot(bathy_final,
+  plot(depth_OG_clamp,
+       col = rev(cmocean("deep")(100)),  # Reversed color scheme
+       ext = plot_extents,
+       main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
+  
+  plot(mean_sst_raster,
+       col = cmocean("thermal")(100),
+       ext = plot_extents)
+  plot(max_sst_raster,
+       col = cmocean("thermal")(100),
+       ext = plot_extents)
+  plot(min_sst_raster,
+       col = cmocean("thermal")(100),
+       ext = plot_extents)
+  plot(std_sst_raster,
+       col = cmocean("thermal")(100),
+       ext = plot_extents)
+  plot(range_sst_raster,
+       col = cmocean("thermal")(100),
+       ext = plot_extents)
+  
+  plot(mean_hsig_raster,
+       col = cmocean("amp")(100),
+       ext = plot_extents)
+  plot(max_hsig_raster,
+       col = cmocean("amp")(100),
+       ext = plot_extents)
+  plot(mean_hswell_raster,
+       col = cmocean("amp")(100),
+       ext = plot_extents)
+  plot(mean_dir_raster,
+       col = cmocean("phase")(100),
+       ext = plot_extents)
+  plot(mean_per_raster,
+       col = cmocean("amp")(100),
+       ext = plot_extents)
+  
+
+
+  # NOTES - 18 May 2025
+  #   - could also take the current 650-m resolution grid and slap a full grid over it, but with grid squares
+  #       extending out to depths <50 m. This could be useful if we care about lining things up with what we already
+  #       know "works" in the CMS. I think the part about lining up with NCRMP data matters less, because it's
+  #       always a mess trying to get PR & USVI grids to be happy with each other anyways. when producing the GAMs,
+  #       will just need to take *average* of outputted coral cover & tissue SA, rather than *sum*, within each
+  #       650 x 650 m grid square
+  #   - SO, I think the game plan is to ideally work with existing 650 m habitat grid, and find a way to *add* to it
+  #       without adding back squares which were previously deleted because of bad CMS exit codes
+  #   - ACTUALLY, thinking about this more I think we should just use the existing grid for CMS tests to confirm
+  #       CMS is "good", then move forward with making a new habitat grid that is completely independent of what was
+  #       done in the past. will need to nail down a routine to properly handle and whittle down the grid to remove
+  #       squares with bad CMS exit codes
+  #   - SO, all I need to do right now is 1.) move on with getting the CMS in order, and 2.) preparing a new, coarse
+  #       grid use once we know the CMS works at all
+
+
+
   ################################## Save objects/workspace ##################################
   
   # #updated way to handle saving of new objects

@@ -270,90 +270,193 @@ overall_min_sst = min(analysed_sst_data(:), [], 'omitnan');
 overall_std_sst = std(analysed_sst_data(:), 'omitnan');
 
 fprintf('\n=== Sea Surface Temperature Statistics (2017-2018) ===\n');
-fprintf('Overall mean SST: %.2f °C\n', overall_mean_sst);
-fprintf('Overall max SST: %.2f °C\n', overall_max_sst);
-fprintf('Overall min SST: %.2f °C\n', overall_min_sst);
-fprintf('Overall std SST: %.2f °C\n', overall_std_sst);
+fprintf('Sea Surface Temperature (SST):\n');
+fprintf('  Mean: %.2f °C, Max: %.2f °C, Min: %.2f °C\n', overall_mean_sst, overall_max_sst, overall_min_sst);
 
-%% Create R-friendly data structure for Species Distribution Modeling
-fprintf('\n=== Preparing spatial summary data for R export ===\n');
+%% Create Maps of SST Statistics
+fprintf('\n=== Creating Maps ===\n');
 
-% Create spatial grid summary (each row = one lat/lon location)
+%% Sea Surface Temperature Maps
+% Mean SST
+figure('Position', [100, 100, 600, 500]);
+imagesc(longitude, latitude, mean_sst');
+set(gca, 'YDir', 'normal');
+colorbar;
+colormap('jet');
+title('Mean Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+xlabel('Longitude (°W)', 'FontSize', 12);
+ylabel('Latitude (°N)', 'FontSize', 12);
+clim([min(mean_sst(:)) max(mean_sst(:))]);
+grid on;
+saveas(gcf, fullfile(outputPath, 'mean_sst_map.png'));
+
+% Max SST
+figure('Position', [200, 200, 600, 500]);
+imagesc(longitude, latitude, max_sst');
+set(gca, 'YDir', 'normal');
+colorbar;
+colormap('jet');
+title('Maximum Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+xlabel('Longitude (°W)', 'FontSize', 12);
+ylabel('Latitude (°N)', 'FontSize', 12);
+clim([min(max_sst(:)) max(max_sst(:))]);
+grid on;
+saveas(gcf, fullfile(outputPath, 'max_sst_map.png'));
+
+% Min SST
+figure('Position', [300, 300, 600, 500]);
+imagesc(longitude, latitude, min_sst');
+set(gca, 'YDir', 'normal');
+colorbar;
+colormap('jet');
+title('Minimum Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+xlabel('Longitude (°W)', 'FontSize', 12);
+ylabel('Latitude (°N)', 'FontSize', 12);
+clim([min(min_sst(:)) max(min_sst(:))]);
+grid on;
+saveas(gcf, fullfile(outputPath, 'min_sst_map.png'));
+
+% Std SST
+figure('Position', [400, 400, 600, 500]);
+imagesc(longitude, latitude, std_sst');
+set(gca, 'YDir', 'normal');
+colorbar;
+colormap('jet');
+title('Standard Deviation Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+xlabel('Longitude (°W)', 'FontSize', 12);
+ylabel('Latitude (°N)', 'FontSize', 12);
+clim([0 max(std_sst(:))]);
+grid on;
+saveas(gcf, fullfile(outputPath, 'std_sst_map.png'));
+
+fprintf('All SST summary maps saved to output directory\n');
+
+%% Export MUR SST Data for R Analysis
+%   Exports processed SST data in R-friendly formats
+%   Following the same format as SWAN wave data export
+
+fprintf('\n=== Exporting Data for R Analysis ===\n');
+
+%% 1. Export Summary Statistics as CSV (Long Format for Easy R Plotting)
+fprintf('Creating summary statistics CSV for R...\n');
+
+% Create coordinate grids
 [lon_grid, lat_grid] = meshgrid(longitude, latitude);
 
-% Flatten spatial coordinates
+% Flatten grids for long format
 lon_vec = lon_grid(:);
 lat_vec = lat_grid(:);
 
-% Flatten summary statistics (reorder to match meshgrid: lat x lon)
-mean_sst_vec = mean_sst(:);
-max_sst_vec = max_sst(:);
-min_sst_vec = min_sst(:);
-std_sst_vec = std_sst(:);
+% Flatten summary statistics (transpose first to match coordinate orientation)
+mean_sst_t = mean_sst';
+mean_sst_vec = mean_sst_t(:);
+max_sst_t = max_sst';
+max_sst_vec = max_sst_t(:);
+min_sst_t = min_sst';
+min_sst_vec = min_sst_t(:);
+std_sst_t = std_sst';
+std_sst_vec = std_sst_t(:);
 
-% Remove rows with NaN SST values (land/missing data)
-valid_idx = ~isnan(mean_sst_vec);
-lon_clean = lon_vec(valid_idx);
-lat_clean = lat_vec(valid_idx);
-mean_sst_clean = mean_sst_vec(valid_idx);
-max_sst_clean = max_sst_vec(valid_idx);
-min_sst_clean = min_sst_vec(valid_idx);
-std_sst_clean = std_sst_vec(valid_idx);
+% Create summary table
+summary_table = table(lon_vec, lat_vec, ...
+    mean_sst_vec, max_sst_vec, min_sst_vec, std_sst_vec, ...
+    'VariableNames', {'longitude', 'latitude', ...
+    'mean_sst', 'max_sst', 'min_sst', 'std_sst'});
 
-fprintf('Total grid points: %d\n', length(mean_sst_vec));
-fprintf('Valid ocean grid points: %d\n', length(mean_sst_clean));
-fprintf('Land/missing grid points removed: %d\n', sum(~valid_idx));
+% Export summary CSV
+writetable(summary_table, fullfile(outputPath, 'mur_sst_summary_for_R.csv'));
+fprintf('Summary statistics saved: mur_sst_summary_for_R.csv\n');
 
-% Create R-ready spatial summary table
-sst_summary_for_R = table(lon_clean, lat_clean, mean_sst_clean, max_sst_clean, min_sst_clean, std_sst_clean, ...
-    'VariableNames', {'longitude', 'latitude', 'mean_sst_celsius', 'max_sst_celsius', 'min_sst_celsius', 'std_sst_celsius'});
+%% 2. Export Coordinate Information
+fprintf('Creating coordinate reference files...\n');
 
-% Add temperature range
-sst_summary_for_R.temp_range_celsius = sst_summary_for_R.max_sst_celsius - sst_summary_for_R.min_sst_celsius;
+% Export coordinate vectors separately
+lon_table = table(longitude(:), 'VariableNames', {'longitude'});
+lat_table = table(latitude(:), 'VariableNames', {'latitude'});
+writetable(lon_table, fullfile(outputPath, 'mur_sst_longitude.csv'));
+writetable(lat_table, fullfile(outputPath, 'mur_sst_latitude.csv'));
 
-fprintf('R-ready spatial summary table created with %d rows and %d variables\n', height(sst_summary_for_R), width(sst_summary_for_R));
+% Also save grid dimensions for R raster creation
+grid_info = table({'longitude'; 'latitude'; 'nlon'; 'nlat'}, ...
+    {min(longitude); min(latitude); length(longitude); length(latitude)}, ...
+    {max(longitude); max(latitude); length(longitude); length(latitude)}, ...
+    'VariableNames', {'dimension', 'min_value', 'max_value'});
+writetable(grid_info, fullfile(outputPath, 'mur_sst_grid_info.csv'));
 
-%% Save R-friendly outputs
-fprintf('\n=== Saving R-friendly data files ===\n');
+fprintf('Coordinate files saved: mur_sst_longitude.csv, mur_sst_latitude.csv, mur_sst_grid_info.csv\n');
 
-% 1. Save spatial summary as CSV (main file for R)
-writetable(sst_summary_for_R, fullfile(outputPath, 'mur_sst_spatial_summary_2017_2018.csv'));
-fprintf('Saved: mur_sst_spatial_summary_2017_2018.csv\n');
+%% 3. Export Individual Summary Matrices (for direct raster creation in R)
+fprintf('Exporting individual summary matrices...\n');
 
-% 2. Save MATLAB workspace (for your own use)
-save('mur_sst_analysis_2017_2018.mat', ...
-     'analysed_sst_data', 'mean_sst', 'max_sst', 'min_sst', 'std_sst', ...
-     'latitude', 'longitude', 'times_data', 'sst_summary_for_R', '-v7.3');
-fprintf('Saved: mur_sst_analysis_2017_2018.mat\n');
+% Create a function to save matrices in R-readable format
+save_matrix_for_R = @(matrix, filename) ...
+    writematrix(matrix', fullfile(outputPath, [filename '.csv']));
 
-% 3. Save overall summary statistics
-summary_stats = table();
-summary_stats.statistic = {'overall_mean'; 'overall_max'; 'overall_min'; 'overall_std'; 'valid_grid_points'; 'total_days'};
-summary_stats.value = [overall_mean_sst; overall_max_sst; overall_min_sst; overall_std_sst; length(mean_sst_clean); length(times_data)];
-summary_stats.units = {'°C'; '°C'; '°C'; '°C'; 'count'; 'days'};
-writetable(summary_stats, fullfile(outputPath, 'mur_sst_overall_stats.csv'));
-fprintf('Saved: mur_sst_overall_stats.csv\n');
+% Export all summary statistics as individual matrices
+save_matrix_for_R(mean_sst, 'mean_sst_matrix');
+save_matrix_for_R(max_sst, 'max_sst_matrix');
+save_matrix_for_R(min_sst, 'min_sst_matrix');
+save_matrix_for_R(std_sst, 'std_sst_matrix');
 
-%% R Import Instructions
-fprintf('\n=== Instructions for R ===\n');
-fprintf('To import this data in R, use:\n');
-fprintf('library(readr)\n');
-fprintf('sst_summary <- read_csv("mur_sst_spatial_summary_2017_2018.csv")\n\n');
-fprintf('Data structure:\n');
-fprintf('- longitude, latitude: Decimal degrees (grid coordinates)\n');
-fprintf('- mean_sst_celsius: Mean SST 2017-2018 in °C\n');
-fprintf('- max_sst_celsius: Maximum SST 2017-2018 in °C\n');
-fprintf('- min_sst_celsius: Minimum SST 2017-2018 in °C\n');
-fprintf('- std_sst_celsius: Standard deviation of SST in °C\n');
-fprintf('- temp_range_celsius: Temperature range (max - min) in °C\n\n');
-fprintf('Perfect for species distribution modeling as environmental predictors!\n');
+fprintf('Individual matrices saved (4 files)\n');
 
-%% Data Quality Notes
-fprintf('\n=== Data Quality Notes ===\n');
-fprintf('- Data converted from Kelvin to Celsius\n');
-fprintf('- Fill values and land pixels excluded\n');
-fprintf('- Resolution: ~1km (0.01°)\n');
-fprintf('- Source: NASA JPL MUR SST v4.1 via NOAA CoastWatch ERDDAP\n');
-fprintf('- Time period: 2017-2018 (%d days total)\n', length(times_data));
-fprintf('- Spatial extent: %.1f°N to %.1f°N, %.1f°W to %.1f°W\n', lat_min, lat_max, abs(lon_max), abs(lon_min));
-fprintf('- Each row represents one ocean grid cell with 2-year SST statistics\n');
+%% 4. Export Time Series Data (Sample - first grid point)
+fprintf('Creating time series sample data...\n');
+
+% Convert MATLAB time to datetime
+time_datetime = datetime(times_data, 'ConvertFrom', 'datenum');
+
+% Extract time series for first valid grid point (avoid NaN locations)
+[valid_i, valid_j] = find(~isnan(mean_sst), 1, 'first');
+
+% Extract time series for this point
+sst_ts = squeeze(analysed_sst_data(valid_i, valid_j, :));
+
+% Create time series table
+ts_table = table(time_datetime, sst_ts, ...
+    'VariableNames', {'datetime', 'sst_celsius'});
+
+% Add location info as metadata
+sample_lon = longitude(valid_i);
+sample_lat = latitude(valid_j);
+
+writetable(ts_table, fullfile(outputPath, 'mur_sst_timeseries_sample.csv'));
+fprintf('Time series sample saved: mur_sst_timeseries_sample.csv\n');
+fprintf('Sample location: %.3f°W, %.3f°N\n', sample_lon, sample_lat);
+
+%% 5. Export Summary Report
+fprintf('Creating export summary...\n');
+
+export_summary = {
+    sprintf('MUR SST Data Export Summary - %s', datestr(now))
+    '=================================================='
+    ''
+    'Files Created:'
+    '1. mur_sst_summary_for_R.csv - All summary statistics in long format'
+    '2. mur_sst_longitude.csv, mur_sst_latitude.csv - Coordinate vectors'
+    '3. mur_sst_grid_info.csv - Grid dimension and extent information'
+    '4. Individual matrix files (4 total):'
+    '   - mean_sst_matrix.csv, max_sst_matrix.csv, etc.'
+    '5. mur_sst_timeseries_sample.csv - Time series data for one location'
+    ''
+    sprintf('Data Characteristics:')
+    sprintf('- Grid size: %d x %d', length(longitude), length(latitude))
+    sprintf('- Longitude range: %.3f to %.3f°W', min(longitude), max(longitude))
+    sprintf('- Latitude range: %.3f to %.3f°N', min(latitude), max(latitude))
+    sprintf('- Time period: 2017-2018')
+    sprintf('- Total time steps: %d', length(times_data))
+    sprintf('- Variable: Sea Surface Temperature (°C)')
+    ''
+    'Ready for R analysis using exported CSV files'
+};
+
+% Write summary
+fileID = fopen(fullfile(outputPath, 'sst_export_summary.txt'), 'w');
+for i = 1:length(export_summary)
+    fprintf(fileID, '%s\n', export_summary{i});
+end
+fclose(fileID);
+
+fprintf('\n=== Export Complete ===\n');
+fprintf('Total files created: %d\n', 9); % Updated count
+fprintf('All files saved to: %s\n', outputPath);
