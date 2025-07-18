@@ -9,11 +9,12 @@
   library(ggplot2)
   library(gridExtra)
   library(tidyverse)
+  library(gratia)
 
   source(here("src/functions.R"))
   
   ################################## setup ##################################
-
+  
   load(here("output", "all_combined_data.rda"))
   
   #load bathy_final
@@ -34,54 +35,7 @@
   #save information for exporting new objects later
   existing_objects <- ls(envir = .GlobalEnv)
 
-  ################################## create GAM prediction grid ##################################
-  
-  # NOTE - this is sparse right now compared to all available rasters, for computational
-  #         reasons. can return to this
-  # First, create your stack properly
-  env_stack <- c(bathy_final,
-                 aspect_terra,
-                 slope_terra,
-                 TPI_terra,
-                 VRM,
-                 planformcurv_multiscale,
-                 max_hsig_raster,
-                 mean_dir_raster,
-                 mean_hsig_raster,
-                 mean_sst_raster,
-                 range_sst_raster)
-  
-  # Check geometry - compareGeom works on individual rasters, not the stack
-  # Let's check that all layers match the first one (bathy_final)
-  terra::compareGeom(bathy_final, aspect_terra, stopOnError = FALSE)
-  terra::compareGeom(bathy_final, slope_terra, stopOnError = FALSE)
-  # etc... or loop through them:
-
-  for(i in 2:nlyr(env_stack)) {
-    cat("Checking layer", i, ":", names(env_stack)[i], "\n")
-    print(terra::compareGeom(env_stack[[1]], env_stack[[i]], stopOnError = FALSE))
-  }
-
-  # Alternative: just check basic properties
-  terra::res(env_stack)  # Should all be the same
-  terra::ext(env_stack)  # Should all be the same
-
-  # Create prediction grid
-  prediction_grid <- as.data.frame(env_stack, xy = TRUE)
-  
-  # # Remove rows with any NA values
-  # prediction_grid <- prediction_grid[complete.cases(prediction_grid), ]
-
-  # Check your grid
-  dim(prediction_grid)
-  head(prediction_grid)
-
-  # Better names for your variables
-  names(prediction_grid) <- c("x", "y", "depth", "aspect", "slope", "TPI",
-                              "VRM", "planform_curv", "max_Hsig", "mean_dir", "mean_Hsig", 
-                              "mean_SST", "range_SST")
-
-  ################################## test GAMs ##################################
+  ################################## simple site GAMs ##################################
   
   # Convert tibble to data.frame first
   species_df <- as.data.frame(combined_benthic_data_averaged_psu)
@@ -186,16 +140,14 @@
   cat("NA points:", sum(na_mask), "\n")
   cat("Percentage with NAs:", round(sum(na_mask)/nrow(spp_data)*100, 1), "%\n")
 
-
-  
   #TEST - taking out PR & NODICE entirely
   # also, filter to just 2017-2018; remove anything below 50 m depth
   # - wait actually not doing that right now because there technically isn't date info for
   #     the collated TCRMP data as-is!
   model_data_filtered <- spp_data %>%
-    filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+    # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
     # filter(year(date) >= 2017) %>%
-    filter(depth_bathy >= -50) %>%
+    # filter(depth_bathy >= -50) %>%
     filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
 
   cat("Remaining datasets:", paste(unique(model_data_filtered$dataset), collapse = ", "), "\n")
@@ -209,7 +161,6 @@
 
   model_data <- model_data_filtered[complete.cases(model_data_filtered[, c("depth_bathy", "slope", "cover")]), ]
 
-
   # Check the new cover distribution
   summary(model_data$cover)
   prop_zeros_new <- sum(model_data$cover == 0) / nrow(model_data)
@@ -218,17 +169,6 @@
   # Compare with original
   prop_zeros_orig <- sum(spp_data$cover == 0, na.rm = TRUE) / nrow(spp_data)
   cat("Original proportion of zeros:", round(prop_zeros_orig, 3), "\n")
-
-
-
-
-  # # Remove rows with NA environmental values
-  # model_data <- spp_data[complete.cases(spp_data[, c("bathymetry", "slope", "cover")]), ]
-
-
-
-
-
 
   # Option 1: Tweedie distribution (good for zero-inflated continuous data)
   gam_tweedie <- gam(cover ~ s(depth_bathy) + s(slope),
@@ -266,427 +206,12 @@
   summary(gam_beta)
   summary(gam_presence)
   summary(gam_abundance)
-
+  
   # Plot results
   par(mfrow = c(2, 2))
   plot(gam_tweedie, pages = 1, main = "Tweedie Model")
   plot(gam_presence, pages = 1, main = "Presence Model")
 
-  # ################################## plot relationships ##################################
-  # 
-  # # Plot both relationships on one page
-  # par(mfrow = c(1, 2))
-  # plot(gam_tweedie, select = 1, main = "Bathymetry effect on coral cover", 
-  #      xlab = "Bathymetry (m)", ylab = "Smooth term")
-  # plot(gam_tweedie, select = 2, main = "Slope effect on coral cover", 
-  #      xlab = "Slope", ylab = "Smooth term")
-  # 
-  # # Reset plotting parameters
-  # par(mfrow = c(1, 1))
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Create prediction data for plotting
-  # bathy_range <- seq(min(model_data$bathymetry, na.rm = TRUE), 
-  #                    max(model_data$bathymetry, na.rm = TRUE), 
-  #                    length.out = 100)
-  # slope_range <- seq(min(model_data$slope, na.rm = TRUE), 
-  #                    max(model_data$slope, na.rm = TRUE), 
-  #                    length.out = 100)
-  # 
-  # # Predictions for bathymetry (holding slope at median)
-  # pred_data_bathy <- data.frame(
-  #   bathymetry = bathy_range,
-  #   slope = median(model_data$slope, na.rm = TRUE)
-  # )
-  # 
-  # # Predictions for slope (holding bathymetry at median)
-  # pred_data_slope <- data.frame(
-  #   bathymetry = median(model_data$bathymetry, na.rm = TRUE),
-  #   slope = slope_range
-  # )
-  # 
-  # # Get predictions with standard errors
-  # pred_bathy <- predict(gam_tweedie, pred_data_bathy, se.fit = TRUE, type = "response")
-  # pred_slope <- predict(gam_tweedie, pred_data_slope, se.fit = TRUE, type = "response")
-  # 
-  # # Create plots
-  # par(mfrow = c(1, 2))
-  # 
-  # # Bathymetry plot
-  # plot(pred_data_bathy$bathymetry, pred_bathy$fit, type = "l", 
-  #      xlab = "Bathymetry (m)", ylab = "Predicted coral cover (%)",
-  #      main = "Coral cover vs Bathymetry", lwd = 2, col = "blue")
-  # lines(pred_data_bathy$bathymetry, pred_bathy$fit + 1.96*pred_bathy$se.fit, lty = 2, col = "blue")
-  # lines(pred_data_bathy$bathymetry, pred_bathy$fit - 1.96*pred_bathy$se.fit, lty = 2, col = "blue")
-  # 
-  # # Add raw data points
-  # points(model_data$bathymetry, model_data$cover, pch = 16, cex = 0.3, col = "gray60")
-  # 
-  # # Slope plot
-  # plot(pred_data_slope$slope, pred_slope$fit, type = "l", 
-  #      xlab = "Slope", ylab = "Predicted coral cover (%)",
-  #      main = "Coral cover vs Slope", lwd = 2, col = "red")
-  # lines(pred_data_slope$slope, pred_slope$fit + 1.96*pred_slope$se.fit, lty = 2, col = "red")
-  # lines(pred_data_slope$slope, pred_slope$fit - 1.96*pred_slope$se.fit, lty = 2, col = "red")
-  # 
-  # # Add raw data points
-  # points(model_data$slope, model_data$cover, pch = 16, cex = 0.3, col = "gray60")
-  # 
-  # par(mfrow = c(1, 1))
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Create prediction dataframes as above, then:
-  # pred_bathy_df <- data.frame(
-  #   bathymetry = pred_data_bathy$bathymetry,
-  #   fitted = pred_bathy$fit,
-  #   lower = pred_bathy$fit - 1.96*pred_bathy$se.fit,
-  #   upper = pred_bathy$fit + 1.96*pred_bathy$se.fit
-  # )
-  # 
-  # pred_slope_df <- data.frame(
-  #   slope = pred_data_slope$slope,
-  #   fitted = pred_slope$fit,
-  #   lower = pred_slope$fit - 1.96*pred_slope$se.fit,
-  #   upper = pred_slope$fit + 1.96*pred_slope$se.fit
-  # )
-  # 
-  # # Bathymetry plot
-  # p1 <- ggplot(pred_bathy_df, aes(x = bathymetry)) +
-  #   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") +
-  #   geom_line(aes(y = fitted), color = "blue", size = 1) +
-  #   geom_point(data = model_data, aes(x = bathymetry, y = cover), 
-  #              alpha = 0.3, size = 0.5) +
-  #   labs(x = "Bathymetry (m)", y = "Predicted coral cover (%)", 
-  #        title = "Coral cover vs Bathymetry") +
-  #   theme_minimal()
-  # 
-  # # Slope plot
-  # p2 <- ggplot(pred_slope_df, aes(x = slope)) +
-  #   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "red") +
-  #   geom_line(aes(y = fitted), color = "red", size = 1) +
-  #   geom_point(data = model_data, aes(x = slope, y = cover), 
-  #              alpha = 0.3, size = 0.5) +
-  #   labs(x = "Slope", y = "Predicted coral cover (%)", 
-  #        title = "Coral cover vs Slope") +
-  #   theme_minimal()
-  # 
-  # # Display both plots
-  # grid.arrange(p1, p2, ncol = 2)  
-  # 
-  # 
-  # 
-  # 
-  # 
-  # ################################## troubleshoot ##################################
-  # 
-  # # Basic data exploration
-  # table(model_data$cover == 0)  # How many exact zeros?
-  # summary(model_data$cover)
-  # length(unique(model_data$cover))  # How many unique values?
-  # 
-  # # Check if you have spatial/temporal clustering
-  # plot(model_data$lon, model_data$lat, col = ifelse(model_data$cover > 0, "red", "black"), 
-  #      pch = 16, cex = 0.5, main = "Spatial distribution of cover data")
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Check if bathymetry values make ecological sense
-  # summary(model_data$bathymetry)
-  # hist(model_data$bathymetry, breaks = 30, main = "Bathymetry distribution")
-  # 
-  # # Are the depths reasonable for coral? (usually 0-40m)
-  # range(model_data$bathymetry, na.rm = TRUE)
-  # 
-  # # Check slope values
-  # summary(model_data$slope)
-  # hist(model_data$slope, breaks = 30, main = "Slope distribution")
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Simple correlations - should show the expected patterns
-  # cor(model_data$cover, model_data$bathymetry, use = "complete.obs")
-  # cor(model_data$cover, model_data$slope, use = "complete.obs")
-  # 
-  # # Scatterplots with trend lines
-  # plot(model_data$bathymetry, model_data$cover, main = "Raw data: Cover vs Depth")
-  # abline(lm(cover ~ bathymetry, data = model_data), col = "red")
-  # 
-  # plot(model_data$slope, model_data$cover, main = "Raw data: Cover vs Slope")
-  # abline(lm(cover ~ slope, data = model_data), col = "red")  
-  # 
-  # 
-  # 
-  # ################################## try more variables ##################################
-  # 
-  # # Extract all the complexity variables at species locations
-  # env_complex <- c(bathy_final, aspect_terra, slope_terra, TPI_terra, roughness, VRM,
-  #                  maxcurv_multiscale, meancurv_multiscale, 
-  #                  planformcurv_multiscale, profilecurv_multiscale)
-  # 
-  # names(env_complex) <- c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
-  #                         "max_curv", "mean_curv", "planform_curv", "profile_curv")
-  # 
-  # # Extract all environmental values at species locations
-  # species_env_complex <- terra::extract(env_complex, 
-  #                                       cbind(model_data_filtered$x_utm, 
-  #                                             model_data_filtered$y_utm))
-  # 
-  # # Add all variables to your filtered dataset
-  # model_data_filtered$bathymetry <- species_env_complex$bathymetry
-  # model_data_filtered$aspect <- species_env_complex$aspect
-  # model_data_filtered$slope <- species_env_complex$slope
-  # model_data_filtered$TPI <- species_env_complex$TPI
-  # model_data_filtered$roughness <- species_env_complex$roughness
-  # model_data_filtered$VRM <- species_env_complex$VRM
-  # model_data_filtered$max_curv <- species_env_complex$max_curv
-  # model_data_filtered$mean_curv <- species_env_complex$mean_curv
-  # model_data_filtered$planform_curv <- species_env_complex$planform_curv
-  # model_data_filtered$profile_curv <- species_env_complex$profile_curv
-  # 
-  # # Create complete cases dataset with all variables
-  # complexity_vars <- c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM", 
-  #                      "max_curv", "mean_curv", "planform_curv", "profile_curv", "cover")
-  # 
-  # model_data_complex <- model_data_filtered[complete.cases(model_data_filtered[, complexity_vars]), ]
-  # 
-  # # Check how much data you have left
-  # cat("Observations with all complexity variables:", nrow(model_data_complex), "\n")
-  # 
-  # # Fit expanded GAM models
-  # # gam_complex <- gam(cover ~ s(bathymetry) + s(aspect, bs = 'cc') + s(slope) + s(TPI) + s(roughness) + s(VRM) +
-  # #                      s(max_curv, k = 15) + s(mean_curv) + s(planform_curv) + s(profile_curv),
-  # #                    data = model_data_complex,
-  # #                    family = tw())
-  # gam_complex <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv), 
-  #                    data = model_data_complex, 
-  #                    family = tw())
-  # 
-  # 
-  # # Check the results
-  # summary(gam_complex)
-  # gam.check(gam_complex)
-  # 
-  # # Plot the relationships
-  # plot(gam_complex, pages = 2)  # Will create multiple pages
-  # 
-  # # Compare model performance
-  # cat("Simple model AIC:", AIC(gam_tweedie), "\n")
-  # cat("Complex model AIC:", AIC(gam_complex), "\n")
-  # 
-  # # Check correlations between variables first
-  # # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM", 
-  # #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
-  # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "TPI", "VRM", 
-  #                                             "max_curv", "planform_curv", "profile_curv")]
-  # cor_matrix <- cor(complexity_matrix, use = "complete.obs")
-  # print(round(cor_matrix, 2))
-  # 
-  # # # If you want to see which variables are most important:
-  # # # Stepwise selection
-  # # gam_step <- step.Gam(gam_complex, scope = list("s(bathymetry)" = 1, "s(slope)" = 1, 
-  # #                                                "s(TPI)" = 1, "s(roughness)" = 1, "s(VRM)" = 1,
-  # #                                                "s(max_curv)" = 1, "s(mean_curv)" = 1, 
-  # #                                                "s(planform_curv)" = 1, "s(profile_curv)" = 1))
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Two-part model with complexity
-  # model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
-  # 
-  # # gam_presence_complex <- gam(present ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM), 
-  # #                             data = model_data_complex,
-  # #                             family = binomial())
-  # gam_presence_complex <- gam(present ~ s(bathymetry) + TPI + s(planform_curv), 
-  #                             data = model_data_complex,
-  #                             family = binomial())
-  # 
-  # # gam_abundance_complex <- gam(cover ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM), 
-  # #                              data = model_data_complex[model_data_complex$cover > 0, ],
-  # #                              family = Gamma(link = "log"))
-  # gam_abundance_complex <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv),
-  #                              data = model_data_complex[model_data_complex$cover > 0, ],
-  #                              family = Gamma(link = "log"))
-  # 
-  # summary(gam_presence_complex)
-  # summary(gam_abundance_complex)  
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Create a reduced model with less correlated variables
-  # # Keep: bathymetry (depth), TPI (topographic position), VRM (rugosity)
-  # # These capture the main dimensions: depth, local position, and complexity
-  # 
-  # gam_reduced <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv), 
-  #                    data = model_data_complex, 
-  #                    family = tw())
-  # 
-  # summary(gam_reduced)
-  # 
-  # # Compare AIC
-  # cat("Full complex model AIC:", AIC(gam_complex), "\n")
-  # cat("Reduced model AIC:", AIC(gam_reduced), "\n")
-  # 
-  # # Plot the reduced model
-  # plot(gam_reduced, pages = 1)
-  # 
-  # 
-  # 
-  # 
-  # # Add spatial smooth to account for unmeasured spatial factors
-  # gam_spatial <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv) + s(lon, lat), 
-  #                    data = model_data_complex, 
-  #                    family = tw())
-  # 
-  # summary(gam_spatial)
-  # 
-  # 
-  # # Maybe relationships vary by depth zone?
-  # gam_interaction <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv) + 
-  #                          s(TPI, by = bathymetry) + s(VRM, by = bathymetry), 
-  #                        data = model_data_complex, 
-  #                        family = tw())
-  # summary(gam_interaction)
-  # 
-  # 
-  # 
-  ################################## try just orbicellids ##################################
-  
-  
-  
-  # TESTING
-  
-  # Convert tibble to data.frame first
-  species_df <- as.data.frame(combined_benthic_data_averaged)
-
-  # Now create SpatVector
-  species_coords <- vect(species_df,
-                         geom = c("lon", "lat"),
-                         crs = "EPSG:4326")  # WGS84 geographic
-
-  # Transform to match your raster CRS
-  species_coords_utm <- project(species_coords, crs(bathy_final))
-
-  # Extract transformed coordinates
-  utm_coords <- as.data.frame(geom(species_coords_utm)[, c("x", "y")])
-  combined_benthic_data_averaged$x_utm <- utm_coords$x
-  combined_benthic_data_averaged$y_utm <- utm_coords$y
-
-  # Create simple environmental stack
-  env_simple <- c(bathy_final, slope_terra)
-  names(env_simple) <- c("depth_bathy", "slope")
-
-  # Extract environmental values at species locations
-  species_env_values <- terra::extract(env_simple,
-                                       cbind(combined_benthic_data_averaged$x_utm,
-                                             combined_benthic_data_averaged$y_utm))
-
-  # Add to dataframe
-  combined_benthic_data_averaged$depth_bathy <- species_env_values$depth_bathy
-  combined_benthic_data_averaged$slope <- species_env_values$slope
-
-  # Add Y/N columns for bathymetry and slope presence
-  combined_benthic_data_averaged$bathymetry_present <- ifelse(is.na(combined_benthic_data_averaged$depth_bathy), "N", "Y")
-  combined_benthic_data_averaged$slope_present <- ifelse(is.na(combined_benthic_data_averaged$slope), "N", "Y")
-
-  # Check how many NAs you have
-  # NOTE - this is actually kind of a lot.
-  sum(is.na(combined_benthic_data_averaged$depth_bathy))
-  sum(is.na(combined_benthic_data_averaged$slope))
-  
-  orbicellids <- combined_benthic_data_averaged %>%
-    # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
-    filter(year(date) >= 2017) %>%
-    # filter(!(dataset == "NCRMP_benthic" & year(date) < 2017)) %>%  # Only remove NCRMP_benthic data before 2017
-    # filter(depth_bathy >= -50) %>%
-    # filter(!grepl("_PR", PSU)) %>%  # Remove any PSU containing '_PR' %>%
-    filter(grepl("Orbicella", spp))
-  
-  cat("Remaining datasets:", paste(unique(orbicellids$dataset), collapse = ", "), "\n")
-
-  psu_with_pr <- orbicellids$PSU[grepl("_PR", orbicellids$PSU)]
-  if(length(psu_with_pr) > 0) {
-    cat("PSUs with '_PR' still remaining:", paste(unique(psu_with_pr), collapse = ", "), "\n")
-  } else {
-    cat("No PSUs with '_PR' remaining\n")
-  }
-
-  model_data <- orbicellids[complete.cases(orbicellids[, c("depth_bathy", "slope", "cover")]), ]
-
-  # Check the new cover distribution
-  summary(model_data$cover)
-  prop_zeros_new <- sum(model_data$cover == 0) / nrow(model_data)
-  cat("New proportion of zeros:", round(prop_zeros_new, 3), "\n")
-
-  # Compare with original
-  prop_zeros_orig <- sum(spp_data$cover == 0, na.rm = TRUE) / nrow(spp_data)
-  cat("Original proportion of zeros:", round(prop_zeros_orig, 3), "\n")
-
-  # Option 1: Tweedie distribution (good for zero-inflated continuous data)
-  gam_tweedie <- gam(cover ~ s(depth_bathy) + s(slope),
-                     data = model_data,
-                     family = tw())
-
-  # Option 2: If cover is bounded (0-100%), use beta regression with zeros
-  # First, transform cover to (0,1) range if it's percentage
-  if(max(model_data$cover, na.rm = TRUE) > 1) {
-    model_data$cover_prop <- model_data$cover / 100
-  } else {
-    model_data$cover_prop <- model_data$cover
-  }
-  
-  # Beta regression (handles zeros with adjustment)
-  gam_beta <- gam(cover_prop ~ s(depth_bathy) + s(slope),
-                  data = model_data[model_data$cover_prop > 0, ],  # exclude zeros
-                  family = betar())
-
-  # Option 3: Two-part model (hurdle model)
-  # Part 1: Presence/absence
-  model_data$present <- ifelse(model_data$cover > 0, 1, 0)
-  gam_presence <- gam(present ~ s(depth_bathy) + s(slope),
-                      data = model_data,
-                      family = binomial())
-
-  # Part 2: Abundance given presence
-  gam_abundance <- gam(cover ~ s(depth_bathy) + s(slope),
-                       data = model_data[model_data$cover > 0, ],
-                       family = Gamma(link = "log"))
-
-  # Check model summaries
-  summary(gam_tweedie)
-  summary(gam_beta)
-  summary(gam_presence)
-  summary(gam_abundance)
-
-  # Plot results
-  par(mfrow = c(2, 2))
-  plot(gam_tweedie, pages = 1, main = "Tweedie Model")
-  plot(gam_presence, pages = 1, main = "Presence Model")
 
   # Plot both relationships on one page
   par(mfrow = c(1, 2))
@@ -784,26 +309,174 @@
 
   # Display both plots
   grid.arrange(p1, p2, ncol = 2)
-  
-  # TESTING
-  
-  
-  
+
+
+  ################################## complex site GAMs ##################################
   
   # Extract all the complexity variables at species locations
-  env_complex <- c(bathy_final, aspect_terra, slope_terra, TPI_terra, VRM,
+  env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
+                   planformcurv_multiscale, SAPA, max_hsig_raster, mean_dir_raster,
+                   mean_hsig_raster, mean_sst_raster, range_sst_raster)
+  
+  names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+                          "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+                          "range_SST")
+  
+  model_data_filtered <- spp_data %>%
+    filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+    filter(year(date) >= 2017) %>%
+    filter(depth_bathy >= -50) %>%
+    filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
+  
+  # Extract all environmental values at species locations
+  species_env_complex <- terra::extract(env_complex,
+                                        cbind(model_data_filtered$x_utm,
+                                              model_data_filtered$y_utm))
+  
+  # Add all variables to your filtered dataset
+  model_data_filtered$depth_bathy <- species_env_complex$depth
+  model_data_filtered$aspect <- species_env_complex$aspect
+  model_data_filtered$slope <- species_env_complex$slope
+  model_data_filtered$complexity <- species_env_complex$complexity
+  model_data_filtered$TPI <- species_env_complex$TPI
+  model_data_filtered$VRM <- species_env_complex$VRM
+  model_data_filtered$planform_curv <- species_env_complex$planform_curv
+  model_data_filtered$SAPA <- species_env_complex$SAPA
+  model_data_filtered$max_Hsig <- species_env_complex$max_Hsig
+  model_data_filtered$mean_dir <- species_env_complex$mean_dir
+  model_data_filtered$mean_Hsig <- species_env_complex$mean_Hsig
+  model_data_filtered$mean_SST <- species_env_complex$mean_SST
+  model_data_filtered$range_SST <- species_env_complex$range_SST
+  
+  # Create complete cases dataset with all variables
+  complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+                       "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+                       "range_SST", "cover")
+
+  model_data_complex <- model_data_filtered[complete.cases(model_data_filtered[, complexity_vars]), ]
+
+  # Check how much data you have left
+  cat("Observations with all complexity variables:", nrow(model_data_complex), "\n")
+  
+  # Fit expanded GAM models
+  # gam_complex <- gam(cover ~ s(bathymetry) + s(aspect, bs = 'cc') + s(slope) + s(TPI) + s(roughness) + s(VRM) +
+  #                      s(max_curv, k = 15) + s(mean_curv) + s(planform_curv) + s(profile_curv),
+  #                    data = model_data_complex,
+  #                    family = tw())
+  # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
+  #                    data = model_data_complex,
+  #                    family = tw())
+  gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
+                      s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                       s(mean_Hsig),
+                     data = model_data_complex,
+                     family = tw())
+  
+  # Check the results
+  summary(gam_complex)
+  gam.check(gam_complex)
+  draw(gam_complex)
+
+  # Plot the relationships
+  plot(gam_complex, pages = 2)  # Will create multiple pages
+
+  # Compare model performance
+  cat("Simple model AIC:", AIC(gam_tweedie), "\n")
+  cat("Complex model AIC:", AIC(gam_complex), "\n")
+
+  # Check correlations between variables first
+  # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
+  #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
+  complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "planform_curv",
+                                              "range_SST", "mean_SST", "mean_dir", "max_Hsig",
+                                              "mean_Hsig")]
+  cor_matrix <- cor(complexity_matrix, use = "complete.obs")
+  print(round(cor_matrix, 2))
+  
+  # Two-part model with complexity
+  model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
+
+  # gam_presence_complex <- gam(present ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM),
+  #                             data = model_data_complex,
+  #                             family = binomial())
+  gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
+                                s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                                s(mean_Hsig),
+                              data = model_data_complex,
+                              family = binomial())
+  
+  # gam_abundance_complex <- gam(cover ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM),
+  #                              data = model_data_complex[model_data_complex$cover > 0, ],
+  #                              family = Gamma(link = "log"))
+  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
+                                 s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                                 s(mean_Hsig),
+                               data = model_data_complex[model_data_complex$cover > 0, ],
+                               family = Gamma(link = "log"))
+  
+  summary(gam_presence_complex)
+  summary(gam_abundance_complex)
+
+  # Create a reduced model with less correlated variables
+  # Keep: bathymetry (depth), TPI (topographic position), VRM (rugosity)
+  # These capture the main dimensions: depth, local position, and complexity
+
+  gam_reduced <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
+                     data = model_data_complex,
+                     family = tw())
+
+  summary(gam_reduced)
+
+    # Plot the reduced model
+  plot(gam_reduced, pages = 1)
+
+  ################################## orbicellid GAMs ##################################
+
+  # Convert tibble to data.frame first
+  species_df <- as.data.frame(combined_benthic_data_averaged)
+  
+  spp_data = combined_benthic_data_averaged
+  
+  # Now create SpatVector
+  species_coords <- vect(species_df,
+                         geom = c("lon", "lat"),
+                         crs = "EPSG:4326")  # WGS84 geographic
+  
+  # Transform to match your raster CRS
+  species_coords_utm <- project(species_coords, crs(bathy_final))
+  
+  # Extract transformed coordinates
+  utm_coords <- as.data.frame(geom(species_coords_utm)[, c("x", "y")])
+  spp_data$x_utm <- utm_coords$x
+  spp_data$y_utm <- utm_coords$y
+  
+  # Extract all the complexity variables at species locations
+  env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
                    planformcurv_multiscale, max_hsig_raster, mean_dir_raster,
                    mean_hsig_raster, mean_sst_raster, range_sst_raster)
   
-  names(env_complex) <- c("depth", "aspect", "slope", "TPI", "VRM", "planform_curv",
+  names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                           "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
                           "range_SST")
   
-  orbicellids <- combined_benthic_data_averaged %>%
-    # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+  # Create simple environmental stack
+  env_simple <- c(bathy_final, slope_terra)
+  names(env_simple) <- c("depth_bathy", "slope")
+  
+  # Extract environmental values at species locations
+  species_env_values <- terra::extract(env_simple,
+                                       cbind(spp_data$x_utm,
+                                             spp_data$y_utm))
+  
+  # Add to dataframe
+  spp_data$depth_bathy <- species_env_values$depth_bathy
+  spp_data$slope <- species_env_values$slope
+  
+  orbicellids <- spp_data %>%
+    filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
     filter(year(date) >= 2017) %>%
-    # filter(bathymetry >= -50) %>%
-    # filter(!grepl("_PR", PSU)) %>%  # Remove any PSU containing '_PR' %>%
+    filter(depth_bathy >= -50) %>%
+    filter(!grepl("_PR", PSU)) %>%  # Remove any PSU containing '_PR' %>%
     filter(grepl("Orbicella", spp))
   
   # Extract all environmental values at species locations
@@ -815,6 +488,7 @@
   orbicellids$depth_bathy <- species_env_complex$depth
   orbicellids$aspect <- species_env_complex$aspect
   orbicellids$slope <- species_env_complex$slope
+  orbicellids$complexity <- species_env_complex$complexity
   orbicellids$TPI <- species_env_complex$TPI
   orbicellids$VRM <- species_env_complex$VRM
   orbicellids$planform_curv <- species_env_complex$planform_curv
@@ -825,7 +499,7 @@
   orbicellids$range_SST <- species_env_complex$range_SST
   
   # Create complete cases dataset with all variables
-  complexity_vars <- c("depth_bathy", "aspect", "slope", "TPI", "VRM", "planform_curv",
+  complexity_vars <- c("depth_bathy", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                        "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST", "range_SST",
                        "cover")
   
@@ -842,14 +516,13 @@
   # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
   #                    data = model_data_complex,
   #                    family = tw())
-  gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv) +
-                       s(range_SST) + s(mean_SST) + s(mean_dir),
+  gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                       s(max_Hsig) + s(mean_Hsig),
                      data = model_data_complex,
                      family = tw())
   
-  # STOPPING POINT - 17 July 2025
-  #   - need to seriously clean up this script!
-  #   - and also, bring in SAPA (rugosity - though check why it seems funky)
+  # STOPPING POINT - 18 July 2025
   #   - continue to consider waves and SST, especially the landmasking for waves
   
   # Check the results
@@ -858,34 +531,40 @@
   
   # Plot the relationships
   plot(gam_complex, pages = 2)  # Will create multiple pages
-
+  draw(gam_complex)
+  
   # Compare model performance
   cat("Simple model AIC:", AIC(gam_tweedie), "\n")
   cat("Complex model AIC:", AIC(gam_complex), "\n")
-
+  
   # Check correlations between variables first
   # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
   #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
-  complexity_matrix <- model_data_complex[, c("depth_bathy", "aspect", "TPI", "VRM",
-                                              "planform_curv")]
+  complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "complexity",
+                                              "planform_curv", "range_SST", "mean_SST",
+                                              "mean_dir", "max_Hsig", "mean_Hsig")]
   cor_matrix <- cor(complexity_matrix, use = "complete.obs")
   print(round(cor_matrix, 2))
-
+  
   # Two-part model with complexity
   model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
   
-  gam_presence_complex <- gam(present ~ s(bathymetry) + TPI + s(planform_curv),
+  gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                                s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                                s(max_Hsig) + s(mean_Hsig),
                               data = model_data_complex,
                               family = binomial())
   
-  gam_abundance_complex <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv),
+  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                                 s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                                 s(max_Hsig) + s(mean_Hsig),
                                data = model_data_complex[model_data_complex$cover > 0, ],
                                family = Gamma(link = "log"))
   
   summary(gam_presence_complex)
   summary(gam_abundance_complex)
   
-  gam_reduced <- gam(cover ~ s(bathymetry) + s(slope) + TPI + s(planform_curv),
+  gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + TPI + s(planform_curv),
                      data = model_data_complex,
                      family = tw())
   
@@ -894,18 +573,283 @@
   # Plot the reduced model
   plot(gam_reduced, pages = 1)
   
-  # Maybe relationships vary by depth zone?
-  gam_interaction <- gam(cover ~ s(bathymetry) + TPI + s(planform_curv) +
-                           s(TPI, by = bathymetry) + s(VRM, by = bathymetry),
-                         data = model_data_complex,
-                         family = tw())
-  summary(gam_interaction)
-  plot(gam_interaction)
+  ################################## spp GAMs ##################################
+  
+  # Define species list (starting with your priority species)
+  species_list <- c("Agaricia", "Montastraea", "Pseudodiploria", "Porites",
+                    "Orbicella")
+  
+  # # Get all unique species from the dataset and add remaining ones
+  # all_species <- unique(spp_data$spp)
+  # remaining_species <- all_species[!grepl(paste(c("Orbicella", species_list), collapse = "|"), all_species)]
+  # species_list <- c(species_list, remaining_species)
+  
+  # Initialize results storage
+  gam_results <- list()
+  
+  # Loop through each species
+  for(sp in species_list) {
+    cat("\n==================== Processing", sp, "====================\n")
+    
+    # Filter data for current species
+    species_data <- spp_data %>%
+      # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%
+      # filter(year(date) >= 2017) %>%
+      # filter(depth_bathy >= -50) %>%
+      # filter(!grepl("_PR", PSU)) %>%
+      filter(grepl(sp, spp))
+    
+    # Check if we have enough data
+    if(nrow(species_data) < 10) {
+      cat("Insufficient data for", sp, "- only", nrow(species_data), "observations\n")
+      next
+    }
+    
+    # Extract environmental values
+    species_env_complex <- terra::extract(env_complex, cbind(species_data$x_utm, species_data$y_utm))
+    
+    # Add environmental variables
+    species_data$depth_bathy <- species_env_complex$depth
+    species_data$aspect <- species_env_complex$aspect
+    species_data$slope <- species_env_complex$slope
+    species_data$complexity <- species_env_complex$complexity
+    species_data$TPI <- species_env_complex$TPI
+    species_data$VRM <- species_env_complex$VRM
+    species_data$planform_curv <- species_env_complex$planform_curv
+    species_data$max_Hsig <- species_env_complex$max_Hsig
+    species_data$mean_dir <- species_env_complex$mean_dir
+    species_data$mean_Hsig <- species_env_complex$mean_Hsig
+    species_data$mean_SST <- species_env_complex$mean_SST
+    species_data$range_SST <- species_env_complex$range_SST
+    
+    # Create complete cases dataset
+    model_data_complete <- species_data[complete.cases(species_data[, complexity_vars]), ]
+    
+    cat("Complete observations:", nrow(model_data_complete), "\n")
+    
+    if(nrow(model_data_complete) < 10) {
+      cat("Insufficient complete data for", sp, "\n")
+      next
+    }
+    
+    # Fit complex GAM
+    tryCatch({
+      gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                           s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                           s(max_Hsig) + s(mean_Hsig),
+                         data = model_data_complete, family = tw())
+      
+      cat("Complex GAM AIC:", AIC(gam_complex), "\n")
+      
+      # Fit reduced GAM
+      gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + TPI + s(planform_curv),
+                         data = model_data_complete, family = tw())
+      
+      cat("Reduced GAM AIC:", AIC(gam_reduced), "\n")
+      
+      # Two-part models
+      model_data_complete$present <- ifelse(model_data_complete$cover > 0, 1, 0)
+      
+      gam_presence <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                            s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                            s(max_Hsig) + s(mean_Hsig),
+                          data = model_data_complete, family = binomial())
+      
+      gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+                             s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) + #, bs = 'cc'
+                             s(max_Hsig) + s(mean_Hsig),
+                           data = model_data_complete[model_data_complete$cover > 0, ],
+                           family = Gamma(link = "log"))
+      
+      # Store results
+      gam_results[[sp]] <- list(
+        data = model_data_complete,
+        complex = gam_complex,
+        reduced = gam_reduced,
+        presence = gam_presence,
+        abundance = gam_abundance,
+        n_obs = nrow(model_data_complete),
+        n_presence = sum(model_data_complete$cover > 0)
+      )
+      
+      # Print summaries for priority species
+      if(sp %in% c("Agaricia", "Montastraea", "Pseudodiploria", "Porites")) {
+        cat("\n--- Summary for", sp, "---\n")
+        print(summary(gam_reduced))
+        cat("\n--- Plotting", sp, "---\n")
+        plot(gam_reduced, pages = 1, main = paste(sp, "GAM"))
+      }
+      
+    }, error = function(e) {
+      cat("Error fitting GAM for", sp, ":", e$message, "\n")
+    })
+  }
+  
+  # Print overall results summary
+  cat("\n==================== SUMMARY ====================\n")
+  for(sp in names(gam_results)) {
+    result <- gam_results[[sp]]
+    cat(sp, "- N obs:", result$n_obs, "- N presence:", result$n_presence, 
+        "- Complex AIC:", round(AIC(result$complex), 1), 
+        "- Reduced AIC:", round(AIC(result$reduced), 1), "\n")
+  }
+  
+  
+  
+  
+  # AGARICIA
+  summary(gam_results[["Agaricia"]]$complex)
+  gam.check(gam_results[["Agaricia"]]$complex)
+  plot(gam_results[["Agaricia"]]$complex, pages = 2)
+  draw(gam_results[["Agaricia"]]$complex)
+  
+  # Complex model
+  summary(gam_results[["Agaricia"]]$complex)
+  plot(gam_results[["Agaricia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Agaricia"]]$reduced)
+  plot(gam_results[["Agaricia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Agaricia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Agaricia"]]$abundance)
+  
+  
+  
+  
+  # MONTASTRAEA
+  summary(gam_results[["Montastraea"]]$complex)
+  gam.check(gam_results[["Montastraea"]]$complex)
+  plot(gam_results[["Montastraea"]]$complex, pages = 2)
+  draw(gam_results[["Montastraea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Montastraea"]]$complex)
+  plot(gam_results[["Montastraea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Montastraea"]]$reduced)
+  plot(gam_results[["Montastraea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Montastraea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Montastraea"]]$abundance)
+  
+  
+  
+  
+  # PSEUDODIPLORIA
+  summary(gam_results[["Pseudodiploria"]]$complex)
+  gam.check(gam_results[["Pseudodiploria"]]$complex)
+  plot(gam_results[["Pseudodiploria"]]$complex, pages = 2)
+  draw(gam_results[["Pseudodiploria"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Pseudodiploria"]]$complex)
+  plot(gam_results[["Pseudodiploria"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Pseudodiploria"]]$reduced)
+  plot(gam_results[["Pseudodiploria"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Pseudodiploria"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Pseudodiploria"]]$abundance)
+  
+  
+  
+  # PORITES
+  summary(gam_results[["Porites"]]$complex)
+  gam.check(gam_results[["Porites"]]$complex)
+  plot(gam_results[["Porites"]]$complex, pages = 2)
+  draw(gam_results[["Porites"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Porites"]]$complex)
+  plot(gam_results[["Porites"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Porites"]]$reduced)
+  plot(gam_results[["Porites"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Porites"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Porites"]]$abundance)
+  
+  
+  # ORBICELLA
+  summary(gam_results[["Orbicella"]]$complex)
+  gam.check(gam_results[["Orbicella"]]$complex)
+  plot(gam_results[["Orbicella"]]$complex, pages = 2)
+  draw(gam_results[["Orbicella"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Orbicella"]]$complex)
+  plot(gam_results[["Orbicella"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Orbicella"]]$reduced)
+  plot(gam_results[["Orbicella"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Orbicella"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Orbicella"]]$abundance)
+  
   
   # ################################## make predictions ##################################
   # 
+  # # NOTE - this is sparse right now compared to all available rasters, for computational
+  # #         reasons. can return to this
+  # # First, create your stack properly
+  # env_stack <- env_complex
+  # 
+  # # Check geometry - compareGeom works on individual rasters, not the stack
+  # # Let's check that all layers match the first one (bathy_final)
+  # terra::compareGeom(bathy_final, aspect_terra, stopOnError = FALSE)
+  # terra::compareGeom(bathy_final, slope_terra, stopOnError = FALSE)
+  # # etc... or loop through them:
+  # 
+  # for(i in 2:nlyr(env_stack)) {
+  #   cat("Checking layer", i, ":", names(env_stack)[i], "\n")
+  #   print(terra::compareGeom(env_stack[[1]], env_stack[[i]], stopOnError = FALSE))
+  # }
+  # 
+  # # Alternative: just check basic properties
+  # terra::res(env_stack)  # Should all be the same
+  # terra::ext(env_stack)  # Should all be the same
+  # 
+  # # Create prediction grid
+  # prediction_grid <- as.data.frame(env_stack, xy = TRUE)
+  # 
+  # # # Remove rows with any NA values
+  # # prediction_grid <- prediction_grid[complete.cases(prediction_grid), ]
+  # 
+  # # Check your grid
+  # dim(prediction_grid)
+  # head(prediction_grid)
+  # 
+  # # Better names for your variables
+  # names(prediction_grid) <- c("x", "y", "depth", "aspect", "slope", "complexity",
+  #                             "TPI", "VRM", "planform_curv", "max_Hsig", "mean_dir",
+  #                             "mean_Hsig", "mean_SST", "range_SST")
+  # 
   # # Convert prediction grid UTM coordinates back to lat/lon for the spatial term
-  # prediction_coords_utm <- vect(cbind(prediction_grid$x, prediction_grid$y), 
+  # prediction_coords_utm <- vect(cbind(prediction_grid$x, prediction_grid$y),
   #                               crs = crs(bathy_final))
   # prediction_coords_latlon <- project(prediction_coords_utm, "EPSG:4326")
   # coords_df <- as.data.frame(geom(prediction_coords_latlon)[, c("x", "y")])
@@ -915,12 +859,12 @@
   # prediction_grid$lat <- coords_df$y
   # 
   # # Remove any rows with NAs in the required variables
-  # pred_vars <- c("bathymetry", "TPI", "VRM", "lon", "lat")
+  # # pred_vars <- c("bathymetry", "TPI", "VRM", "lon", "lat")
+  # pred_vars <- c("depth", "TPI", "slope", "complexity", "planform_curv",
+  #                "range_SST", "mean_SST", "mean_dir", "max_Hsig", "mean_Hsig", "lon", "lat")
   # prediction_grid_clean <- prediction_grid[complete.cases(prediction_grid[, pred_vars]), ]
   # 
   # cat("Prediction grid size:", nrow(prediction_grid_clean), "cells\n")
-  # 
-  # 
   # 
   # 
   # # # Make predictions with the spatial model
@@ -939,7 +883,7 @@
   # # # Test prediction on small subset to estimate time
   # # test_subset <- prediction_grid_clean[1:1000, ]
   # # test_start <- Sys.time()
-  # # test_pred <- predict(gam_spatial, test_subset, type = "response")
+  # # test_pred <- predict(gam_complex, test_subset, type = "response")
   # # test_time <- as.numeric(difftime(Sys.time(), test_start, units = "secs"))
   # # 
   # # # Estimate total time
@@ -952,7 +896,7 @@
   # 
   # 
   # # Resample your environmental stack to 200m resolution
-  # env_simple_200m <- aggregate(env_simple, fact = 4, fun = "mean")  # 4x aggregation = 200m
+  # env_simple_200m <- aggregate(env_stack, fact = 4, fun = "mean")  # 4x aggregation = 200m
   # 
   # # Check the new resolution
   # res(env_simple_200m)  # Should show 200, 200
@@ -978,7 +922,7 @@
   # cat("Reduction factor:", round(nrow(prediction_grid_clean)/nrow(prediction_grid_200m), 1), "\n")
   # 
   # # Convert UTM to lat/lon for the spatial term
-  # prediction_coords_utm_200m <- vect(cbind(prediction_grid_200m$x, prediction_grid_200m$y), 
+  # prediction_coords_utm_200m <- vect(cbind(prediction_grid_200m$x, prediction_grid_200m$y),
   #                                    crs = crs(bathy_final))
   # prediction_coords_latlon_200m <- project(prediction_coords_utm_200m, "EPSG:4326")
   # coords_df_200m <- as.data.frame(geom(prediction_coords_latlon_200m)[, c("x", "y")])
@@ -1016,32 +960,32 @@
   # 
   # if(tolower(user_input) == "y") {
   #   cat("Starting full prediction...\n")
-  #   
+  # 
   #   # Full prediction with timing
   #   full_start <- Sys.time()
   #   predictions_200m <- predict(gam_spatial, prediction_grid_200m, type = "response")
   #   prediction_grid_200m$predicted_cover <- predictions_200m
   #   full_end <- Sys.time()
-  #   
+  # 
   #   cat("Actual prediction time:", round(difftime(full_end, full_start, units = "mins"), 1), "minutes\n")
   #   cat("Prediction complete!\n")
-  #   
+  # 
   # } else {
   #   cat("Prediction cancelled. Consider further reducing grid size or using sampling.\n")
   # }
   # 
   # # Convert to raster
-  # pred_raster_200m <- rast(prediction_grid_200m[, c("x", "y", "predicted_cover")], 
+  # pred_raster_200m <- rast(prediction_grid_200m[, c("x", "y", "predicted_cover")],
   #                          crs = crs(bathy_final))
   # 
   # # Plot
-  # plot(pred_raster_200m, 
+  # plot(pred_raster_200m,
   #      main = "Predicted Coral Cover (%) - 200m resolution",
   #      col = viridis(100))
   # 
   # # Add survey points
-  # points(model_data_complex$x_utm, model_data_complex$y_utm, 
-  #        pch = 21, 
+  # points(model_data_complex$x_utm, model_data_complex$y_utm,
+  #        pch = 21,
   #        bg = heat.colors(10)[cut(model_data_complex$cover, breaks = 10)],
   #        cex = 0.8)
   # 
@@ -1094,3 +1038,8 @@
   # 
   # 
   # 
+  ################################## Save objects/workspace ##################################
+  
+  # #updated way to handle saving of new objects
+  # save_new_objects("output/GAMs", existing_objects)
+  
