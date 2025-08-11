@@ -10,7 +10,9 @@
   library(gridExtra)
   library(tidyverse)
   library(gratia)
-
+  
+  library(pROC)
+  
   source(here("src/functions.R"))
   
   ################################## setup ##################################
@@ -182,12 +184,12 @@
   } else {
     model_data$cover_prop <- model_data$cover
   }
-
+  
   # Beta regression (handles zeros with adjustment)
   gam_beta <- gam(cover_prop ~ s(depth_bathy) + s(slope),
                   data = model_data[model_data$cover_prop > 0, ],  # exclude zeros
                   family = betar())
-
+  
   # Option 3: Two-part model (hurdle model)
   # Part 1: Presence/absence
   model_data$present <- ifelse(model_data$cover > 0, 1, 0)
@@ -323,10 +325,11 @@
                           "range_SST")
   
   model_data_filtered <- spp_data %>%
-    filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+    # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+    # filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
+    # filter(!dataset %in% c("NODICE")) %>%
     filter(year(date) >= 2017) %>%
-    filter(depth_bathy >= -50) %>%
-    filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
+    filter(depth_bathy >= -50)
   
   # Extract all environmental values at species locations
   species_env_complex <- terra::extract(env_complex,
@@ -367,7 +370,7 @@
   #                    data = model_data_complex,
   #                    family = tw())
   gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
-                      s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                      s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
                        s(mean_Hsig),
                      data = model_data_complex,
                      family = tw())
@@ -379,7 +382,7 @@
 
   # Plot the relationships
   plot(gam_complex, pages = 2)  # Will create multiple pages
-
+  
   # Compare model performance
   cat("Simple model AIC:", AIC(gam_tweedie), "\n")
   cat("Complex model AIC:", AIC(gam_complex), "\n")
@@ -400,7 +403,7 @@
   #                             data = model_data_complex,
   #                             family = binomial())
   gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
-                                s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                                s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
                                 s(mean_Hsig),
                               data = model_data_complex,
                               family = binomial())
@@ -409,7 +412,7 @@
   #                              data = model_data_complex[model_data_complex$cover > 0, ],
   #                              family = Gamma(link = "log"))
   gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
-                                 s(range_SST) + s(mean_SST) + s(mean_dir) + s(max_Hsig) +
+                                 s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
                                  s(mean_Hsig),
                                data = model_data_complex[model_data_complex$cover > 0, ],
                                family = Gamma(link = "log"))
@@ -431,7 +434,7 @@
   plot(gam_reduced, pages = 1)
 
   ################################## orbicellid GAMs ##################################
-
+  
   # Convert tibble to data.frame first
   species_df <- as.data.frame(combined_benthic_data_averaged)
   
@@ -517,7 +520,7 @@
   #                    data = model_data_complex,
   #                    family = tw())
   gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                        s(max_Hsig) + s(mean_Hsig),
                      data = model_data_complex,
                      family = tw())
@@ -550,13 +553,13 @@
   model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
   
   gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                                s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                                s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                                 s(max_Hsig) + s(mean_Hsig),
                               data = model_data_complex,
                               family = binomial())
   
   gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                                 s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                                 s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                                  s(max_Hsig) + s(mean_Hsig),
                                data = model_data_complex[model_data_complex$cover > 0, ],
                                family = Gamma(link = "log"))
@@ -577,7 +580,8 @@
   
   # Define species list (starting with your priority species)
   species_list <- c("Agaricia", "Montastraea", "Pseudodiploria", "Porites",
-                    "Orbicella")
+                    "Orbicella", "Colpophyllia", "Dendrogyra",
+                    "Siderastrea")
   
   # # Get all unique species from the dataset and add remaining ones
   # all_species <- unique(spp_data$spp)
@@ -587,6 +591,12 @@
   # Initialize results storage
   gam_results <- list()
   
+  # STOPPING POINT - 11 August 2025
+  #   - need to collapse all Isophyllia
+  #   - still in the middle of figuring out exactly how I want to pursue model selection
+  #   - should probably test for spatial and maybe temporal autocorrelation at some point
+  #   - Investigate increasing sample size (years / PR), why montastraea & pseudodip. are struggling, hurdle vs. beta vs. gamma vs. Tweedie
+  
   # Loop through each species
   for(sp in species_list) {
     cat("\n==================== Processing", sp, "====================\n")
@@ -594,9 +604,10 @@
     # Filter data for current species
     species_data <- spp_data %>%
       # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%
-      # filter(year(date) >= 2017) %>%
-      # filter(depth_bathy >= -50) %>%
       # filter(!grepl("_PR", PSU)) %>%
+      # filter(!dataset %in% c("NODICE")) %>%
+      filter(year(date) >= 2017) %>%
+      filter(depth_bathy >= -50) %>%
       filter(grepl(sp, spp))
     
     # Check if we have enough data
@@ -635,7 +646,7 @@
     # Fit complex GAM
     tryCatch({
       gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                           s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                           s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                            s(max_Hsig) + s(mean_Hsig),
                          data = model_data_complete, family = tw())
       
@@ -651,12 +662,12 @@
       model_data_complete$present <- ifelse(model_data_complete$cover > 0, 1, 0)
       
       gam_presence <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                            s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) +
+                            s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                             s(max_Hsig) + s(mean_Hsig),
                           data = model_data_complete, family = binomial())
       
       gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                             s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir) + #, bs = 'cc'
+                             s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
                              s(max_Hsig) + s(mean_Hsig),
                            data = model_data_complete[model_data_complete$cover > 0, ],
                            family = Gamma(link = "log"))
@@ -675,9 +686,9 @@
       # Print summaries for priority species
       if(sp %in% c("Agaricia", "Montastraea", "Pseudodiploria", "Porites")) {
         cat("\n--- Summary for", sp, "---\n")
-        print(summary(gam_reduced))
+        print(summary(gam_complex))
         cat("\n--- Plotting", sp, "---\n")
-        plot(gam_reduced, pages = 1, main = paste(sp, "GAM"))
+        plot(gam_complex, pages = 1, main = paste(sp, "GAM"))
       }
       
     }, error = function(e) {
@@ -810,6 +821,72 @@
   # Abundance model
   summary(gam_results[["Orbicella"]]$abundance)
   
+  
+  # COLPOPHYLLIA
+  summary(gam_results[["Colpophyllia"]]$complex)
+  gam.check(gam_results[["Colpophyllia"]]$complex)
+  plot(gam_results[["Colpophyllia"]]$complex, pages = 2)
+  draw(gam_results[["Colpophyllia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Colpophyllia"]]$complex)
+  plot(gam_results[["Colpophyllia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Colpophyllia"]]$reduced)
+  plot(gam_results[["Colpophyllia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Colpophyllia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Colpophyllia"]]$abundance)
+  
+  
+  
+  # DENDROGYRA
+  summary(gam_results[["Dendrogyra"]]$complex)
+  gam.check(gam_results[["Dendrogyra"]]$complex)
+  plot(gam_results[["Dendrogyra"]]$complex, pages = 2)
+  draw(gam_results[["Dendrogyra"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Dendrogyra"]]$complex)
+  plot(gam_results[["Dendrogyra"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Dendrogyra"]]$reduced)
+  plot(gam_results[["Dendrogyra"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Dendrogyra"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Dendrogyra"]]$abundance)
+  
+  
+  # SIDERASTREA
+  summary(gam_results[["Siderastrea"]]$complex)
+  gam.check(gam_results[["Siderastrea"]]$complex)
+  plot(gam_results[["Siderastrea"]]$complex, pages = 2)
+  draw(gam_results[["Siderastrea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Siderastrea"]]$complex)
+  plot(gam_results[["Siderastrea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Siderastrea"]]$reduced)
+  plot(gam_results[["Siderastrea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Siderastrea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Siderastrea"]]$abundance)
   
   # ################################## make predictions ##################################
   # 
@@ -1038,6 +1115,953 @@
   # 
   # 
   # 
+  
+  
+  ################################## 80/20 w/ Tweedie ##################################
+  
+  gam_train_test_split <- function(gam_model, gam_results_entry = NULL, train_percent = 80, 
+                                   seed = 123, return_details = FALSE) {
+    
+    # Load required libraries
+    library(mgcv)
+    library(pROC)
+    library(dplyr)
+    library(ggplot2)
+    library(viridis)
+    library(gridExtra)
+    
+    set.seed(seed)
+    
+    # Extract model information and use model's own data
+    model_formula <- formula(gam_model)
+    model_family <- family(gam_model)
+    model_data <- gam_model$model
+    
+    # If full gam_results entry provided, use that data for coordinates
+    if(!is.null(gam_results_entry) && !is.null(gam_results_entry$data)) {
+      full_data <- gam_results_entry$data
+      # Match the model data with full data to get coordinates
+      # Assuming the model data is a subset of the full data
+      model_data_with_coords <- merge(model_data, full_data, by = intersect(names(model_data), names(full_data)))
+    } else {
+      model_data_with_coords <- model_data
+    }
+    
+    # Get response variable name
+    response_var <- all.vars(model_formula)[1]
+    
+    # Remove rows with missing values for the variables in the formula
+    formula_vars <- all.vars(model_formula)
+    complete_data <- model_data_with_coords[complete.cases(model_data_with_coords[, formula_vars]), ]
+    
+    cat("Using", nrow(complete_data), "complete observations from model's data\n")
+    cat("Model family:", model_family$family, "\n")
+    cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
+    cat("Response variable:", response_var, "\n")
+    
+    if(nrow(complete_data) < 20) {
+      warning("Insufficient data for validation (< 20 observations)")
+      return(NULL)
+    }
+    
+    # Determine if this is predicting binary outcomes (0/1 only) vs continuous
+    unique_values <- unique(complete_data[[response_var]])
+    unique_values <- unique_values[!is.na(unique_values)]
+    is_binary <- length(unique_values) == 2 && all(unique_values %in% c(0, 1))
+    
+    # Calculate appropriate metrics
+    calculate_metrics <- function(actual, predicted) {
+      if(is_binary) {
+        # For binary outcomes - calculate AUC and classification metrics
+        if(length(unique(actual)) > 1) {
+          auc_val <- as.numeric(auc(actual, predicted))
+          pred_class <- ifelse(predicted > 0.5, 1, 0)
+          accuracy <- mean(actual == pred_class)
+          sensitivity <- if(sum(actual == 1) > 0) sum(actual == 1 & pred_class == 1) / sum(actual == 1) else NA
+          specificity <- if(sum(actual == 0) > 0) sum(actual == 0 & pred_class == 0) / sum(actual == 0) else NA
+          
+          return(list(
+            auc = auc_val,
+            accuracy = accuracy,
+            sensitivity = sensitivity,
+            specificity = specificity
+          ))
+        } else {
+          return(list(auc = NA, accuracy = NA, sensitivity = NA, specificity = NA))
+        }
+      } else {
+        # For continuous outcomes - calculate RMSE, MAE, R², and Pearson correlation
+        rmse <- sqrt(mean((actual - predicted)^2, na.rm = TRUE))
+        mae <- mean(abs(actual - predicted), na.rm = TRUE)
+        
+        # Calculate R²
+        if(var(actual, na.rm = TRUE) > 0) {
+          r_squared <- cor(actual, predicted, use = "complete.obs")^2
+        } else {
+          r_squared <- NA
+        }
+        
+        # Calculate Pearson correlation coefficient and test significance
+        cor_test <- cor.test(actual, predicted, method = "pearson")
+        pearson_r <- cor_test$estimate
+        pearson_p <- cor_test$p.value
+        
+        # Determine significance level
+        if(is.na(pearson_p)) {
+          significance <- "Cannot determine"
+        } else if(pearson_p < 0.001) {
+          significance <- "***"
+        } else if(pearson_p < 0.01) {
+          significance <- "**"
+        } else if(pearson_p < 0.05) {
+          significance <- "*"
+        } else {
+          significance <- "ns"
+        }
+        
+        return(list(
+          rmse = rmse,
+          mae = mae,
+          r_squared = r_squared,
+          pearson_r = pearson_r,
+          pearson_p = pearson_p,
+          significance = significance
+        ))
+      }
+    }
+    
+    # Train-test split
+    n <- nrow(complete_data)
+    train_size <- floor((train_percent / 100) * n)
+    train_idx <- sample(1:n, size = train_size)
+    
+    train_data <- complete_data[train_idx, ]
+    test_data <- complete_data[-train_idx, ]
+    
+    cat("Training observations:", nrow(train_data), "\n")
+    cat("Testing observations:", nrow(test_data), "\n")
+    
+    # Fit model on training data
+    tryCatch({
+      fit <- gam(model_formula, data = train_data, family = model_family)
+      
+      # Make predictions on test data
+      predictions <- predict(fit, newdata = test_data, type = "response")
+      actual <- test_data[[response_var]]
+      
+      # Calculate metrics
+      metrics <- calculate_metrics(actual, predictions)
+      
+      # Print key results
+      cat("\n=== RESULTS ===\n")
+      if(is_binary) {
+        cat("AUC:", round(metrics$auc, 3), "\n")
+        cat("Accuracy:", round(metrics$accuracy, 3), "\n")
+      } else {
+        cat("R²:", round(metrics$r_squared, 3), "\n")
+        cat("Pearson r:", round(metrics$pearson_r, 3), "\n")
+        cat("P-value:", format(metrics$pearson_p, scientific = TRUE, digits = 3), "\n")
+        cat("Significance:", metrics$significance, "\n")
+        cat("RMSE:", round(metrics$rmse, 3), "\n")
+        
+        # Provide interpretation
+        if(metrics$significance == "***") {
+          cat("Interpretation: Correlation is highly significant (P < 0.001)\n")
+        } else if(metrics$significance == "**") {
+          cat("Interpretation: Correlation is significant (P < 0.01)\n")
+        } else if(metrics$significance == "*") {
+          cat("Interpretation: Correlation is significant (P < 0.05)\n")
+        } else if(metrics$significance == "ns") {
+          cat("Interpretation: Correlation is not significant (P ≥ 0.05)\n")
+        }
+      }
+      
+      # Create results dataframe with spatial coordinates for mapping
+      test_results <- test_data
+      test_results$predicted <- predictions
+      test_results$residuals <- actual - predictions
+      
+      result <- list(
+        n_total = nrow(complete_data),
+        n_train = nrow(train_data),
+        n_test = nrow(test_data),
+        train_percent = train_percent,
+        family = model_family$family,
+        response_variable = response_var,
+        metrics = metrics,
+        test_results = test_results,  # Always include this for mapping
+        is_binary = is_binary
+      )
+      
+      if(return_details) {
+        result$predictions <- predictions
+        result$actual <- actual
+        result$train_data <- train_data
+        result$test_data <- test_data
+        result$fitted_model <- fit
+        result$formula <- model_formula
+      }
+      
+      return(result)
+      
+    }, error = function(e) {
+      cat("Error in model fitting:", e$message, "\n")
+      return(NULL)
+    })
+  }
+  
+  ################################## 80/20 plot ##################################
+  
+  plot_validation_maps <- function(validation_result, coord_system = "latlon") {
+    
+    if(is.null(validation_result) || is.null(validation_result$test_results)) {
+      stop("No test results found for mapping")
+    }
+    
+    plot_data <- validation_result$test_results
+    
+    # Print available columns for debugging
+    cat("Available columns in test results:\n")
+    print(colnames(plot_data))
+    
+    # Determine coordinate columns with fallbacks
+    if(coord_system == "latlon") {
+      x_candidates <- c("lon", "longitude", "Longitude", "LON")
+      y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+      x_lab <- "Longitude"
+      y_lab <- "Latitude"
+    } else {
+      x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+      y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+      x_lab <- "UTM X"
+      y_lab <- "UTM Y"
+    }
+    
+    # Find the actual column names
+    x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+    y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+    
+    if(length(x_col) == 0 || length(y_col) == 0) {
+      cat("Could not find coordinate columns. Trying the other coordinate system...\n")
+      
+      # Try the other coordinate system
+      if(coord_system == "latlon") {
+        x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+        y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+        x_lab <- "UTM X"
+        y_lab <- "UTM Y"
+      } else {
+        x_candidates <- c("lon", "longitude", "Longitude", "LON")
+        y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+        x_lab <- "Longitude"
+        y_lab <- "Latitude"
+      }
+      
+      x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+      y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+    }
+    
+    if(length(x_col) == 0 || length(y_col) == 0) {
+      stop("Could not find any coordinate columns. Available columns: ", paste(colnames(plot_data), collapse = ", "))
+    }
+    
+    # Use first match
+    x_col <- x_col[1]
+    y_col <- y_col[1]
+    
+    cat("Using coordinates:", x_col, "and", y_col, "\n")
+    
+    # Common theme for maps
+    map_theme <- theme_minimal() +
+      theme(
+        axis.text = element_text(size = 8),
+        plot.title = element_text(size = 10, hjust = 0.5),
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8)
+      )
+    
+    # Get response variable name
+    response_var <- validation_result$response_variable
+    
+    # Calculate shared color scale limits
+    actual_values <- plot_data[[response_var]]
+    predicted_values <- plot_data$predicted
+    shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
+    shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
+    
+    cat("Shared color scale range:", round(shared_min, 2), "to", round(shared_max, 2), "\n")
+    
+    # Plot 1: Actual cover values
+    p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = response_var)) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_viridis_c(name = "Actual", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = paste("Actual", response_var, "(Test Set)"), 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 2: Predicted cover values
+    p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_viridis_c(name = "Predicted", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = paste("Predicted", response_var), 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 3: Residuals (actual - predicted)
+    p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "residuals")) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_gradient2(name = "Residual", 
+                            low = "red", mid = "white", high = "blue",
+                            midpoint = 0) +
+      labs(title = "Residuals (Actual - Predicted)", 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 4: Predicted vs Actual scatter plot
+    p4 <- ggplot(plot_data, aes_string(x = "predicted", y = response_var)) +
+      geom_point(alpha = 0.6) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      labs(title = "Predicted vs Actual", 
+           x = paste("Predicted", response_var), 
+           y = paste("Actual", response_var)) +
+      theme_minimal()
+    
+    # Arrange plots
+    grid.arrange(p1, p2, p3, p4, ncol = 2,
+                 top = paste("Validation Results -", 
+                             validation_result$family, "model"))
+    
+    # Return the individual plots as well
+    invisible(list(actual = p1, predicted = p2, residuals = p3, scatter = p4))
+  }
+  
+  ################################## 80/20 usage ##################################
+  
+  # Example 1: Validation with coordinates for mapping
+  result <- gam_train_test_split(gam_results[["Orbicella"]]$complex,
+                                 gam_results_entry = gam_results[["Orbicella"]],
+                                 train_percent = 80)
+  plot_validation_maps(result)
+  
+  # Example 2: Simple validation without coordinates (no mapping possible)
+  # result <- gam_train_test_split(gam_results[["Agaricia"]]$complex, train_percent = 80)
+  
+  # Example 3: Validate all species models with mapping
+  # for(sp in names(gam_results)) {
+  #   cat("\n=== VALIDATING", sp, "===\n")
+  #   result <- gam_train_test_split(gam_results[[sp]]$complex, 
+  #                                 gam_results_entry = gam_results[[sp]], 
+  #                                 train_percent = 80)
+  #   if(!is.null(result)) {
+  #     plot_validation_maps(result)
+  #   }
+  # }
+  
+  # Example 4: Generate summary table for multiple species
+  # results_summary <- data.frame(
+  #   Species = character(),
+  #   Model_Type = character(),
+  #   Pearson_r = numeric(),
+  #   P_value = numeric(),
+  #   Significance = character(),
+  #   R_squared = numeric(),
+  #   RMSE = numeric(),
+  #   stringsAsFactors = FALSE
+  # )
+  # 
+  # for(sp in names(gam_results)) {
+  #   for(model_type in c("complex", "reduced")) {
+  #     result <- gam_train_test_split(gam_results[[sp]][[model_type]], 
+  #                                   gam_results_entry = gam_results[[sp]], 
+  #                                   train_percent = 80)
+  #     if(!is.null(result) && !result$is_binary) {
+  #       results_summary <- rbind(results_summary, data.frame(
+  #         Species = sp,
+  #         Model_Type = model_type,
+  #         Pearson_r = round(result$metrics$pearson_r, 3),
+  #         P_value = result$metrics$pearson_p,
+  #         Significance = result$metrics$significance,
+  #         R_squared = round(result$metrics$r_squared, 3),
+  #         RMSE = round(result$metrics$rmse, 3)
+  #       ))
+  #     }
+  #   }
+  # }
+  # print(results_summary)
+  
+  
+  ################################## GAM Train-Test Split Function ##################################
+  
+  gam_train_test_split <- function(gam_model, gam_results_entry = NULL, train_percent = 80, 
+                                   seed = 123, return_details = FALSE, use_hurdle = FALSE) {
+    
+    # Load required libraries
+    library(mgcv)
+    library(pROC)
+    library(dplyr)
+    library(ggplot2)
+    library(viridis)
+    library(gridExtra)
+    
+    set.seed(seed)
+    
+    if(use_hurdle && !is.null(gam_results_entry)) {
+      # Use two-part hurdle model approach
+      return(gam_hurdle_validation(gam_results_entry, train_percent, seed, return_details))
+    }
+    
+    # Original single-model approach
+    # Extract model information and use model's own data
+    model_formula <- formula(gam_model)
+    model_family <- family(gam_model)
+    model_data <- gam_model$model
+    
+    # If full gam_results entry provided, use that data for coordinates
+    if(!is.null(gam_results_entry) && !is.null(gam_results_entry$data)) {
+      full_data <- gam_results_entry$data
+      # Match the model data with full data to get coordinates
+      # Assuming the model data is a subset of the full data
+      model_data_with_coords <- merge(model_data, full_data, by = intersect(names(model_data), names(full_data)))
+    } else {
+      model_data_with_coords <- model_data
+    }
+    
+    # Get response variable name
+    response_var <- all.vars(model_formula)[1]
+    
+    # Remove rows with missing values for the variables in the formula
+    formula_vars <- all.vars(model_formula)
+    complete_data <- model_data_with_coords[complete.cases(model_data_with_coords[, formula_vars]), ]
+    
+    cat("Using", nrow(complete_data), "complete observations from model's data\n")
+    cat("Model family:", model_family$family, "\n")
+    cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
+    cat("Response variable:", response_var, "\n")
+    
+    if(nrow(complete_data) < 20) {
+      warning("Insufficient data for validation (< 20 observations)")
+      return(NULL)
+    }
+    
+    # Determine if this is predicting binary outcomes (0/1 only) vs continuous
+    unique_values <- unique(complete_data[[response_var]])
+    unique_values <- unique_values[!is.na(unique_values)]
+    is_binary <- length(unique_values) == 2 && all(unique_values %in% c(0, 1))
+    
+    # Calculate appropriate metrics
+    calculate_metrics <- function(actual, predicted) {
+      if(is_binary) {
+        # For binary outcomes - calculate AUC and classification metrics
+        if(length(unique(actual)) > 1) {
+          auc_val <- as.numeric(auc(actual, predicted))
+          pred_class <- ifelse(predicted > 0.5, 1, 0)
+          accuracy <- mean(actual == pred_class)
+          sensitivity <- if(sum(actual == 1) > 0) sum(actual == 1 & pred_class == 1) / sum(actual == 1) else NA
+          specificity <- if(sum(actual == 0) > 0) sum(actual == 0 & pred_class == 0) / sum(actual == 0) else NA
+          
+          return(list(
+            auc = auc_val,
+            accuracy = accuracy,
+            sensitivity = sensitivity,
+            specificity = specificity
+          ))
+        } else {
+          return(list(auc = NA, accuracy = NA, sensitivity = NA, specificity = NA))
+        }
+      } else {
+        # For continuous outcomes - calculate RMSE, MAE, R², and Pearson correlation
+        rmse <- sqrt(mean((actual - predicted)^2, na.rm = TRUE))
+        mae <- mean(abs(actual - predicted), na.rm = TRUE)
+        
+        # Calculate R²
+        if(var(actual, na.rm = TRUE) > 0) {
+          r_squared <- cor(actual, predicted, use = "complete.obs")^2
+        } else {
+          r_squared <- NA
+        }
+        
+        # Calculate Pearson correlation coefficient and test significance
+        cor_test <- cor.test(actual, predicted, method = "pearson")
+        pearson_r <- cor_test$estimate
+        pearson_p <- cor_test$p.value
+        
+        # Determine significance level
+        if(is.na(pearson_p)) {
+          significance <- "Cannot determine"
+        } else if(pearson_p < 0.001) {
+          significance <- "***"
+        } else if(pearson_p < 0.01) {
+          significance <- "**"
+        } else if(pearson_p < 0.05) {
+          significance <- "*"
+        } else {
+          significance <- "ns"
+        }
+        
+        return(list(
+          rmse = rmse,
+          mae = mae,
+          r_squared = r_squared,
+          pearson_r = pearson_r,
+          pearson_p = pearson_p,
+          significance = significance
+        ))
+      }
+    }
+    
+    # Train-test split
+    n <- nrow(complete_data)
+    train_size <- floor((train_percent / 100) * n)
+    train_idx <- sample(1:n, size = train_size)
+    
+    train_data <- complete_data[train_idx, ]
+    test_data <- complete_data[-train_idx, ]
+    
+    cat("Training observations:", nrow(train_data), "\n")
+    cat("Testing observations:", nrow(test_data), "\n")
+    
+    # Fit model on training data
+    tryCatch({
+      fit <- gam(model_formula, data = train_data, family = model_family)
+      
+      # Make predictions on test data
+      predictions <- predict(fit, newdata = test_data, type = "response")
+      actual <- test_data[[response_var]]
+      
+      # Calculate metrics
+      metrics <- calculate_metrics(actual, predictions)
+      
+      # Print key results
+      cat("\n=== RESULTS ===\n")
+      if(is_binary) {
+        cat("AUC:", round(metrics$auc, 3), "\n")
+        cat("Accuracy:", round(metrics$accuracy, 3), "\n")
+      } else {
+        cat("R²:", round(metrics$r_squared, 3), "\n")
+        cat("Pearson r:", round(metrics$pearson_r, 3), "\n")
+        cat("P-value:", format(metrics$pearson_p, scientific = TRUE, digits = 3), "\n")
+        cat("Significance:", metrics$significance, "\n")
+        cat("RMSE:", round(metrics$rmse, 3), "\n")
+        
+        # Provide interpretation
+        if(metrics$significance == "***") {
+          cat("Interpretation: Correlation is highly significant (P < 0.001)\n")
+        } else if(metrics$significance == "**") {
+          cat("Interpretation: Correlation is significant (P < 0.01)\n")
+        } else if(metrics$significance == "*") {
+          cat("Interpretation: Correlation is significant (P < 0.05)\n")
+        } else if(metrics$significance == "ns") {
+          cat("Interpretation: Correlation is not significant (P ≥ 0.05)\n")
+        }
+      }
+      
+      # Create results dataframe with spatial coordinates for mapping
+      test_results <- test_data
+      test_results$predicted <- predictions
+      test_results$residuals <- actual - predictions
+      
+      result <- list(
+        n_total = nrow(complete_data),
+        n_train = nrow(train_data),
+        n_test = nrow(test_data),
+        train_percent = train_percent,
+        family = model_family$family,
+        response_variable = response_var,
+        metrics = metrics,
+        test_results = test_results,  # Always include this for mapping
+        is_binary = is_binary
+      )
+      
+      if(return_details) {
+        result$predictions <- predictions
+        result$actual <- actual
+        result$train_data <- train_data
+        result$test_data <- test_data
+        result$fitted_model <- fit
+        result$formula <- model_formula
+      }
+      
+      return(result)
+      
+    }, error = function(e) {
+      cat("Error in model fitting:", e$message, "\n")
+      return(NULL)
+    })
+  }
+  
+  ################################## Two-Part Hurdle Model Validation ##################################
+  
+  gam_hurdle_validation <- function(gam_results_entry, train_percent = 80, seed = 123, return_details = FALSE) {
+    
+    set.seed(seed)
+    
+    # Check if both presence and abundance models exist
+    if(is.null(gam_results_entry$presence) || is.null(gam_results_entry$abundance)) {
+      stop("Both presence and abundance models required for hurdle validation")
+    }
+    
+    # Get the full dataset
+    full_data <- gam_results_entry$data
+    
+    # Get formulas from both models
+    presence_formula <- formula(gam_results_entry$presence)
+    abundance_formula <- formula(gam_results_entry$abundance)
+    
+    # Get all variables needed
+    presence_vars <- all.vars(presence_formula)
+    abundance_vars <- all.vars(abundance_formula)
+    all_vars <- unique(c(presence_vars, abundance_vars))
+    
+    # Filter to complete cases for all variables
+    complete_data <- full_data[complete.cases(full_data[, all_vars]), ]
+    
+    cat("=== HURDLE MODEL VALIDATION ===\n")
+    cat("Using", nrow(complete_data), "complete observations\n")
+    cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
+    
+    if(nrow(complete_data) < 20) {
+      warning("Insufficient data for validation (< 20 observations)")
+      return(NULL)
+    }
+    
+    # Train-test split
+    n <- nrow(complete_data)
+    train_size <- floor((train_percent / 100) * n)
+    train_idx <- sample(1:n, size = train_size)
+    
+    train_data <- complete_data[train_idx, ]
+    test_data <- complete_data[-train_idx, ]
+    
+    cat("Training observations:", nrow(train_data), "\n")
+    cat("Testing observations:", nrow(test_data), "\n")
+    
+    tryCatch({
+      # Fit presence model on training data
+      presence_fit <- gam(presence_formula, data = train_data, family = binomial())
+      
+      # Fit abundance model on training data (only where cover > 0)
+      abundance_train_data <- train_data[train_data$cover > 0, ]
+      abundance_fit <- gam(abundance_formula, data = abundance_train_data, family = Gamma(link = "log"))
+      
+      # Make predictions on test data
+      # Step 1: Predict presence probability
+      presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+      
+      # Step 2: Predict abundance (conditional on presence)
+      abundance_pred <- predict(abundance_fit, newdata = test_data, type = "response")
+      
+      # Step 3: Combine using hurdle approach with threshold
+      # Method 1: Expected value = P(presence) * E(abundance | presence)
+      hurdle_predictions_raw <- presence_prob * abundance_pred
+      
+      # Apply threshold for more realistic zero predictions
+      presence_threshold <- 0.5  # Can be adjusted
+      probability_threshold <- 0.1  # Very low probability predictions become zero
+      
+      # Method A: Use presence classification (0.5 threshold)
+      presence_binary <- ifelse(presence_prob > presence_threshold, 1, 0)
+      classification_predictions <- presence_binary * abundance_pred
+      
+      # Method B: Use probability threshold (very low probabilities become zero)
+      hurdle_predictions_threshold <- ifelse(presence_prob < probability_threshold, 0, hurdle_predictions_raw)
+      
+      # Use the classification approach as default (more zeros)
+      hurdle_predictions <- classification_predictions
+      
+      actual <- test_data$cover
+      
+      # Calculate metrics for both approaches
+      calculate_hurdle_metrics <- function(actual, predicted) {
+        rmse <- sqrt(mean((actual - predicted)^2, na.rm = TRUE))
+        mae <- mean(abs(actual - predicted), na.rm = TRUE)
+        
+        if(var(actual, na.rm = TRUE) > 0) {
+          r_squared <- cor(actual, predicted, use = "complete.obs")^2
+        } else {
+          r_squared <- NA
+        }
+        
+        cor_test <- cor.test(actual, predicted, method = "pearson")
+        pearson_r <- cor_test$estimate
+        pearson_p <- cor_test$p.value
+        
+        if(is.na(pearson_p)) {
+          significance <- "Cannot determine"
+        } else if(pearson_p < 0.001) {
+          significance <- "***"
+        } else if(pearson_p < 0.01) {
+          significance <- "**"
+        } else if(pearson_p < 0.05) {
+          significance <- "*"
+        } else {
+          significance <- "ns"
+        }
+        
+        # Calculate how many zeros are correctly predicted
+        actual_zeros <- sum(actual == 0)
+        predicted_zeros <- sum(predicted == 0)
+        correct_zeros <- sum(actual == 0 & predicted == 0)
+        
+        return(list(
+          rmse = rmse,
+          mae = mae,
+          r_squared = r_squared,
+          pearson_r = pearson_r,
+          pearson_p = pearson_p,
+          significance = significance,
+          actual_zeros = actual_zeros,
+          predicted_zeros = predicted_zeros,
+          correct_zeros = correct_zeros
+        ))
+      }
+      
+      # Use the expected value approach as primary
+      metrics <- calculate_hurdle_metrics(actual, hurdle_predictions)
+      
+      # Print results
+      cat("\n=== HURDLE MODEL RESULTS ===\n")
+      cat("R²:", round(metrics$r_squared, 3), "\n")
+      cat("Pearson r:", round(metrics$pearson_r, 3), "\n")
+      cat("P-value:", format(metrics$pearson_p, scientific = TRUE, digits = 3), "\n")
+      cat("Significance:", metrics$significance, "\n")
+      cat("RMSE:", round(metrics$rmse, 3), "\n")
+      cat("Actual zeros:", metrics$actual_zeros, "/ Predicted zeros:", metrics$predicted_zeros, "\n")
+      cat("Correctly predicted zeros:", metrics$correct_zeros, "\n")
+      cat("Presence threshold used:", presence_threshold, "\n")
+      
+      # Provide interpretation
+      if(metrics$significance == "***") {
+        cat("Interpretation: Correlation is highly significant (P < 0.001)\n")
+      } else if(metrics$significance == "**") {
+        cat("Interpretation: Correlation is significant (P < 0.01)\n")
+      } else if(metrics$significance == "*") {
+        cat("Interpretation: Correlation is significant (P < 0.05)\n")
+      } else if(metrics$significance == "ns") {
+        cat("Interpretation: Correlation is not significant (P ≥ 0.05)\n")
+      }
+      
+      # Create results dataframe
+      test_results <- test_data
+      test_results$predicted <- hurdle_predictions
+      test_results$presence_prob <- presence_prob
+      test_results$abundance_pred <- abundance_pred
+      test_results$residuals <- actual - hurdle_predictions
+      
+      result <- list(
+        n_total = nrow(complete_data),
+        n_train = nrow(train_data),
+        n_test = nrow(test_data),
+        train_percent = train_percent,
+        family = "Hurdle (Binomial + Gamma)",
+        response_variable = "cover",
+        metrics = metrics,
+        test_results = test_results,
+        is_binary = FALSE,
+        model_type = "hurdle"
+      )
+      
+      if(return_details) {
+        result$presence_fit <- presence_fit
+        result$abundance_fit <- abundance_fit
+        result$presence_predictions <- presence_prob
+        result$abundance_predictions <- abundance_pred
+        result$hurdle_predictions <- hurdle_predictions
+        result$hurdle_predictions_raw <- hurdle_predictions_raw
+        result$hurdle_predictions_threshold <- hurdle_predictions_threshold
+        result$presence_threshold <- presence_threshold
+        result$probability_threshold <- probability_threshold
+      }
+      
+      return(result)
+      
+    }, error = function(e) {
+      cat("Error in hurdle model fitting:", e$message, "\n")
+      return(NULL)
+    })
+  }
+  
+  ################################## Mapping Function ##################################
+  
+  plot_validation_maps <- function(validation_result, coord_system = "latlon") {
+    
+    if(is.null(validation_result) || is.null(validation_result$test_results)) {
+      stop("No test results found for mapping")
+    }
+    
+    plot_data <- validation_result$test_results
+    
+    # Print available columns for debugging
+    cat("Available columns in test results:\n")
+    print(colnames(plot_data))
+    
+    # Determine coordinate columns with fallbacks
+    if(coord_system == "latlon") {
+      x_candidates <- c("lon", "longitude", "Longitude", "LON")
+      y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+      x_lab <- "Longitude"
+      y_lab <- "Latitude"
+    } else {
+      x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+      y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+      x_lab <- "UTM X"
+      y_lab <- "UTM Y"
+    }
+    
+    # Find the actual column names
+    x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+    y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+    
+    if(length(x_col) == 0 || length(y_col) == 0) {
+      cat("Could not find coordinate columns. Trying the other coordinate system...\n")
+      
+      # Try the other coordinate system
+      if(coord_system == "latlon") {
+        x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+        y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+        x_lab <- "UTM X"
+        y_lab <- "UTM Y"
+      } else {
+        x_candidates <- c("lon", "longitude", "Longitude", "LON")
+        y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+        x_lab <- "Longitude"
+        y_lab <- "Latitude"
+      }
+      
+      x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+      y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+    }
+    
+    if(length(x_col) == 0 || length(y_col) == 0) {
+      stop("Could not find any coordinate columns. Available columns: ", paste(colnames(plot_data), collapse = ", "))
+    }
+    
+    # Use first match
+    x_col <- x_col[1]
+    y_col <- y_col[1]
+    
+    cat("Using coordinates:", x_col, "and", y_col, "\n")
+    
+    # Common theme for maps
+    map_theme <- theme_minimal() +
+      theme(
+        axis.text = element_text(size = 8),
+        plot.title = element_text(size = 10, hjust = 0.5),
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8)
+      )
+    
+    # Get response variable name
+    response_var <- validation_result$response_variable
+    
+    # Calculate shared color scale limits
+    actual_values <- plot_data[[response_var]]
+    predicted_values <- plot_data$predicted
+    shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
+    shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
+    
+    cat("Shared color scale range:", round(shared_min, 2), "to", round(shared_max, 2), "\n")
+    
+    # Plot 1: Actual cover values
+    p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = response_var)) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_viridis_c(name = "Actual", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = paste("Actual", response_var, "(Test Set)"), 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 2: Predicted cover values
+    p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_viridis_c(name = "Predicted", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = paste("Predicted", response_var), 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 3: Residuals (actual - predicted)
+    p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "residuals")) +
+      geom_point(size = 2, alpha = 0.7) +
+      scale_color_gradient2(name = "Residual", 
+                            low = "red", mid = "white", high = "blue",
+                            midpoint = 0) +
+      labs(title = "Residuals (Actual - Predicted)", 
+           x = x_lab, y = y_lab) +
+      map_theme
+    
+    # Plot 4: Predicted vs Actual scatter plot
+    p4 <- ggplot(plot_data, aes_string(x = "predicted", y = response_var)) +
+      geom_point(alpha = 0.6) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      labs(title = "Predicted vs Actual", 
+           x = paste("Predicted", response_var), 
+           y = paste("Actual", response_var)) +
+      theme_minimal()
+    
+    # Arrange plots
+    grid.arrange(p1, p2, p3, p4, ncol = 2,
+                 top = paste("Validation Results -", 
+                             validation_result$family, "model"))
+    
+    # Return the individual plots as well
+    invisible(list(actual = p1, predicted = p2, residuals = p3, scatter = p4))
+  }
+  
+  ################################## Usage Examples ##################################
+  
+  # Example 1: Standard single-model validation
+  result <- gam_train_test_split(gam_results[["Montastraea"]]$complex,
+                                 gam_results_entry = gam_results[["Montastraea"]],
+                                 train_percent = 80)
+  
+  # Example 2: Hurdle model validation (uses presence + abundance models)
+  result_hurdle <- gam_train_test_split(gam_model = NULL,  # Not used for hurdle
+                                        gam_results_entry = gam_results[["Montastraea"]],
+                                        train_percent = 80,
+                                        use_hurdle = TRUE, seed = sample(1:10000, 1))
+  plot_validation_maps(result_hurdle)
+  
+  # Example 3: Compare single vs hurdle approaches
+  # single_result <- gam_train_test_split(gam_results[["Agaricia"]]$complex, 
+  #                                      gam_results_entry = gam_results[["Agaricia"]])
+  # hurdle_result <- gam_train_test_split(gam_model = NULL, 
+  #                                      gam_results_entry = gam_results[["Agaricia"]], 
+  #                                      use_hurdle = TRUE)
+  # 
+  # cat("Single model R²:", round(single_result$metrics$r_squared, 3), "\n")
+  # cat("Hurdle model R²:", round(hurdle_result$metrics$r_squared, 3), "\n")
+  # cat("Single model predicted zeros:", sum(single_result$test_results$predicted == 0), "\n")
+  # cat("Hurdle model predicted zeros:", hurdle_result$metrics$predicted_zeros, "\n")
+  
+  # Example 4: Generate summary table for multiple species
+  # results_summary <- data.frame(
+  #   Species = character(),
+  #   Model_Type = character(),
+  #   Pearson_r = numeric(),
+  #   P_value = numeric(),
+  #   Significance = character(),
+  #   R_squared = numeric(),
+  #   RMSE = numeric(),
+  #   stringsAsFactors = FALSE
+  # )
+  # 
+  # for(sp in names(gam_results)) {
+  #   for(model_type in c("complex", "reduced")) {
+  #     result <- gam_train_test_split(gam_results[[sp]][[model_type]], 
+  #                                   gam_results_entry = gam_results[[sp]], 
+  #                                   train_percent = 80)
+  #     if(!is.null(result) && !result$is_binary) {
+  #       results_summary <- rbind(results_summary, data.frame(
+  #         Species = sp,
+  #         Model_Type = model_type,
+  #         Pearson_r = round(result$metrics$pearson_r, 3),
+  #         P_value = result$metrics$pearson_p,
+  #         Significance = result$metrics$significance,
+  #         R_squared = round(result$metrics$r_squared, 3),
+  #         RMSE = round(result$metrics$rmse, 3)
+  #       ))
+  #     }
+  #   }
+  # }
+  # print(results_summary)
   ################################## Save objects/workspace ##################################
   
   # #updated way to handle saving of new objects
