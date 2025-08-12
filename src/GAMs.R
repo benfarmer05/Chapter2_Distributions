@@ -149,9 +149,9 @@
   model_data_filtered <- spp_data %>%
     # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
     # filter(year(date) >= 2017) %>%
-    # filter(depth_bathy >= -50) %>%
-    filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
-
+    # filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
+    filter(depth_bathy >= -60)
+    
   cat("Remaining datasets:", paste(unique(model_data_filtered$dataset), collapse = ", "), "\n")
 
   psu_with_pr <- model_data_filtered$PSU[grepl("_PR", model_data_filtered$PSU)]
@@ -328,8 +328,8 @@
     # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
     # filter(!grepl("_PR", PSU))  # Remove any PSU containing '_PR'
     # filter(!dataset %in% c("NODICE")) %>%
-    filter(year(date) >= 2017) %>%
-    filter(depth_bathy >= -50)
+    # filter(year(date) >= 2017) %>%
+    filter(depth_bathy >= -60)
   
   # Extract all environmental values at species locations
   species_env_complex <- terra::extract(env_complex,
@@ -350,14 +350,29 @@
   model_data_filtered$mean_Hsig <- species_env_complex$mean_Hsig
   model_data_filtered$mean_SST <- species_env_complex$mean_SST
   model_data_filtered$range_SST <- species_env_complex$range_SST
+  model_data_filtered$year = year(model_data_filtered$date)
+  # model_data_filtered$date = model_data_filtered$date
+  
+  
+  # STOPPING POINT - 12 August 2025
+  #   - in the model of a few issues...
+  #   - wave data is severely limiting sample size because of loss of nearshore reef observations
+  #       - need to seriously consider interpolating, or layering in higher-res wave data
+  #   - wrapping up a test, assessing whether PR & 2013-2016 data is appropriate 
+  #   - deciding if current data is fine, or if need to extend waves/SST to 2013-onward, and/or
+  #       bring in water quality, velocities, etc.
+  #   - considering things like distance from 50-m depth contour, lat, lon, year. year and date
+  #       seem to cause some real issues for some reason right now in the GAM
+  #   - anyways, a lot of this can wait until I have more code developed for model selection and
+  #       evaluation. it is most of the way there already I think!
   
   # Create complete cases dataset with all variables
   complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                        "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
-                       "range_SST", "cover")
+                       "range_SST", "year", "date", "lat", "lon", "cover")
 
   model_data_complex <- model_data_filtered[complete.cases(model_data_filtered[, complexity_vars]), ]
-
+  
   # Check how much data you have left
   cat("Observations with all complexity variables:", nrow(model_data_complex), "\n")
   
@@ -371,7 +386,7 @@
   #                    family = tw())
   gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
                       s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
-                       s(mean_Hsig),
+                       s(mean_Hsig) + s(year),
                      data = model_data_complex,
                      family = tw())
   

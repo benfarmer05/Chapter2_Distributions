@@ -72,6 +72,10 @@ try
             end
             
             % Request all four wave variables in the URL
+            % NOTE - was 'http://dm3.caricoos.org:8003/erddap' before and
+            % ran much faster, but that port doesn't work now. this version
+            % without a specified port does run, but VERY slowly. takes ~30
+            % minutes per year of data
             url = sprintf('http://dm3.caricoos.org:8003/erddap/griddap/caricoos_dm3_d848_78a5_baa6.nc?Hsig[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Hswell[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Dir[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Per[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)]', ...
                           start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date);
             

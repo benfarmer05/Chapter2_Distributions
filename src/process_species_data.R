@@ -10,6 +10,9 @@
   
   ################################## setup ##################################
   
+  startyear = 2013
+  enddate = "2018-11-30"
+  
   # NOTE - in general, should I be including conditions (bleached, diseased, etc.) as "coral cover"?
   #          - also will need to figure out how compatible each survey type is. some of these are
   #             long-term monitoring rather than random, which could mean they artificially inflate
@@ -110,11 +113,10 @@
     # select(-SampleYear, -SampleMonth) %>%
     # Move date to the beginning
     relocate(date, .before = everything()) %>%
-    # Filter for 2013 and onward
-    filter(year(date) >= 2013)
+    filter(year(date) >= startyear)
   
   # NOTE / VERY IMPORTANT
-  # - if I choose to go back and look at any data prior to 2013, would need to make that everything I do far downstream with wrangling
+  # - if I choose to go back and look at any data prior to 2013, would need to make sure that everything I do far downstream with wrangling
   #     species still holds up (i.e., not throwing out any important taxa-level data)
   
   ################################## wrangle CSUN ##################################
@@ -140,6 +142,11 @@
     # Convert cover to numeric and filter out NA values
     mutate(cover = as.numeric(cover)) %>%
     filter(!is.na(cover))
+  
+  #drop non-'complex' orbicellid lines, as these just get summated in the complex lines anyways
+  PRCRMP_long <- PRCRMP_long %>%
+    filter(!(str_detect(species_code, regex("orbicella", ignore_case = TRUE)) & 
+               !str_detect(species_code, regex("complex", ignore_case = TRUE))))
   
   PRCRMP_long <- PRCRMP_long %>%
     rename_with(tolower) %>%
@@ -172,6 +179,9 @@
     mutate(date = as.POSIXct(paste(year, "01", "01", sep = "-"), 
                              format = "%Y-%m-%d", 
                              tz = "UTC"))
+  
+  PRCRMP_long = PRCRMP_long %>%
+    filter(year >= startyear & date <= as.Date(enddate))
   
   # PRCRMP_test = PRCRMP_long
   # PRCRMP_test = PRCRMP_test %>%
@@ -537,7 +547,7 @@
       species = species_code,
       transect = Transect
     ) %>%
-    filter(year(date) >= 2013) %>% # NOTE - mismatch of sample year with date in Ginsburg Fringe
+    filter(year(date) >= startyear & date <= as.Date(enddate)) %>% # NOTE - mismatch of sample year with date in Ginsburg Fringe
     select(year, month, date, transect, location_id, analysis_by, analysis_date, data_points, species, cover) %>%
     arrange(location_id, species)
   
@@ -589,8 +599,9 @@
     rename_with(~ tolower(gsub(":", "", .))) %>% #remove underscores
     rename(
       PSU = location
-    )
-  
+    ) %>%
+    filter(year(date) >= startyear & date <= as.Date(enddate))
+    
   #refactor locations and drop unnecessary variables
   TCRMP_health_long <- TCRMP_health_long %>%
     mutate(PSU = as.factor(PSU)) %>%
@@ -1224,7 +1235,7 @@
   #filter only 2013 to November 2018 pre-SCTLD
   # NOTE - consider if this is the filter we want!!
   combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
-    filter(year(date) >= 2013 & date <= as.Date("2018-11-30"))
+    filter(year(date) >= startyear & date <= as.Date(enddate))
   
   #filter 'Montastraea spp' since none were marked as present anyways, and this taxonomy is ambiguous
   combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
@@ -1393,7 +1404,7 @@
   
   #filter only 2013 to November 2018 pre-SCTLD
   combined_demo_data = combined_demo_data %>%
-    filter(year(date) >= 2013 & date <= as.Date("2018-11-30"))
+    filter(year(date) >= startyear & date <= as.Date(enddate))
   
   #drop all TCRMP health data collected using transect-intercept methods
   combined_demo_data <- combined_demo_data %>%
@@ -1843,6 +1854,278 @@
   
   ################################## spp-grouping ##################################
   
+  # # NOTE - Version where each PSU is averaged across sampling period (applies to TCRMP and PRCRMP)
+  # #         - this has a weakness in that you cannot parse the effect of year at all
+  # # Average coral cover across transects and dates for each PSU
+  # combined_benthic_data_averaged <- combined_benthic_data_summed %>%
+  #   group_by(dataset, PSU, spp) %>%
+  #   summarise(
+  #     # Average cover across all transects/dates within each PSU
+  #     cover = mean(cover, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     susc = first(susc),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_real_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match original structure
+  #   select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
+  # 
+  # #summation by PSU/susc, which accounts for repeat observations but also 
+  # #   multiple transects in the case of TCRMP. also handles lack of 'date' information
+  # #   for NODICE & SESAP
+  # #
+  # # Sum cover values with dataset-specific grouping by susceptibility group
+  # combined_benthic_data_summed_susc = combined_benthic_data_summed %>%
+  #   group_by(dataset, PSU, date,
+  #            transect = if_else(dataset %in% c("TCRMP_benthic", "PRCRMP"), transect, NA_real_),
+  #            susc  # Group by susceptibility instead of species
+  #   ) %>%
+  #   summarise(
+  #     # Keep other variables (taking first value since they should be consistent within groups)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     cover = sum(cover, na.rm = TRUE),  # Sum all species cover within susceptibility group
+  #     depth = first(depth),
+  #     # Count number of species contributing to this susceptibility group
+  #     species_count = n_distinct(spp),
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match structure
+  #   select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)  
+  # 
+  # # Average coral cover across transects and dates for each PSU by susceptibility group
+  # combined_benthic_data_averaged_susc <- combined_benthic_data_summed_susc %>%
+  #   group_by(dataset, PSU, susc) %>%
+  #   summarise(
+  #     # Average cover across all transects/dates within each PSU
+  #     cover = mean(cover, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     # Average species count across transects
+  #     species_count = mean(species_count, na.rm = TRUE),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_real_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match structure
+  #   select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)
+  # 
+  # ## DEMO
+  # #
+  # #summation by PSU/spp, which accounts for repeat observations but also 
+  # #   multiple transects in the case of TCRMP
+  # #
+  # # NOTE - there are some outliers here, mainly on the 10-cm belt transects, because a few very large colonies
+  # #         were considered part of the transect even though it is very narrow. will likely need to cut
+  # #         those dates out, or simply all 10-cm belt transects for consistency
+  # #
+  # # Sum SA values with dataset-specific grouping
+  # combined_demo_data_summed <- combined_demo_data_trimmed %>%
+  #   group_by(
+  #     dataset, PSU, date,
+  #     # # Keep original date column for grouping, but handle NAs properly
+  #     # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+  #     # Keep original transect, but set to NA for non-TCRMP datasets
+  #     # transect = if_else(dataset == "TCRMP_health", transect, NA_real_),
+  #     transect = if_else(dataset == "TCRMP_health", transect, NA_character_), # Changed to NA_character_
+  #     spp
+  #   ) %>%
+  #   summarise(
+  #     # Keep other variables (taking first value since they should be consistent within groups)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     SA = sum(SA, na.rm = TRUE),
+  #     depth = first(depth),
+  #     susc = first(susc),
+  #     method = first(method),
+  #     meterscompleted = first(meterscompleted),
+  #     surveyarea = first(surveyarea),
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match original structure
+  #   select(dataset, date, PSU, transect, lat, lon, depth, spp, method, meterscompleted, surveyarea,
+  #          SA, susc)  
+  # 
+  # #calculate transect- and species-level surface area which is scaled to 2D transect area
+  # combined_demo_data_summed = combined_demo_data_summed %>%
+  #   mutate(SA_density = SA / surveyarea)
+  # 
+  # # Average coral SA across transects and dates for each PSU
+  # combined_demo_data_averaged <- combined_demo_data_summed %>%
+  #   group_by(dataset, PSU, spp) %>%
+  #   summarise(
+  #     # Average SA across all transects/dates within each PSU
+  #     SA = mean(SA, na.rm = TRUE),
+  #     SA_density = mean(SA_density, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     susc = first(susc),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_real_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match original structure
+  #   select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density)  
+  # 
+  # #fill in absences
+  # #
+  # # Get all unique species across all datasets
+  # all_species <- combined_demo_data_averaged %>%
+  #   distinct(spp) %>%
+  #   pull(spp)
+  # 
+  # # Get all unique combinations of dataset/PSU (with their associated metadata)
+  # all_locations <- combined_demo_data_averaged %>%
+  #   select(dataset, PSU, lat, lon, depth) %>%
+  #   distinct()
+  # 
+  # # Create complete grid of all location/species combinations
+  # complete_grid <- expand_grid(
+  #   location_data = all_locations,
+  #   spp = all_species
+  # ) %>%
+  #   # Unnest the location data
+  #   unnest(location_data)
+  # 
+  # # Join with existing data to fill in absences
+  # combined_demo_data_averaged <- complete_grid %>%
+  #   left_join(combined_demo_data_averaged, 
+  #             by = c("dataset", "PSU", "spp", "lat", "lon", "depth")) %>%
+  #   # Fill in missing values
+  #   mutate(
+  #     # Mark inferred absences
+  #     inferred_absence = if_else(is.na(SA), "Y", "N"),
+  #     # Fill in zeros for SA and SA_density where missing
+  #     SA = if_else(is.na(SA), 0, SA),
+  #     SA_density = if_else(is.na(SA_density), 0, SA_density),
+  #     # For inferred absences, we need to assign susc values
+  #     # You may want to modify this logic based on your species data
+  #     susc = if_else(is.na(susc), "unknown", susc),
+  #     # Keep date and transect as NA for inferred absences
+  #     date = if_else(inferred_absence == "Y", as.Date(NA), date),
+  #     transect = if_else(inferred_absence == "Y", NA_real_, transect)
+  #   ) %>%
+  #   # Reorder columns to match your structure plus new column
+  #   select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density, inferred_absence)
+  # 
+  # #summation by PSU/susc, which accounts for repeat observations but also 
+  # #   multiple transects in the case of TCRMP
+  # #
+  # # Sum SA values with dataset-specific grouping by susceptibility group
+  # combined_demo_data_summed_susc <- combined_demo_data_trimmed %>%
+  #   group_by(
+  #     dataset, PSU, date,
+  #     # # Keep original date column for grouping, but handle NAs properly
+  #     # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+  #     # Keep original transect, but set to NA for non-TCRMP datasets
+  #     transect = if_else(dataset == "TCRMP_health", transect, NA_character_),
+  #     susc  # Group by susceptibility instead of species
+  #   ) %>%
+  #   summarise(
+  #     # Keep other variables (taking first value since they should be consistent within groups)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     SA = sum(SA, na.rm = TRUE),  # Sum all species within susceptibility group
+  #     depth = first(depth),
+  #     method = first(method),
+  #     meterscompleted = first(meterscompleted),
+  #     surveyarea = first(surveyarea),
+  #     # Count number of species contributing to this susceptibility group
+  #     species_count = n_distinct(spp),
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match structure
+  #   select(dataset, date, PSU, transect, lat, lon, depth, susc, method, meterscompleted, surveyarea,
+  #          SA, species_count)  
+  # 
+  # #calculate transect- and susceptibility-level surface area which is scaled to 2D transect area
+  # combined_demo_data_summed_susc = combined_demo_data_summed_susc %>%
+  #   mutate(SA_density = SA / surveyarea)
+  # 
+  # # Average coral SA across transects and dates for each PSU by susceptibility group
+  # combined_demo_data_averaged_susc <- combined_demo_data_summed_susc %>%
+  #   group_by(dataset, PSU, susc) %>%
+  #   summarise(
+  #     # Average SA across all transects/dates within each PSU
+  #     SA = mean(SA, na.rm = TRUE),
+  #     SA_density = mean(SA_density, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     # Average species count across transects
+  #     species_count = mean(species_count, na.rm = TRUE),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_character_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns to match structure
+  #   select(dataset, date, PSU, transect, lat, lon, SA, susc, depth, SA_density, species_count)
+  # 
+  # #fill in absences
+  # #
+  # # Get all unique species across all datasets
+  # all_susc <- combined_demo_data_averaged_susc %>%
+  #   distinct(susc) %>%
+  #   pull(susc)
+  # 
+  # # Get all unique combinations of dataset/PSU (with their associated metadata)
+  # all_locations <- combined_demo_data_averaged_susc %>%
+  #   select(dataset, PSU, lat, lon, depth) %>%
+  #   distinct()
+  # 
+  # # Create complete grid of all location/species combinations
+  # complete_grid <- expand_grid(
+  #   location_data = all_locations,
+  #   susc = all_susc
+  # ) %>%
+  #   # Unnest the location data
+  #   unnest(location_data)
+  # 
+  # # Join with existing data to fill in absences
+  # combined_demo_data_averaged_susc <- complete_grid %>%
+  #   left_join(combined_demo_data_averaged_susc, 
+  #             by = c("dataset", "PSU", "susc", "lat", "lon", "depth")) %>%
+  #   # Fill in missing values
+  #   mutate(
+  #     # Mark inferred absences
+  #     inferred_absence = if_else(is.na(SA), "Y", "N"),
+  #     # Fill in zeros for SA and SA_density where missing
+  #     SA = if_else(is.na(SA), 0, SA),
+  #     SA_density = if_else(is.na(SA_density), 0, SA_density),
+  #     # Keep date and transect as NA for inferred absences
+  #     date = if_else(inferred_absence == "Y", as.Date(NA), date),
+  #     transect = if_else(inferred_absence == "Y", NA_character_, transect)  # Changed to NA_character_
+  #     # Note: removed the susc line since it's already correctly populated from the grid
+  #   ) %>%
+  #   # Reorder columns to match your structure plus new column
+  #   select(dataset, date, PSU, transect, lat, lon, SA, depth, susc, SA_density, inferred_absence)  
+  
+  
+  # NOTE - Version where TCRMP & PRCRMP only have the most recently sampled PSU survey included
+  #
+  #filter to only most recent PSU survey (applies to TCRMP & PRCRMP)
+  combined_benthic_data_summed <- combined_benthic_data_summed %>%
+    group_by(PSU) %>%
+    slice_max(date, with_ties = TRUE) %>%
+    ungroup()
+  
   # Average coral cover across transects and dates for each PSU
   combined_benthic_data_averaged <- combined_benthic_data_summed %>%
     group_by(dataset, PSU, spp) %>%
@@ -1854,20 +2137,13 @@
       lon = first(lon),
       depth = first(depth),
       susc = first(susc),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
+      date = first(date),
       # Set transect to NA for everything since we're now at PSU level
       transect = NA_real_,
       .groups = 'drop'
     ) %>%
     # Reorder columns to match original structure
     select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
-  
-  # test = combined_benthic_data_summed %>%
-  #   filter(spp == 'Meandrina spp',
-  #          PSU == 'Black Point') %>%
-  #   summarise(avg = mean(cover, na.rm = TRUE))
-  # test
   
   #summation by PSU/susc, which accounts for repeat observations but also 
   #   multiple transects in the case of TCRMP. also handles lack of 'date' information
@@ -1904,8 +2180,7 @@
       depth = first(depth),
       # Average species count across transects
       species_count = mean(species_count, na.rm = TRUE),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
+      date = first(date),
       # Set transect to NA for everything since we're now at PSU level
       transect = NA_real_,
       .groups = 'drop'
@@ -1923,6 +2198,11 @@
   #         those dates out, or simply all 10-cm belt transects for consistency
   #
   # Sum SA values with dataset-specific grouping
+  
+  
+  # NOTE - why is brewers and other sites getting dropped ?? make sure this isn't happening
+  #         to TCRMP benthic or PRCRMP!
+  
   combined_demo_data_summed <- combined_demo_data_trimmed %>%
     group_by(
       dataset, PSU, date,
@@ -1948,6 +2228,13 @@
     # Reorder columns to match original structure
     select(dataset, date, PSU, transect, lat, lon, depth, spp, method, meterscompleted, surveyarea,
            SA, susc)  
+  
+  #filter to only most recent PSU survey (applies to TCRMP & PRCRMP)
+  combined_demo_data_summed <- combined_demo_data_summed %>%
+    group_by(PSU) %>%
+    slice_max(date, with_ties = TRUE) %>%
+    ungroup()
+  
   
   #calculate transect- and species-level surface area which is scaled to 2D transect area
   combined_demo_data_summed = combined_demo_data_summed %>%
@@ -2014,7 +2301,7 @@
     ) %>%
     # Reorder columns to match your structure plus new column
     select(dataset, date, PSU, transect, lat, lon, SA, spp, depth, susc, SA_density, inferred_absence)
-
+  
   #summation by PSU/susc, which accounts for repeat observations but also 
   #   multiple transects in the case of TCRMP
   #
@@ -2062,8 +2349,7 @@
       depth = first(depth),
       # Average species count across transects
       species_count = mean(species_count, na.rm = TRUE),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
+      date = first(date),
       # Set transect to NA for everything since we're now at PSU level
       transect = NA_character_,
       .groups = 'drop'
@@ -2112,6 +2398,137 @@
   
   ################################## site-level grouping ##################################
   
+  # # NOTE - Version where all dates for TCRMP & PRCRMP are averaged (not great)
+  # #
+  # # BENTHIC
+  # #
+  # #summation by PSU only, pooling all species together
+  # #   accounts for repeat observations and multiple transects in the case of TCRMP
+  # #
+  # # Sum cover values across all species with dataset-specific grouping
+  # combined_benthic_data_summed_psu <- combined_benthic_data_summed %>%
+  #   group_by(
+  #     dataset, PSU, date,
+  #     # # Keep original date column for grouping, but handle NAs properly
+  #     # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+  #     # Keep original transect, but set to NA for non-TCRMP datasets
+  #     transect = if_else(dataset %in% c("TCRMP_benthic", "PRCRMP"), transect, NA_real_),
+  #     # No species or susceptibility grouping - pooling all species
+  #   ) %>%
+  #   summarise(
+  #     # Keep other variables (taking first value since they should be consistent within groups)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     cover = sum(cover, na.rm = TRUE),  # Sum all species cover together
+  #     depth = first(depth),
+  #     # Count total number of species and susceptibility groups
+  #     total_species_count = n_distinct(spp),
+  #     high_susc_count = sum(susc == "high", na.rm = TRUE),
+  #     moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
+  #     low_susc_count = sum(susc == "low", na.rm = TRUE),
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns
+  #   select(dataset, date, PSU, transect, lat, lon, depth, cover, 
+  #          total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
+  # 
+  # # Average total coral cover across transects and dates for each PSU
+  # combined_benthic_data_averaged_psu <- combined_benthic_data_summed_psu %>%
+  #   group_by(dataset, PSU) %>%
+  #   summarise(
+  #     # Average cover across all transects/dates within each PSU
+  #     cover = mean(cover, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     # Average species counts across transects
+  #     total_species_count = mean(total_species_count, na.rm = TRUE),
+  #     high_susc_count = mean(high_susc_count, na.rm = TRUE),
+  #     moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
+  #     low_susc_count = mean(low_susc_count, na.rm = TRUE),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_real_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns
+  #   select(dataset, date, PSU, transect, lat, lon, cover, depth,
+  #          total_species_count, high_susc_count, moderate_susc_count, low_susc_count) %>%
+  #   mutate(PSU = as.factor(PSU))
+  # 
+  # # DEMO
+  # #
+  # #summation by PSU only, pooling all species together
+  # #   accounts for repeat observations and multiple transects in the case of TCRMP
+  # #
+  # # Sum SA values across all species with dataset-specific grouping
+  # combined_demo_data_summed_psu <- combined_demo_data_trimmed %>%
+  #   group_by(
+  #     dataset, PSU, date,
+  #     # # Keep original date column for grouping, but handle NAs properly
+  #     # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
+  #     # Keep original transect, but set to NA for non-TCRMP datasets
+  #     transect = if_else(dataset == "TCRMP_health", transect, NA_character_)
+  #     # No species or susceptibility grouping - pooling all species
+  #   ) %>%
+  #   summarise(
+  #     # Keep other variables (taking first value since they should be consistent within groups)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     SA = sum(SA, na.rm = TRUE),  # Sum all species together
+  #     depth = first(depth),
+  #     method = first(method),
+  #     meterscompleted = first(meterscompleted),
+  #     surveyarea = first(surveyarea),
+  #     # Count total number of species and susceptibility groups
+  #     total_species_count = n_distinct(spp),
+  #     high_susc_count = sum(susc == "high", na.rm = TRUE),
+  #     moderate_susc_count = sum(susc == "moderate", na.rm = TRUE),
+  #     low_susc_count = sum(susc == "low", na.rm = TRUE),
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns
+  #   select(dataset, date, PSU, transect, lat, lon, depth, method, meterscompleted, surveyarea,
+  #          SA, total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
+  # 
+  # #calculate transect-level total surface area scaled to 2D transect area
+  # combined_demo_data_summed_psu = combined_demo_data_summed_psu %>%
+  #   mutate(SA_density = SA / surveyarea)
+  # 
+  # # Average total coral SA across transects and dates for each PSU
+  # combined_demo_data_averaged_psu <- combined_demo_data_summed_psu %>%
+  #   group_by(dataset, PSU) %>%
+  #   summarise(
+  #     # Average SA across all transects/dates within each PSU
+  #     SA = mean(SA, na.rm = TRUE),
+  #     SA_density = mean(SA_density, na.rm = TRUE),
+  #     # Keep other variables (taking first value since they should be consistent within PSU)
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     depth = first(depth),
+  #     # Average species counts across transects
+  #     total_species_count = mean(total_species_count, na.rm = TRUE),
+  #     high_susc_count = mean(high_susc_count, na.rm = TRUE),
+  #     moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
+  #     low_susc_count = mean(low_susc_count, na.rm = TRUE),
+  #     # Set date to NA if we're averaging across multiple samples, otherwise keep original date
+  #     date = if_else(n() > 1, as.Date(NA), first(date)),
+  #     # Set transect to NA for everything since we're now at PSU level
+  #     transect = NA_character_,
+  #     .groups = 'drop'
+  #   ) %>%
+  #   # Reorder columns
+  #   select(dataset, date, PSU, transect, lat, lon, SA, depth, SA_density, 
+  #          total_species_count, high_susc_count, moderate_susc_count, low_susc_count)
+  # 
+  # 
+  # # NOTE - from what I can tell, absences are automatically filtered down to the site-level for both
+  # #         benthic and demo data
+  
+  # NOTE - Version where only most recently sampled TCRMP & PRCRMP surveys are pulled (better)
+  #
   # BENTHIC
   #
   #summation by PSU only, pooling all species together
@@ -2159,8 +2576,7 @@
       high_susc_count = mean(high_susc_count, na.rm = TRUE),
       moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
       low_susc_count = mean(low_susc_count, na.rm = TRUE),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
+      date = first(date),
       # Set transect to NA for everything since we're now at PSU level
       transect = NA_real_,
       .groups = 'drop'
@@ -2225,8 +2641,7 @@
       high_susc_count = mean(high_susc_count, na.rm = TRUE),
       moderate_susc_count = mean(moderate_susc_count, na.rm = TRUE),
       low_susc_count = mean(low_susc_count, na.rm = TRUE),
-      # Set date to NA if we're averaging across multiple samples, otherwise keep original date
-      date = if_else(n() > 1, as.Date(NA), first(date)),
+      date = first(date),
       # Set transect to NA for everything since we're now at PSU level
       transect = NA_character_,
       .groups = 'drop'
