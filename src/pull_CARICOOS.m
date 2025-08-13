@@ -76,7 +76,7 @@ try
             % ran much faster, but that port doesn't work now. this version
             % without a specified port does run, but VERY slowly. takes ~30
             % minutes per year of data
-            url = sprintf('http://dm3.caricoos.org:8003/erddap/griddap/caricoos_dm3_d848_78a5_baa6.nc?Hsig[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Hswell[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Dir[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Per[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)]', ...
+            url = sprintf('http://dm3.caricoos.org/erddap/griddap/caricoos_dm3_d848_78a5_baa6.nc?Hsig[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Hswell[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Dir[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Per[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)]', ...
                           start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date);
             
             % Download with error handling and retry logic
@@ -587,3 +587,104 @@ fclose(fileID);
 fprintf('\n=== Export Complete ===\n');
 fprintf('Total files created: %d\n', 17); % Updated count
 fprintf('All files saved to: %s\n', outputPath);
+
+
+
+
+
+% %% % Simple MATLAB script to download NetCDF files from CARICOOS ERDDAP server
+% % Downloads all four SWAN wave model datasets with different resolutions
+% 
+% % Define dates for one day of data
+% start_date = '2025-08-13T00:00:00Z';
+% end_date = '2025-08-13T23:59:59Z';
+% 
+% %% 1. Download Regional SWAN Data (1 km resolution)
+% fprintf('=== Downloading Regional SWAN Data (1 km) ===\n');
+% 
+% % Construct URL for regional data (Puerto Rico + USVI)
+% regional_url = sprintf('http://dm3.caricoos.org/erddap/griddap/caricoos_dm3_d848_78a5_baa6.nc?Hsig[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Hswell[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Dir[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)],Per[(%s):(%s)][(17.0):(19.5)][(-68.0):(-64.0)]', ...
+%                       start_date, end_date, start_date, end_date, start_date, end_date, start_date, end_date);
+% 
+% % Download regional data
+% regional_filename = 'swan_regional_1km.nc';
+% fprintf('Downloading regional data...\n');
+% websave(regional_filename, regional_url);
+% fprintf('Regional file saved as: %s\n', regional_filename);
+% 
+% % Verify regional download
+% file_info = dir(regional_filename);
+% fprintf('Regional file size: %.2f MB\n\n', file_info.bytes / 1024 / 1024);
+% 
+% %% 2. Download St. Croix High-Resolution Data (180 m resolution)
+% fprintf('=== Downloading St. Croix High-Res SWAN Data (180 m) ===\n');
+% 
+% % Construct URL for St. Croix data
+% stcroix_url = sprintf('http://dm3.caricoos.org/erddap/griddap/Historical_257a_2af8_9075.nc?hs[(%s):(%s)][(17.63):(17.825)][(-65.0):(-64.48)],dir[(%s):(%s)][(17.63):(17.825)][(-65.0):(-64.48)],tp[(%s):(%s)][(17.63):(17.825)][(-65.0):(-64.48)]', ...
+%                      start_date, end_date, start_date, end_date, start_date, end_date);
+% 
+% % Download St. Croix data
+% stcroix_filename = 'swan_stcroix_180m.nc';
+% fprintf('Downloading St. Croix high-res data...\n');
+% websave(stcroix_filename, stcroix_url);
+% fprintf('St. Croix file saved as: %s\n', stcroix_filename);
+% 
+% % Verify St. Croix download
+% file_info = dir(stcroix_filename);
+% fprintf('St. Croix file size: %.2f MB\n\n', file_info.bytes / 1024 / 1024);
+% 
+% %% 3. Download US Virgin Islands High-Resolution Data (100 m resolution)
+% fprintf('=== Downloading USVI High-Res SWAN Data (100 m) ===\n');
+% 
+% % Construct URL for USVI data
+% usvi_url = sprintf('http://dm3.caricoos.org/erddap/griddap/Historical_7719_73b6_fa7d.nc?hs[(%s):(%s)][(18.18):(18.8)][(-65.2):(-64.0)],dir[(%s):(%s)][(18.18):(18.8)][(-65.2):(-64.0)],tp[(%s):(%s)][(18.18):(18.8)][(-65.2):(-64.0)]', ...
+%               start_date, end_date, start_date, end_date, start_date, end_date);
+% 
+% % Download USVI data
+% usvi_filename = 'swan_usvi_100m.nc';
+% fprintf('Downloading USVI high-res data...\n');
+% websave(usvi_filename, usvi_url);
+% fprintf('USVI file saved as: %s\n', usvi_filename);
+% 
+% % Verify USVI download
+% file_info = dir(usvi_filename);
+% fprintf('USVI file size: %.2f MB\n\n', file_info.bytes / 1024 / 1024);
+% 
+% %% 4. Download Puerto Rico High-Resolution Data (120 m resolution)
+% fprintf('=== Downloading Puerto Rico High-Res SWAN Data (120 m) ===\n');
+% 
+% % Construct URL for Puerto Rico data
+% pr_url = sprintf('http://dm3.caricoos.org/erddap/griddap/Historical_9810_6460_3129.nc?hs[(%s):(%s)][(17.8):(18.6)][(-67.5):(-65.1)],dir[(%s):(%s)][(17.8):(18.6)][(-67.5):(-65.1)],tp[(%s):(%s)][(17.8):(18.6)][(-67.5):(-65.1)]', ...
+%          start_date, end_date, start_date, end_date, start_date, end_date);
+% 
+% % Download Puerto Rico data
+% pr_filename = 'swan_pr_120m.nc';
+% fprintf('Downloading Puerto Rico high-res data...\n');
+% websave(pr_filename, pr_url);
+% fprintf('Puerto Rico file saved as: %s\n', pr_filename);
+% 
+% % Verify Puerto Rico download
+% file_info = dir(pr_filename);
+% fprintf('Puerto Rico file size: %.2f MB\n\n', file_info.bytes / 1024 / 1024);
+% 
+% %% Summary
+% fprintf('=== Download Summary ===\n');
+% fprintf('Downloaded 4 SWAN wave model files for %s:\n\n', start_date(1:10));
+% 
+% fprintf('1. %s - Regional (1 km)\n', regional_filename);
+% fprintf('   Variables: Hsig, Hswell, Dir, Per\n');
+% fprintf('   Domain: 17-19.5°N, 68-64°W (All PR + USVI)\n\n');
+% 
+% fprintf('2. %s - St. Croix (180 m)\n', stcroix_filename);
+% fprintf('   Variables: hs, dir, tp\n');
+% fprintf('   Domain: 17.63-17.825°N, 65-64.48°W (St. Croix)\n\n');
+% 
+% fprintf('3. %s - USVI (100 m)\n', usvi_filename);
+% fprintf('   Variables: hs, dir, tp\n');
+% fprintf('   Domain: 18.18-18.8°N, 65.2-64°W (St. Thomas, St. John)\n\n');
+% 
+% fprintf('4. %s - Puerto Rico (120 m)\n', pr_filename);
+% fprintf('   Variables: hs, dir, tp\n');
+% fprintf('   Domain: 17.8-18.6°N, 67.5-65.1°W (PR + municipality islands)\n\n');
+% 
+% fprintf('Resolution hierarchy: 100m (USVI) > 120m (PR) > 180m (St.Croix) > 1000m (Regional)\n');
