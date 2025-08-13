@@ -111,7 +111,7 @@
   # plot_extents = ext(55000, 230000, 2030000, 2058000) #for investigating PR North
   # plot_extents = ext(20000, 80000, 1970000, 2060000) #for investigating PR West
   # plot_extents = ext(52000, 230000, 1970000, 2020000) #for investigating PR South
-
+  
   # raster
   bathy_final_clamp <- clamp(bathy_final, lower = -50, upper = 0)
   plot(bathy_final,
@@ -367,26 +367,30 @@
   #       evaluation. it is most of the way there already I think!
   
   # Create complete cases dataset with all variables
-  complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
-                       "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  # NOTE - VRM, complexity, and SAPA create a BIG NA buffer around them which cause a loss of
+  #         139 observation points. good argument for removing!
+  #           - and unfortunately, CARICOOS wave data causes a loss of 310 nearshore points.
+  #               certainly an argument for favoring the higher-resolution model
+  # complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+  #                      "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
                        "range_SST", "year", "date", "lat", "lon", "cover")
-
+  
   model_data_complex <- model_data_filtered[complete.cases(model_data_filtered[, complexity_vars]), ]
   
   # Check how much data you have left
   cat("Observations with all complexity variables:", nrow(model_data_complex), "\n")
   
   # Fit expanded GAM models
-  # gam_complex <- gam(cover ~ s(bathymetry) + s(aspect, bs = 'cc') + s(slope) + s(TPI) + s(roughness) + s(VRM) +
-  #                      s(max_curv, k = 15) + s(mean_curv) + s(planform_curv) + s(profile_curv),
+  # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
+  #                     s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
+  #                      s(mean_Hsig),
   #                    data = model_data_complex,
   #                    family = tw())
-  # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
-  #                    data = model_data_complex,
-  #                    family = tw())
-  gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
-                      s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
-                       s(mean_Hsig) + s(year),
+  gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+                       s(range_SST) + s(mean_SST),
                      data = model_data_complex,
                      family = tw())
   
@@ -414,27 +418,29 @@
   # Two-part model with complexity
   model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
 
-  # gam_presence_complex <- gam(present ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM),
+  # gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
+  #                               s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
+  #                               s(mean_Hsig),
   #                             data = model_data_complex,
   #                             family = binomial())
-  gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
-                                s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
-                                s(mean_Hsig),
+  gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+                                s(range_SST) + s(mean_SST),
                               data = model_data_complex,
                               family = binomial())
   
-  # gam_abundance_complex <- gam(cover ~ s(bathymetry) + s(slope) + s(TPI) + s(roughness) + s(VRM),
+  # gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+  #                                s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
+  #                                s(mean_Hsig),
   #                              data = model_data_complex[model_data_complex$cover > 0, ],
   #                              family = Gamma(link = "log"))
-  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(planform_curv) +
-                                 s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
-                                 s(mean_Hsig),
+  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+                                 s(range_SST) + s(mean_SST),
                                data = model_data_complex[model_data_complex$cover > 0, ],
                                family = Gamma(link = "log"))
   
   summary(gam_presence_complex)
   summary(gam_abundance_complex)
-
+  
   # Create a reduced model with less correlated variables
   # Keep: bathymetry (depth), TPI (topographic position), VRM (rugosity)
   # These capture the main dimensions: depth, local position, and complexity
@@ -594,9 +600,23 @@
   ################################## spp GAMs ##################################
   
   # Define species list (starting with your priority species)
-  species_list <- c("Agaricia", "Montastraea", "Pseudodiploria", "Porites",
-                    "Orbicella", "Colpophyllia", "Dendrogyra",
+  #  NOTE - will add the rarely observed and SCTLD-susceptibility-poor ones into one group
+  species_list <- c("Agaricia", "Helioseris", "Madracis", "Montastraea", "Pseudodiploria", "Porites",
+                    "Orbicella", "Colpophyllia", "Dendrogyra", "Solenastrea", "Dichocoenia",
+                    "Diploria", "Eusmilia", "Meandrina",
                     "Siderastrea")
+  
+  # Create complete cases dataset with all variables
+  # NOTE - VRM, complexity, and SAPA create a BIG NA buffer around them which cause a loss of
+  #         139 observation points. good argument for removing!
+  #           - and unfortunately, CARICOOS wave data causes a loss of 310 nearshore points.
+  #               certainly an argument for favoring the higher-resolution model
+  # complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+  #                      "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
+                       "range_SST", "year", "date", "lat", "lon", "cover")
   
   # # Get all unique species from the dataset and add remaining ones
   # all_species <- unique(spp_data$spp)
@@ -620,9 +640,9 @@
     species_data <- spp_data %>%
       # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%
       # filter(!grepl("_PR", PSU)) %>%
-      # filter(!dataset %in% c("NODICE")) %>%
-      filter(year(date) >= 2017) %>%
-      filter(depth_bathy >= -50) %>%
+      filter(!dataset %in% c("NODICE")) %>%
+      # filter(year(date) >= 2017) %>%
+      filter(depth_bathy >= -60) %>%
       filter(grepl(sp, spp))
     
     # Check if we have enough data
@@ -647,9 +667,11 @@
     species_data$mean_Hsig <- species_env_complex$mean_Hsig
     species_data$mean_SST <- species_env_complex$mean_SST
     species_data$range_SST <- species_env_complex$range_SST
+    species_data$year <- year(species_data$date)
     
     # Create complete cases dataset
     model_data_complete <- species_data[complete.cases(species_data[, complexity_vars]), ]
+    
     
     cat("Complete observations:", nrow(model_data_complete), "\n")
     
@@ -660,15 +682,18 @@
     
     # Fit complex GAM
     tryCatch({
-      gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                           s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                           s(max_Hsig) + s(mean_Hsig),
+      # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                      s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                      s(max_Hsig) + s(mean_Hsig),
+      #                    data = model_data_complete, family = tw())
+      gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+                           s(planform_curv) + s(range_SST) + s(mean_SST),
                          data = model_data_complete, family = tw())
       
       cat("Complex GAM AIC:", AIC(gam_complex), "\n")
       
       # Fit reduced GAM
-      gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + TPI + s(planform_curv),
+      gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + s(TPI) + s(planform_curv),
                          data = model_data_complete, family = tw())
       
       cat("Reduced GAM AIC:", AIC(gam_reduced), "\n")
@@ -676,14 +701,21 @@
       # Two-part models
       model_data_complete$present <- ifelse(model_data_complete$cover > 0, 1, 0)
       
-      gam_presence <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                            s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                            s(max_Hsig) + s(mean_Hsig),
+      # gam_presence <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                       s(max_Hsig) + s(mean_Hsig),
+      #                     data = model_data_complete, family = binomial())
+      gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) +
+                            s(planform_curv) + s(range_SST) + s(mean_SST),
                           data = model_data_complete, family = binomial())
       
-      gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                             s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                             s(max_Hsig) + s(mean_Hsig),
+      # gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                        s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                        s(max_Hsig) + s(mean_Hsig),
+      #                      data = model_data_complete[model_data_complete$cover > 0, ],
+      #                      family = Gamma(link = "log"))
+      gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+                             s(planform_curv) + s(range_SST) + s(mean_SST),
                            data = model_data_complete[model_data_complete$cover > 0, ],
                            family = Gamma(link = "log"))
       
@@ -903,608 +935,544 @@
   # Abundance model
   summary(gam_results[["Siderastrea"]]$abundance)
   
-  # ################################## make predictions ##################################
-  # 
-  # # NOTE - this is sparse right now compared to all available rasters, for computational
-  # #         reasons. can return to this
-  # # First, create your stack properly
-  # env_stack <- env_complex
-  # 
-  # # Check geometry - compareGeom works on individual rasters, not the stack
-  # # Let's check that all layers match the first one (bathy_final)
-  # terra::compareGeom(bathy_final, aspect_terra, stopOnError = FALSE)
-  # terra::compareGeom(bathy_final, slope_terra, stopOnError = FALSE)
-  # # etc... or loop through them:
-  # 
-  # for(i in 2:nlyr(env_stack)) {
-  #   cat("Checking layer", i, ":", names(env_stack)[i], "\n")
-  #   print(terra::compareGeom(env_stack[[1]], env_stack[[i]], stopOnError = FALSE))
-  # }
-  # 
-  # # Alternative: just check basic properties
-  # terra::res(env_stack)  # Should all be the same
-  # terra::ext(env_stack)  # Should all be the same
-  # 
-  # # Create prediction grid
-  # prediction_grid <- as.data.frame(env_stack, xy = TRUE)
-  # 
-  # # # Remove rows with any NA values
-  # # prediction_grid <- prediction_grid[complete.cases(prediction_grid), ]
-  # 
-  # # Check your grid
-  # dim(prediction_grid)
-  # head(prediction_grid)
-  # 
-  # # Better names for your variables
-  # names(prediction_grid) <- c("x", "y", "depth", "aspect", "slope", "complexity",
-  #                             "TPI", "VRM", "planform_curv", "max_Hsig", "mean_dir",
-  #                             "mean_Hsig", "mean_SST", "range_SST")
-  # 
-  # # Convert prediction grid UTM coordinates back to lat/lon for the spatial term
-  # prediction_coords_utm <- vect(cbind(prediction_grid$x, prediction_grid$y),
-  #                               crs = crs(bathy_final))
-  # prediction_coords_latlon <- project(prediction_coords_utm, "EPSG:4326")
-  # coords_df <- as.data.frame(geom(prediction_coords_latlon)[, c("x", "y")])
-  # 
-  # # Add lat/lon to prediction grid
-  # prediction_grid$lon <- coords_df$x
-  # prediction_grid$lat <- coords_df$y
-  # 
-  # # Remove any rows with NAs in the required variables
-  # # pred_vars <- c("bathymetry", "TPI", "VRM", "lon", "lat")
-  # pred_vars <- c("depth", "TPI", "slope", "complexity", "planform_curv",
-  #                "range_SST", "mean_SST", "mean_dir", "max_Hsig", "mean_Hsig", "lon", "lat")
-  # prediction_grid_clean <- prediction_grid[complete.cases(prediction_grid[, pred_vars]), ]
-  # 
-  # cat("Prediction grid size:", nrow(prediction_grid_clean), "cells\n")
-  # 
-  # 
-  # # # Make predictions with the spatial model
-  # # predictions <- predict(gam_spatial, prediction_grid_clean, type = "response")
-  # # 
-  # # # Add predictions to the grid
-  # # prediction_grid_clean$predicted_cover <- predictions
-  # # 
-  # # # Check prediction range
-  # # summary(prediction_grid_clean$predicted_cover)
-  # 
-  # 
-  # # # Simple approach with time estimates
-  # # start_time <- Sys.time()
-  # # 
-  # # # Test prediction on small subset to estimate time
-  # # test_subset <- prediction_grid_clean[1:1000, ]
-  # # test_start <- Sys.time()
-  # # test_pred <- predict(gam_complex, test_subset, type = "response")
-  # # test_time <- as.numeric(difftime(Sys.time(), test_start, units = "secs"))
-  # # 
-  # # # Estimate total time
-  # # estimated_total <- (test_time / 1000) * nrow(prediction_grid_clean)
-  # # cat("Estimated total time:", round(estimated_total/60, 1), "minutes\n")
-  # # 
-  # # # Now do full prediction
-  # # predictions <- predict(gam_spatial, prediction_grid_clean, type = "response")
-  # # cat("Actual time:", round(difftime(Sys.time(), start_time, units = "mins"), 1), "minutes\n")
-  # 
-  # 
-  # # Resample your environmental stack to 200m resolution
-  # env_simple_200m <- aggregate(env_stack, fact = 4, fun = "mean")  # 4x aggregation = 200m
-  # 
-  # # Check the new resolution
-  # res(env_simple_200m)  # Should show 200, 200
-  # 
-  # # Create prediction grid from 200m rasters
-  # prediction_grid_200m <- as.data.frame(env_simple_200m, xy = TRUE)
-  # names(prediction_grid_200m) <- c("x", "y", "bathymetry", "slope")
-  # 
-  # # Add TPI and VRM at 200m
-  # env_complex_200m <- aggregate(env_complex, fact = 4, fun = "mean")
-  # complex_grid_200m <- as.data.frame(env_complex_200m, xy = TRUE)
-  # names(complex_grid_200m) <- c("x", "y", "bathymetry", "slope", "TPI", "roughness", "VRM",
-  #                               "max_curv", "mean_curv", "planform_curv", "profile_curv")
-  # 
-  # # Keep just the variables you need
-  # prediction_grid_200m <- complex_grid_200m[, c("x", "y", "bathymetry", "TPI", "VRM")]
-  # 
-  # # Remove NAs
-  # prediction_grid_200m <- prediction_grid_200m[complete.cases(prediction_grid_200m), ]
-  # 
-  # cat("200m grid size:", nrow(prediction_grid_200m), "cells\n")
-  # cat("50m grid size was:", nrow(prediction_grid_clean), "cells\n")
-  # cat("Reduction factor:", round(nrow(prediction_grid_clean)/nrow(prediction_grid_200m), 1), "\n")
-  # 
-  # # Convert UTM to lat/lon for the spatial term
-  # prediction_coords_utm_200m <- vect(cbind(prediction_grid_200m$x, prediction_grid_200m$y),
-  #                                    crs = crs(bathy_final))
-  # prediction_coords_latlon_200m <- project(prediction_coords_utm_200m, "EPSG:4326")
-  # coords_df_200m <- as.data.frame(geom(prediction_coords_latlon_200m)[, c("x", "y")])
-  # 
-  # prediction_grid_200m$lon <- coords_df_200m$x
-  # prediction_grid_200m$lat <- coords_df_200m$y
-  # 
-  # cat("Final 200m grid size:", nrow(prediction_grid_200m), "cells\n")
-  # 
-  # # Step 4: Estimate time before full prediction
-  # start_time <- Sys.time()
-  # 
-  # # Test prediction on small subset to estimate time
-  # test_subset_200m <- prediction_grid_200m[1:1000, ]
-  # test_start <- Sys.time()
-  # test_pred_200m <- predict(gam_spatial, test_subset_200m, type = "response")
-  # test_time <- as.numeric(difftime(Sys.time(), test_start, units = "secs"))
-  # 
-  # # Estimate total time
-  # estimated_total_200m <- (test_time / 1000) * nrow(prediction_grid_200m)
-  # cat("200m grid size:", nrow(prediction_grid_200m), "cells\n")
-  # cat("Test time for 1000 cells:", round(test_time, 2), "seconds\n")
-  # cat("Estimated total time:", round(estimated_total_200m/60, 1), "minutes\n")
-  # 
-  # # Compare to original estimate
-  # original_cells <- nrow(prediction_grid_clean)
-  # reduction_factor <- original_cells / nrow(prediction_grid_200m)
-  # cat("Reduction factor:", round(reduction_factor, 1), "x smaller\n")
-  # cat("Original estimate was 61 minutes\n")
-  # cat("New estimate should be ~", round(61/reduction_factor, 1), "minutes\n")
-  # 
-  # # Ask user if they want to proceed
-  # cat("\nProceed with full prediction? (y/n)\n")
-  # user_input <- readline()
-  # 
-  # if(tolower(user_input) == "y") {
-  #   cat("Starting full prediction...\n")
-  # 
-  #   # Full prediction with timing
-  #   full_start <- Sys.time()
-  #   predictions_200m <- predict(gam_spatial, prediction_grid_200m, type = "response")
-  #   prediction_grid_200m$predicted_cover <- predictions_200m
-  #   full_end <- Sys.time()
-  # 
-  #   cat("Actual prediction time:", round(difftime(full_end, full_start, units = "mins"), 1), "minutes\n")
-  #   cat("Prediction complete!\n")
-  # 
-  # } else {
-  #   cat("Prediction cancelled. Consider further reducing grid size or using sampling.\n")
-  # }
-  # 
-  # # Convert to raster
-  # pred_raster_200m <- rast(prediction_grid_200m[, c("x", "y", "predicted_cover")],
-  #                          crs = crs(bathy_final))
-  # 
-  # # Plot
-  # plot(pred_raster_200m,
-  #      main = "Predicted Coral Cover (%) - 200m resolution",
-  #      col = viridis(100))
-  # 
-  # # Add survey points
-  # points(model_data_complex$x_utm, model_data_complex$y_utm,
-  #        pch = 21,
-  #        bg = heat.colors(10)[cut(model_data_complex$cover, breaks = 10)],
-  #        cex = 0.8)
-  # 
-  # 
-  # ################################## maps ##################################
-  # 
-  # 
-  # # library(viridis)
-  # library(sf)
-  # 
-  # # Convert predictions back to raster
-  # pred_raster <- rast(prediction_grid_clean[, c("x", "y", "predicted_cover")], 
-  #                     crs = crs(bathy_final))
-  # 
-  # # Create a nice map
-  # # Option 1: Using terra plot
-  # plot(pred_raster, 
-  #      main = "Predicted Coral Cover (%)",
-  #      col = viridis(100),
-  #      range = c(0, max(prediction_grid_clean$predicted_cover, na.rm = TRUE)))
-  # 
-  # # Add your actual survey points
-  # points(model_data_complex$x_utm, model_data_complex$y_utm, 
-  #        pch = 21, 
-  #        bg = heat.colors(10)[cut(model_data_complex$cover, breaks = 10)],
-  #        cex = 0.8)
-  # 
-  # # Add legend for points
-  # legend("topright", 
-  #        title = "Observed Cover",
-  #        legend = c("0-10%", "10-20%", "20-30%", "30%+"),
-  #        pch = 21,
-  #        pt.bg = heat.colors(4),
-  #        cex = 0.8)
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
   
   
-  ################################## 80/20 w/ Tweedie ##################################
+  # HELIOSERIS
+  summary(gam_results[["Helioseris"]]$complex)
+  gam.check(gam_results[["Helioseris"]]$complex)
+  plot(gam_results[["Helioseris"]]$complex, pages = 2)
+  draw(gam_results[["Helioseris"]]$complex)
   
-  gam_train_test_split <- function(gam_model, gam_results_entry = NULL, train_percent = 80, 
-                                   seed = 123, return_details = FALSE) {
-    
-    # Load required libraries
-    library(mgcv)
-    library(pROC)
-    library(dplyr)
-    library(ggplot2)
-    library(viridis)
-    library(gridExtra)
-    
-    set.seed(seed)
-    
-    # Extract model information and use model's own data
-    model_formula <- formula(gam_model)
-    model_family <- family(gam_model)
-    model_data <- gam_model$model
-    
-    # If full gam_results entry provided, use that data for coordinates
-    if(!is.null(gam_results_entry) && !is.null(gam_results_entry$data)) {
-      full_data <- gam_results_entry$data
-      # Match the model data with full data to get coordinates
-      # Assuming the model data is a subset of the full data
-      model_data_with_coords <- merge(model_data, full_data, by = intersect(names(model_data), names(full_data)))
-    } else {
-      model_data_with_coords <- model_data
-    }
-    
-    # Get response variable name
-    response_var <- all.vars(model_formula)[1]
-    
-    # Remove rows with missing values for the variables in the formula
-    formula_vars <- all.vars(model_formula)
-    complete_data <- model_data_with_coords[complete.cases(model_data_with_coords[, formula_vars]), ]
-    
-    cat("Using", nrow(complete_data), "complete observations from model's data\n")
-    cat("Model family:", model_family$family, "\n")
-    cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
-    cat("Response variable:", response_var, "\n")
-    
-    if(nrow(complete_data) < 20) {
-      warning("Insufficient data for validation (< 20 observations)")
-      return(NULL)
-    }
-    
-    # Determine if this is predicting binary outcomes (0/1 only) vs continuous
-    unique_values <- unique(complete_data[[response_var]])
-    unique_values <- unique_values[!is.na(unique_values)]
-    is_binary <- length(unique_values) == 2 && all(unique_values %in% c(0, 1))
-    
-    # Calculate appropriate metrics
-    calculate_metrics <- function(actual, predicted) {
-      if(is_binary) {
-        # For binary outcomes - calculate AUC and classification metrics
-        if(length(unique(actual)) > 1) {
-          auc_val <- as.numeric(auc(actual, predicted))
-          pred_class <- ifelse(predicted > 0.5, 1, 0)
-          accuracy <- mean(actual == pred_class)
-          sensitivity <- if(sum(actual == 1) > 0) sum(actual == 1 & pred_class == 1) / sum(actual == 1) else NA
-          specificity <- if(sum(actual == 0) > 0) sum(actual == 0 & pred_class == 0) / sum(actual == 0) else NA
-          
-          return(list(
-            auc = auc_val,
-            accuracy = accuracy,
-            sensitivity = sensitivity,
-            specificity = specificity
-          ))
-        } else {
-          return(list(auc = NA, accuracy = NA, sensitivity = NA, specificity = NA))
-        }
-      } else {
-        # For continuous outcomes - calculate RMSE, MAE, R², and Pearson correlation
-        rmse <- sqrt(mean((actual - predicted)^2, na.rm = TRUE))
-        mae <- mean(abs(actual - predicted), na.rm = TRUE)
-        
-        # Calculate R²
-        if(var(actual, na.rm = TRUE) > 0) {
-          r_squared <- cor(actual, predicted, use = "complete.obs")^2
-        } else {
-          r_squared <- NA
-        }
-        
-        # Calculate Pearson correlation coefficient and test significance
-        cor_test <- cor.test(actual, predicted, method = "pearson")
-        pearson_r <- cor_test$estimate
-        pearson_p <- cor_test$p.value
-        
-        # Determine significance level
-        if(is.na(pearson_p)) {
-          significance <- "Cannot determine"
-        } else if(pearson_p < 0.001) {
-          significance <- "***"
-        } else if(pearson_p < 0.01) {
-          significance <- "**"
-        } else if(pearson_p < 0.05) {
-          significance <- "*"
-        } else {
-          significance <- "ns"
-        }
-        
-        return(list(
-          rmse = rmse,
-          mae = mae,
-          r_squared = r_squared,
-          pearson_r = pearson_r,
-          pearson_p = pearson_p,
-          significance = significance
-        ))
-      }
-    }
-    
-    # Train-test split
-    n <- nrow(complete_data)
-    train_size <- floor((train_percent / 100) * n)
-    train_idx <- sample(1:n, size = train_size)
-    
-    train_data <- complete_data[train_idx, ]
-    test_data <- complete_data[-train_idx, ]
-    
-    cat("Training observations:", nrow(train_data), "\n")
-    cat("Testing observations:", nrow(test_data), "\n")
-    
-    # Fit model on training data
-    tryCatch({
-      fit <- gam(model_formula, data = train_data, family = model_family)
-      
-      # Make predictions on test data
-      predictions <- predict(fit, newdata = test_data, type = "response")
-      actual <- test_data[[response_var]]
-      
-      # Calculate metrics
-      metrics <- calculate_metrics(actual, predictions)
-      
-      # Print key results
-      cat("\n=== RESULTS ===\n")
-      if(is_binary) {
-        cat("AUC:", round(metrics$auc, 3), "\n")
-        cat("Accuracy:", round(metrics$accuracy, 3), "\n")
-      } else {
-        cat("R²:", round(metrics$r_squared, 3), "\n")
-        cat("Pearson r:", round(metrics$pearson_r, 3), "\n")
-        cat("P-value:", format(metrics$pearson_p, scientific = TRUE, digits = 3), "\n")
-        cat("Significance:", metrics$significance, "\n")
-        cat("RMSE:", round(metrics$rmse, 3), "\n")
-        
-        # Provide interpretation
-        if(metrics$significance == "***") {
-          cat("Interpretation: Correlation is highly significant (P < 0.001)\n")
-        } else if(metrics$significance == "**") {
-          cat("Interpretation: Correlation is significant (P < 0.01)\n")
-        } else if(metrics$significance == "*") {
-          cat("Interpretation: Correlation is significant (P < 0.05)\n")
-        } else if(metrics$significance == "ns") {
-          cat("Interpretation: Correlation is not significant (P ≥ 0.05)\n")
-        }
-      }
-      
-      # Create results dataframe with spatial coordinates for mapping
-      test_results <- test_data
-      test_results$predicted <- predictions
-      test_results$residuals <- actual - predictions
-      
-      result <- list(
-        n_total = nrow(complete_data),
-        n_train = nrow(train_data),
-        n_test = nrow(test_data),
-        train_percent = train_percent,
-        family = model_family$family,
-        response_variable = response_var,
-        metrics = metrics,
-        test_results = test_results,  # Always include this for mapping
-        is_binary = is_binary
-      )
-      
-      if(return_details) {
-        result$predictions <- predictions
-        result$actual <- actual
-        result$train_data <- train_data
-        result$test_data <- test_data
-        result$fitted_model <- fit
-        result$formula <- model_formula
-      }
-      
-      return(result)
-      
-    }, error = function(e) {
-      cat("Error in model fitting:", e$message, "\n")
-      return(NULL)
-    })
-  }
   
-  ################################## 80/20 plot ##################################
+  # Complex model
+  summary(gam_results[["Helioseris"]]$complex)
+  plot(gam_results[["Helioseris"]]$complex, pages = 2)
   
-  plot_validation_maps <- function(validation_result, coord_system = "latlon") {
-    
-    if(is.null(validation_result) || is.null(validation_result$test_results)) {
-      stop("No test results found for mapping")
-    }
-    
-    plot_data <- validation_result$test_results
-    
-    # Print available columns for debugging
-    cat("Available columns in test results:\n")
-    print(colnames(plot_data))
-    
-    # Determine coordinate columns with fallbacks
-    if(coord_system == "latlon") {
-      x_candidates <- c("lon", "longitude", "Longitude", "LON")
-      y_candidates <- c("lat", "latitude", "Latitude", "LAT")
-      x_lab <- "Longitude"
-      y_lab <- "Latitude"
-    } else {
-      x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
-      y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
-      x_lab <- "UTM X"
-      y_lab <- "UTM Y"
-    }
-    
-    # Find the actual column names
-    x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
-    y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
-    
-    if(length(x_col) == 0 || length(y_col) == 0) {
-      cat("Could not find coordinate columns. Trying the other coordinate system...\n")
-      
-      # Try the other coordinate system
-      if(coord_system == "latlon") {
-        x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
-        y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
-        x_lab <- "UTM X"
-        y_lab <- "UTM Y"
-      } else {
-        x_candidates <- c("lon", "longitude", "Longitude", "LON")
-        y_candidates <- c("lat", "latitude", "Latitude", "LAT")
-        x_lab <- "Longitude"
-        y_lab <- "Latitude"
-      }
-      
-      x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
-      y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
-    }
-    
-    if(length(x_col) == 0 || length(y_col) == 0) {
-      stop("Could not find any coordinate columns. Available columns: ", paste(colnames(plot_data), collapse = ", "))
-    }
-    
-    # Use first match
-    x_col <- x_col[1]
-    y_col <- y_col[1]
-    
-    cat("Using coordinates:", x_col, "and", y_col, "\n")
-    
-    # Common theme for maps
-    map_theme <- theme_minimal() +
-      theme(
-        axis.text = element_text(size = 8),
-        plot.title = element_text(size = 10, hjust = 0.5),
-        legend.title = element_text(size = 9),
-        legend.text = element_text(size = 8)
-      )
-    
-    # Get response variable name
-    response_var <- validation_result$response_variable
-    
-    # Calculate shared color scale limits
-    actual_values <- plot_data[[response_var]]
-    predicted_values <- plot_data$predicted
-    shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
-    shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
-    
-    cat("Shared color scale range:", round(shared_min, 2), "to", round(shared_max, 2), "\n")
-    
-    # Plot 1: Actual cover values
-    p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = response_var)) +
-      geom_point(size = 2, alpha = 0.7) +
-      scale_color_viridis_c(name = "Actual", option = "plasma", limits = c(shared_min, shared_max)) +
-      labs(title = paste("Actual", response_var, "(Test Set)"), 
-           x = x_lab, y = y_lab) +
-      map_theme
-    
-    # Plot 2: Predicted cover values
-    p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
-      geom_point(size = 2, alpha = 0.7) +
-      scale_color_viridis_c(name = "Predicted", option = "plasma", limits = c(shared_min, shared_max)) +
-      labs(title = paste("Predicted", response_var), 
-           x = x_lab, y = y_lab) +
-      map_theme
-    
-    # Plot 3: Residuals (actual - predicted)
-    p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "residuals")) +
-      geom_point(size = 2, alpha = 0.7) +
-      scale_color_gradient2(name = "Residual", 
-                            low = "red", mid = "white", high = "blue",
-                            midpoint = 0) +
-      labs(title = "Residuals (Actual - Predicted)", 
-           x = x_lab, y = y_lab) +
-      map_theme
-    
-    # Plot 4: Predicted vs Actual scatter plot
-    p4 <- ggplot(plot_data, aes_string(x = "predicted", y = response_var)) +
-      geom_point(alpha = 0.6) +
-      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
-      labs(title = "Predicted vs Actual", 
-           x = paste("Predicted", response_var), 
-           y = paste("Actual", response_var)) +
-      theme_minimal()
-    
-    # Arrange plots
-    grid.arrange(p1, p2, p3, p4, ncol = 2,
-                 top = paste("Validation Results -", 
-                             validation_result$family, "model"))
-    
-    # Return the individual plots as well
-    invisible(list(actual = p1, predicted = p2, residuals = p3, scatter = p4))
-  }
+  # Reduced model  
+  summary(gam_results[["Helioseris"]]$reduced)
+  plot(gam_results[["Helioseris"]]$reduced, pages = 1)
   
-  ################################## 80/20 usage ##################################
+  # Presence/absence model
+  summary(gam_results[["Helioseris"]]$presence)
   
-  # Example 1: Validation with coordinates for mapping
-  result <- gam_train_test_split(gam_results[["Orbicella"]]$complex,
-                                 gam_results_entry = gam_results[["Orbicella"]],
-                                 train_percent = 80)
-  plot_validation_maps(result)
+  # Abundance model
+  summary(gam_results[["Helioseris"]]$abundance)
   
-  # Example 2: Simple validation without coordinates (no mapping possible)
-  # result <- gam_train_test_split(gam_results[["Agaricia"]]$complex, train_percent = 80)
   
-  # Example 3: Validate all species models with mapping
-  # for(sp in names(gam_results)) {
-  #   cat("\n=== VALIDATING", sp, "===\n")
-  #   result <- gam_train_test_split(gam_results[[sp]]$complex, 
-  #                                 gam_results_entry = gam_results[[sp]], 
-  #                                 train_percent = 80)
-  #   if(!is.null(result)) {
-  #     plot_validation_maps(result)
+  
+  
+  # MADRACIS
+  summary(gam_results[["Madracis"]]$complex)
+  gam.check(gam_results[["Madracis"]]$complex)
+  plot(gam_results[["Madracis"]]$complex, pages = 2)
+  draw(gam_results[["Madracis"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Madracis"]]$complex)
+  plot(gam_results[["Madracis"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Madracis"]]$reduced)
+  plot(gam_results[["Madracis"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Madracis"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Madracis"]]$abundance)
+  
+  
+  # SOLENASTREA
+  summary(gam_results[["Solenastrea"]]$complex)
+  gam.check(gam_results[["Solenastrea"]]$complex)
+  plot(gam_results[["Solenastrea"]]$complex, pages = 2)
+  draw(gam_results[["Solenastrea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Solenastrea"]]$complex)
+  plot(gam_results[["Solenastrea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Solenastrea"]]$reduced)
+  plot(gam_results[["Solenastrea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Solenastrea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Solenastrea"]]$abundance)
+  
+  
+  
+  
+  # DICHOCOENIA
+  summary(gam_results[["Dichocoenia"]]$complex)
+  gam.check(gam_results[["Dichocoenia"]]$complex)
+  plot(gam_results[["Dichocoenia"]]$complex, pages = 2)
+  draw(gam_results[["Dichocoenia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Dichocoenia"]]$complex)
+  plot(gam_results[["Dichocoenia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Dichocoenia"]]$reduced)
+  plot(gam_results[["Dichocoenia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Dichocoenia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Dichocoenia"]]$abundance)
+  
+  
+  
+  
+  
+  # DIPLORIA
+  summary(gam_results[["Diploria"]]$complex)
+  gam.check(gam_results[["Diploria"]]$complex)
+  plot(gam_results[["Diploria"]]$complex, pages = 2)
+  draw(gam_results[["Diploria"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Diploria"]]$complex)
+  plot(gam_results[["Diploria"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Diploria"]]$reduced)
+  plot(gam_results[["Diploria"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Diploria"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Diploria"]]$abundance)
+  
+  
+  
+  # EUSMILIA
+  summary(gam_results[["Eusmilia"]]$complex)
+  gam.check(gam_results[["Eusmilia"]]$complex)
+  plot(gam_results[["Eusmilia"]]$complex, pages = 2)
+  draw(gam_results[["Eusmilia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Eusmilia"]]$complex)
+  plot(gam_results[["Eusmilia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Eusmilia"]]$reduced)
+  plot(gam_results[["Eusmilia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Eusmilia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Eusmilia"]]$abundance)
+  
+  
+  
+  # MEANDRINA
+  summary(gam_results[["Meandrina"]]$complex)
+  gam.check(gam_results[["Meandrina"]]$complex)
+  plot(gam_results[["Meandrina"]]$complex, pages = 2)
+  draw(gam_results[["Meandrina"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Meandrina"]]$complex)
+  plot(gam_results[["Meandrina"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Meandrina"]]$reduced)
+  plot(gam_results[["Meandrina"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Meandrina"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Meandrina"]]$abundance)
+  
+  
+  # ################################## 80/20 w/ Tweedie ##################################
+  # 
+  # gam_train_test_split <- function(gam_model, gam_results_entry = NULL, train_percent = 80, 
+  #                                  seed = 123, return_details = FALSE) {
+  #   
+  #   # Load required libraries
+  #   library(mgcv)
+  #   library(pROC)
+  #   library(dplyr)
+  #   library(ggplot2)
+  #   library(viridis)
+  #   library(gridExtra)
+  #   
+  #   set.seed(seed)
+  #   
+  #   # Extract model information and use model's own data
+  #   model_formula <- formula(gam_model)
+  #   model_family <- family(gam_model)
+  #   model_data <- gam_model$model
+  #   
+  #   # If full gam_results entry provided, use that data for coordinates
+  #   if(!is.null(gam_results_entry) && !is.null(gam_results_entry$data)) {
+  #     full_data <- gam_results_entry$data
+  #     # Match the model data with full data to get coordinates
+  #     # Assuming the model data is a subset of the full data
+  #     model_data_with_coords <- merge(model_data, full_data, by = intersect(names(model_data), names(full_data)))
+  #   } else {
+  #     model_data_with_coords <- model_data
   #   }
-  # }
-  
-  # Example 4: Generate summary table for multiple species
-  # results_summary <- data.frame(
-  #   Species = character(),
-  #   Model_Type = character(),
-  #   Pearson_r = numeric(),
-  #   P_value = numeric(),
-  #   Significance = character(),
-  #   R_squared = numeric(),
-  #   RMSE = numeric(),
-  #   stringsAsFactors = FALSE
-  # )
-  # 
-  # for(sp in names(gam_results)) {
-  #   for(model_type in c("complex", "reduced")) {
-  #     result <- gam_train_test_split(gam_results[[sp]][[model_type]], 
-  #                                   gam_results_entry = gam_results[[sp]], 
-  #                                   train_percent = 80)
-  #     if(!is.null(result) && !result$is_binary) {
-  #       results_summary <- rbind(results_summary, data.frame(
-  #         Species = sp,
-  #         Model_Type = model_type,
-  #         Pearson_r = round(result$metrics$pearson_r, 3),
-  #         P_value = result$metrics$pearson_p,
-  #         Significance = result$metrics$significance,
-  #         R_squared = round(result$metrics$r_squared, 3),
-  #         RMSE = round(result$metrics$rmse, 3)
+  #   
+  #   # Get response variable name
+  #   response_var <- all.vars(model_formula)[1]
+  #   
+  #   # Remove rows with missing values for the variables in the formula
+  #   formula_vars <- all.vars(model_formula)
+  #   complete_data <- model_data_with_coords[complete.cases(model_data_with_coords[, formula_vars]), ]
+  #   
+  #   cat("Using", nrow(complete_data), "complete observations from model's data\n")
+  #   cat("Model family:", model_family$family, "\n")
+  #   cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
+  #   cat("Response variable:", response_var, "\n")
+  #   
+  #   if(nrow(complete_data) < 20) {
+  #     warning("Insufficient data for validation (< 20 observations)")
+  #     return(NULL)
+  #   }
+  #   
+  #   # Determine if this is predicting binary outcomes (0/1 only) vs continuous
+  #   unique_values <- unique(complete_data[[response_var]])
+  #   unique_values <- unique_values[!is.na(unique_values)]
+  #   is_binary <- length(unique_values) == 2 && all(unique_values %in% c(0, 1))
+  #   
+  #   # Calculate appropriate metrics
+  #   calculate_metrics <- function(actual, predicted) {
+  #     if(is_binary) {
+  #       # For binary outcomes - calculate AUC and classification metrics
+  #       if(length(unique(actual)) > 1) {
+  #         auc_val <- as.numeric(auc(actual, predicted))
+  #         pred_class <- ifelse(predicted > 0.5, 1, 0)
+  #         accuracy <- mean(actual == pred_class)
+  #         sensitivity <- if(sum(actual == 1) > 0) sum(actual == 1 & pred_class == 1) / sum(actual == 1) else NA
+  #         specificity <- if(sum(actual == 0) > 0) sum(actual == 0 & pred_class == 0) / sum(actual == 0) else NA
+  #         
+  #         return(list(
+  #           auc = auc_val,
+  #           accuracy = accuracy,
+  #           sensitivity = sensitivity,
+  #           specificity = specificity
+  #         ))
+  #       } else {
+  #         return(list(auc = NA, accuracy = NA, sensitivity = NA, specificity = NA))
+  #       }
+  #     } else {
+  #       # For continuous outcomes - calculate RMSE, MAE, R², and Pearson correlation
+  #       rmse <- sqrt(mean((actual - predicted)^2, na.rm = TRUE))
+  #       mae <- mean(abs(actual - predicted), na.rm = TRUE)
+  #       
+  #       # Calculate R²
+  #       if(var(actual, na.rm = TRUE) > 0) {
+  #         r_squared <- cor(actual, predicted, use = "complete.obs")^2
+  #       } else {
+  #         r_squared <- NA
+  #       }
+  #       
+  #       # Calculate Pearson correlation coefficient and test significance
+  #       cor_test <- cor.test(actual, predicted, method = "pearson")
+  #       pearson_r <- cor_test$estimate
+  #       pearson_p <- cor_test$p.value
+  #       
+  #       # Determine significance level
+  #       if(is.na(pearson_p)) {
+  #         significance <- "Cannot determine"
+  #       } else if(pearson_p < 0.001) {
+  #         significance <- "***"
+  #       } else if(pearson_p < 0.01) {
+  #         significance <- "**"
+  #       } else if(pearson_p < 0.05) {
+  #         significance <- "*"
+  #       } else {
+  #         significance <- "ns"
+  #       }
+  #       
+  #       return(list(
+  #         rmse = rmse,
+  #         mae = mae,
+  #         r_squared = r_squared,
+  #         pearson_r = pearson_r,
+  #         pearson_p = pearson_p,
+  #         significance = significance
   #       ))
   #     }
   #   }
+  #   
+  #   # Train-test split
+  #   n <- nrow(complete_data)
+  #   train_size <- floor((train_percent / 100) * n)
+  #   train_idx <- sample(1:n, size = train_size)
+  #   
+  #   train_data <- complete_data[train_idx, ]
+  #   test_data <- complete_data[-train_idx, ]
+  #   
+  #   cat("Training observations:", nrow(train_data), "\n")
+  #   cat("Testing observations:", nrow(test_data), "\n")
+  #   
+  #   # Fit model on training data
+  #   tryCatch({
+  #     fit <- gam(model_formula, data = train_data, family = model_family)
+  #     
+  #     # Make predictions on test data
+  #     predictions <- predict(fit, newdata = test_data, type = "response")
+  #     actual <- test_data[[response_var]]
+  #     
+  #     # Calculate metrics
+  #     metrics <- calculate_metrics(actual, predictions)
+  #     
+  #     # Print key results
+  #     cat("\n=== RESULTS ===\n")
+  #     if(is_binary) {
+  #       cat("AUC:", round(metrics$auc, 3), "\n")
+  #       cat("Accuracy:", round(metrics$accuracy, 3), "\n")
+  #     } else {
+  #       cat("R²:", round(metrics$r_squared, 3), "\n")
+  #       cat("Pearson r:", round(metrics$pearson_r, 3), "\n")
+  #       cat("P-value:", format(metrics$pearson_p, scientific = TRUE, digits = 3), "\n")
+  #       cat("Significance:", metrics$significance, "\n")
+  #       cat("RMSE:", round(metrics$rmse, 3), "\n")
+  #       
+  #       # Provide interpretation
+  #       if(metrics$significance == "***") {
+  #         cat("Interpretation: Correlation is highly significant (P < 0.001)\n")
+  #       } else if(metrics$significance == "**") {
+  #         cat("Interpretation: Correlation is significant (P < 0.01)\n")
+  #       } else if(metrics$significance == "*") {
+  #         cat("Interpretation: Correlation is significant (P < 0.05)\n")
+  #       } else if(metrics$significance == "ns") {
+  #         cat("Interpretation: Correlation is not significant (P ≥ 0.05)\n")
+  #       }
+  #     }
+  #     
+  #     # Create results dataframe with spatial coordinates for mapping
+  #     test_results <- test_data
+  #     test_results$predicted <- predictions
+  #     test_results$residuals <- actual - predictions
+  #     
+  #     result <- list(
+  #       n_total = nrow(complete_data),
+  #       n_train = nrow(train_data),
+  #       n_test = nrow(test_data),
+  #       train_percent = train_percent,
+  #       family = model_family$family,
+  #       response_variable = response_var,
+  #       metrics = metrics,
+  #       test_results = test_results,  # Always include this for mapping
+  #       is_binary = is_binary
+  #     )
+  #     
+  #     if(return_details) {
+  #       result$predictions <- predictions
+  #       result$actual <- actual
+  #       result$train_data <- train_data
+  #       result$test_data <- test_data
+  #       result$fitted_model <- fit
+  #       result$formula <- model_formula
+  #     }
+  #     
+  #     return(result)
+  #     
+  #   }, error = function(e) {
+  #     cat("Error in model fitting:", e$message, "\n")
+  #     return(NULL)
+  #   })
   # }
-  # print(results_summary)
-  
-  
+  # 
+  # ################################## 80/20 plot ##################################
+  # 
+  # plot_validation_maps <- function(validation_result, coord_system = "latlon") {
+  #   
+  #   if(is.null(validation_result) || is.null(validation_result$test_results)) {
+  #     stop("No test results found for mapping")
+  #   }
+  #   
+  #   plot_data <- validation_result$test_results
+  #   
+  #   # Print available columns for debugging
+  #   cat("Available columns in test results:\n")
+  #   print(colnames(plot_data))
+  #   
+  #   # Determine coordinate columns with fallbacks
+  #   if(coord_system == "latlon") {
+  #     x_candidates <- c("lon", "longitude", "Longitude", "LON")
+  #     y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+  #     x_lab <- "Longitude"
+  #     y_lab <- "Latitude"
+  #   } else {
+  #     x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+  #     y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+  #     x_lab <- "UTM X"
+  #     y_lab <- "UTM Y"
+  #   }
+  #   
+  #   # Find the actual column names
+  #   x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+  #   y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+  #   
+  #   if(length(x_col) == 0 || length(y_col) == 0) {
+  #     cat("Could not find coordinate columns. Trying the other coordinate system...\n")
+  #     
+  #     # Try the other coordinate system
+  #     if(coord_system == "latlon") {
+  #       x_candidates <- c("x_utm", "X_utm", "utm_x", "UTM_X")
+  #       y_candidates <- c("y_utm", "Y_utm", "utm_y", "UTM_Y")
+  #       x_lab <- "UTM X"
+  #       y_lab <- "UTM Y"
+  #     } else {
+  #       x_candidates <- c("lon", "longitude", "Longitude", "LON")
+  #       y_candidates <- c("lat", "latitude", "Latitude", "LAT")
+  #       x_lab <- "Longitude"
+  #       y_lab <- "Latitude"
+  #     }
+  #     
+  #     x_col <- x_candidates[x_candidates %in% colnames(plot_data)]
+  #     y_col <- y_candidates[y_candidates %in% colnames(plot_data)]
+  #   }
+  #   
+  #   if(length(x_col) == 0 || length(y_col) == 0) {
+  #     stop("Could not find any coordinate columns. Available columns: ", paste(colnames(plot_data), collapse = ", "))
+  #   }
+  #   
+  #   # Use first match
+  #   x_col <- x_col[1]
+  #   y_col <- y_col[1]
+  #   
+  #   cat("Using coordinates:", x_col, "and", y_col, "\n")
+  #   
+  #   # Common theme for maps
+  #   map_theme <- theme_minimal() +
+  #     theme(
+  #       axis.text = element_text(size = 8),
+  #       plot.title = element_text(size = 10, hjust = 0.5),
+  #       legend.title = element_text(size = 9),
+  #       legend.text = element_text(size = 8)
+  #     )
+  #   
+  #   # Get response variable name
+  #   response_var <- validation_result$response_variable
+  #   
+  #   # Calculate shared color scale limits
+  #   actual_values <- plot_data[[response_var]]
+  #   predicted_values <- plot_data$predicted
+  #   shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
+  #   shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
+  #   
+  #   cat("Shared color scale range:", round(shared_min, 2), "to", round(shared_max, 2), "\n")
+  #   
+  #   # Plot 1: Actual cover values
+  #   p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = response_var)) +
+  #     geom_point(size = 2, alpha = 0.7) +
+  #     scale_color_viridis_c(name = "Actual", option = "plasma", limits = c(shared_min, shared_max)) +
+  #     labs(title = paste("Actual", response_var, "(Test Set)"), 
+  #          x = x_lab, y = y_lab) +
+  #     map_theme
+  #   
+  #   # Plot 2: Predicted cover values
+  #   p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
+  #     geom_point(size = 2, alpha = 0.7) +
+  #     scale_color_viridis_c(name = "Predicted", option = "plasma", limits = c(shared_min, shared_max)) +
+  #     labs(title = paste("Predicted", response_var), 
+  #          x = x_lab, y = y_lab) +
+  #     map_theme
+  #   
+  #   # Plot 3: Residuals (actual - predicted)
+  #   p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "residuals")) +
+  #     geom_point(size = 2, alpha = 0.7) +
+  #     scale_color_gradient2(name = "Residual", 
+  #                           low = "red", mid = "white", high = "blue",
+  #                           midpoint = 0) +
+  #     labs(title = "Residuals (Actual - Predicted)", 
+  #          x = x_lab, y = y_lab) +
+  #     map_theme
+  #   
+  #   # Plot 4: Predicted vs Actual scatter plot
+  #   p4 <- ggplot(plot_data, aes_string(x = "predicted", y = response_var)) +
+  #     geom_point(alpha = 0.6) +
+  #     geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  #     labs(title = "Predicted vs Actual", 
+  #          x = paste("Predicted", response_var), 
+  #          y = paste("Actual", response_var)) +
+  #     theme_minimal()
+  #   
+  #   # Arrange plots
+  #   grid.arrange(p1, p2, p3, p4, ncol = 2,
+  #                top = paste("Validation Results -", 
+  #                            validation_result$family, "model"))
+  #   
+  #   # Return the individual plots as well
+  #   invisible(list(actual = p1, predicted = p2, residuals = p3, scatter = p4))
+  # }
+  # 
+  # ################################## 80/20 usage ##################################
+  # 
+  # # Example 1: Validation with coordinates for mapping
+  # result <- gam_train_test_split(gam_results[["Orbicella"]]$complex,
+  #                                gam_results_entry = gam_results[["Orbicella"]],
+  #                                train_percent = 80)
+  # plot_validation_maps(result)
+  # 
+  # # Example 2: Simple validation without coordinates (no mapping possible)
+  # # result <- gam_train_test_split(gam_results[["Agaricia"]]$complex, train_percent = 80)
+  # 
+  # # Example 3: Validate all species models with mapping
+  # # for(sp in names(gam_results)) {
+  # #   cat("\n=== VALIDATING", sp, "===\n")
+  # #   result <- gam_train_test_split(gam_results[[sp]]$complex, 
+  # #                                 gam_results_entry = gam_results[[sp]], 
+  # #                                 train_percent = 80)
+  # #   if(!is.null(result)) {
+  # #     plot_validation_maps(result)
+  # #   }
+  # # }
+  # 
+  # # Example 4: Generate summary table for multiple species
+  # # results_summary <- data.frame(
+  # #   Species = character(),
+  # #   Model_Type = character(),
+  # #   Pearson_r = numeric(),
+  # #   P_value = numeric(),
+  # #   Significance = character(),
+  # #   R_squared = numeric(),
+  # #   RMSE = numeric(),
+  # #   stringsAsFactors = FALSE
+  # # )
+  # # 
+  # # for(sp in names(gam_results)) {
+  # #   for(model_type in c("complex", "reduced")) {
+  # #     result <- gam_train_test_split(gam_results[[sp]][[model_type]], 
+  # #                                   gam_results_entry = gam_results[[sp]], 
+  # #                                   train_percent = 80)
+  # #     if(!is.null(result) && !result$is_binary) {
+  # #       results_summary <- rbind(results_summary, data.frame(
+  # #         Species = sp,
+  # #         Model_Type = model_type,
+  # #         Pearson_r = round(result$metrics$pearson_r, 3),
+  # #         P_value = result$metrics$pearson_p,
+  # #         Significance = result$metrics$significance,
+  # #         R_squared = round(result$metrics$r_squared, 3),
+  # #         RMSE = round(result$metrics$rmse, 3)
+  # #       ))
+  # #     }
+  # #   }
+  # # }
+  # # print(results_summary)
+  # 
+  # 
   ################################## GAM Train-Test Split Function ##################################
   
   gam_train_test_split <- function(gam_model, gam_results_entry = NULL, train_percent = 80, 
@@ -2022,14 +1990,18 @@
   
   ################################## Usage Examples ##################################
   
+  sppofinterest = "Orbicella"
+  
   # Example 1: Standard single-model validation
-  result <- gam_train_test_split(gam_results[["Montastraea"]]$complex,
-                                 gam_results_entry = gam_results[["Montastraea"]],
+  result <- gam_train_test_split(gam_results[[sppofinterest]]$complex,
+                                 gam_results_entry = gam_results[[sppofinterest]],
                                  train_percent = 80)
+  plot_validation_maps(result)
+  
   
   # Example 2: Hurdle model validation (uses presence + abundance models)
   result_hurdle <- gam_train_test_split(gam_model = NULL,  # Not used for hurdle
-                                        gam_results_entry = gam_results[["Montastraea"]],
+                                        gam_results_entry = gam_results[[sppofinterest]],
                                         train_percent = 80,
                                         use_hurdle = TRUE, seed = sample(1:10000, 1))
   plot_validation_maps(result_hurdle)
@@ -2077,6 +2049,237 @@
   #   }
   # }
   # print(results_summary)
+  
+  # ################################## make predictions ##################################
+  # 
+  # # NOTE - this is sparse right now compared to all available rasters, for computational
+  # #         reasons. can return to this
+  # # First, create your stack properly
+  # env_stack <- env_complex
+  # 
+  # # Check geometry - compareGeom works on individual rasters, not the stack
+  # # Let's check that all layers match the first one (bathy_final)
+  # terra::compareGeom(bathy_final, aspect_terra, stopOnError = FALSE)
+  # terra::compareGeom(bathy_final, slope_terra, stopOnError = FALSE)
+  # # etc... or loop through them:
+  # 
+  # for(i in 2:nlyr(env_stack)) {
+  #   cat("Checking layer", i, ":", names(env_stack)[i], "\n")
+  #   print(terra::compareGeom(env_stack[[1]], env_stack[[i]], stopOnError = FALSE))
+  # }
+  # 
+  # # Alternative: just check basic properties
+  # terra::res(env_stack)  # Should all be the same
+  # terra::ext(env_stack)  # Should all be the same
+  # 
+  # # Create prediction grid
+  # prediction_grid <- as.data.frame(env_stack, xy = TRUE)
+  # 
+  # # # Remove rows with any NA values
+  # # prediction_grid <- prediction_grid[complete.cases(prediction_grid), ]
+  # 
+  # # Check your grid
+  # dim(prediction_grid)
+  # head(prediction_grid)
+  # 
+  # # Better names for your variables
+  # names(prediction_grid) <- c("x", "y", "depth", "aspect", "slope", "complexity",
+  #                             "TPI", "VRM", "planform_curv", "max_Hsig", "mean_dir",
+  #                             "mean_Hsig", "mean_SST", "range_SST")
+  # 
+  # # Convert prediction grid UTM coordinates back to lat/lon for the spatial term
+  # prediction_coords_utm <- vect(cbind(prediction_grid$x, prediction_grid$y),
+  #                               crs = crs(bathy_final))
+  # prediction_coords_latlon <- project(prediction_coords_utm, "EPSG:4326")
+  # coords_df <- as.data.frame(geom(prediction_coords_latlon)[, c("x", "y")])
+  # 
+  # # Add lat/lon to prediction grid
+  # prediction_grid$lon <- coords_df$x
+  # prediction_grid$lat <- coords_df$y
+  # 
+  # # Remove any rows with NAs in the required variables
+  # # pred_vars <- c("bathymetry", "TPI", "VRM", "lon", "lat")
+  # pred_vars <- c("depth", "TPI", "slope", "complexity", "planform_curv",
+  #                "range_SST", "mean_SST", "mean_dir", "max_Hsig", "mean_Hsig", "lon", "lat")
+  # prediction_grid_clean <- prediction_grid[complete.cases(prediction_grid[, pred_vars]), ]
+  # 
+  # cat("Prediction grid size:", nrow(prediction_grid_clean), "cells\n")
+  # 
+  # 
+  # # # Make predictions with the spatial model
+  # # predictions <- predict(gam_spatial, prediction_grid_clean, type = "response")
+  # #
+  # # # Add predictions to the grid
+  # # prediction_grid_clean$predicted_cover <- predictions
+  # #
+  # # # Check prediction range
+  # # summary(prediction_grid_clean$predicted_cover)
+  # 
+  # 
+  # # # Simple approach with time estimates
+  # # start_time <- Sys.time()
+  # #
+  # # # Test prediction on small subset to estimate time
+  # # test_subset <- prediction_grid_clean[1:1000, ]
+  # # test_start <- Sys.time()
+  # # test_pred <- predict(gam_complex, test_subset, type = "response")
+  # # test_time <- as.numeric(difftime(Sys.time(), test_start, units = "secs"))
+  # #
+  # # # Estimate total time
+  # # estimated_total <- (test_time / 1000) * nrow(prediction_grid_clean)
+  # # cat("Estimated total time:", round(estimated_total/60, 1), "minutes\n")
+  # #
+  # # # Now do full prediction
+  # # predictions <- predict(gam_spatial, prediction_grid_clean, type = "response")
+  # # cat("Actual time:", round(difftime(Sys.time(), start_time, units = "mins"), 1), "minutes\n")
+  # 
+  # 
+  # # Resample your environmental stack to 200m resolution
+  # env_simple_200m <- aggregate(env_stack, fact = 4, fun = "mean")  # 4x aggregation = 200m
+  # 
+  # # Check the new resolution
+  # res(env_simple_200m)  # Should show 200, 200
+  # 
+  # # Create prediction grid from 200m rasters
+  # prediction_grid_200m <- as.data.frame(env_simple_200m, xy = TRUE)
+  # names(prediction_grid_200m) <- c("x", "y", "bathymetry", "slope")
+  # 
+  # # Add TPI and VRM at 200m
+  # env_complex_200m <- aggregate(env_complex, fact = 4, fun = "mean")
+  # complex_grid_200m <- as.data.frame(env_complex_200m, xy = TRUE)
+  # names(complex_grid_200m) <- c("x", "y", "bathymetry", "slope", "TPI", "roughness", "VRM",
+  #                               "max_curv", "mean_curv", "planform_curv", "profile_curv")
+  # 
+  # # Keep just the variables you need
+  # prediction_grid_200m <- complex_grid_200m[, c("x", "y", "bathymetry", "TPI", "VRM")]
+  # 
+  # # Remove NAs
+  # prediction_grid_200m <- prediction_grid_200m[complete.cases(prediction_grid_200m), ]
+  # 
+  # cat("200m grid size:", nrow(prediction_grid_200m), "cells\n")
+  # cat("50m grid size was:", nrow(prediction_grid_clean), "cells\n")
+  # cat("Reduction factor:", round(nrow(prediction_grid_clean)/nrow(prediction_grid_200m), 1), "\n")
+  # 
+  # # Convert UTM to lat/lon for the spatial term
+  # prediction_coords_utm_200m <- vect(cbind(prediction_grid_200m$x, prediction_grid_200m$y),
+  #                                    crs = crs(bathy_final))
+  # prediction_coords_latlon_200m <- project(prediction_coords_utm_200m, "EPSG:4326")
+  # coords_df_200m <- as.data.frame(geom(prediction_coords_latlon_200m)[, c("x", "y")])
+  # 
+  # prediction_grid_200m$lon <- coords_df_200m$x
+  # prediction_grid_200m$lat <- coords_df_200m$y
+  # 
+  # cat("Final 200m grid size:", nrow(prediction_grid_200m), "cells\n")
+  # 
+  # # Step 4: Estimate time before full prediction
+  # start_time <- Sys.time()
+  # 
+  # # Test prediction on small subset to estimate time
+  # test_subset_200m <- prediction_grid_200m[1:1000, ]
+  # test_start <- Sys.time()
+  # test_pred_200m <- predict(gam_spatial, test_subset_200m, type = "response")
+  # test_time <- as.numeric(difftime(Sys.time(), test_start, units = "secs"))
+  # 
+  # # Estimate total time
+  # estimated_total_200m <- (test_time / 1000) * nrow(prediction_grid_200m)
+  # cat("200m grid size:", nrow(prediction_grid_200m), "cells\n")
+  # cat("Test time for 1000 cells:", round(test_time, 2), "seconds\n")
+  # cat("Estimated total time:", round(estimated_total_200m/60, 1), "minutes\n")
+  # 
+  # # Compare to original estimate
+  # original_cells <- nrow(prediction_grid_clean)
+  # reduction_factor <- original_cells / nrow(prediction_grid_200m)
+  # cat("Reduction factor:", round(reduction_factor, 1), "x smaller\n")
+  # cat("Original estimate was 61 minutes\n")
+  # cat("New estimate should be ~", round(61/reduction_factor, 1), "minutes\n")
+  # 
+  # # Ask user if they want to proceed
+  # cat("\nProceed with full prediction? (y/n)\n")
+  # user_input <- readline()
+  # 
+  # if(tolower(user_input) == "y") {
+  #   cat("Starting full prediction...\n")
+  # 
+  #   # Full prediction with timing
+  #   full_start <- Sys.time()
+  #   predictions_200m <- predict(gam_spatial, prediction_grid_200m, type = "response")
+  #   prediction_grid_200m$predicted_cover <- predictions_200m
+  #   full_end <- Sys.time()
+  # 
+  #   cat("Actual prediction time:", round(difftime(full_end, full_start, units = "mins"), 1), "minutes\n")
+  #   cat("Prediction complete!\n")
+  # 
+  # } else {
+  #   cat("Prediction cancelled. Consider further reducing grid size or using sampling.\n")
+  # }
+  # 
+  # # Convert to raster
+  # pred_raster_200m <- rast(prediction_grid_200m[, c("x", "y", "predicted_cover")],
+  #                          crs = crs(bathy_final))
+  # 
+  # # Plot
+  # plot(pred_raster_200m,
+  #      main = "Predicted Coral Cover (%) - 200m resolution",
+  #      col = viridis(100))
+  # 
+  # # Add survey points
+  # points(model_data_complex$x_utm, model_data_complex$y_utm,
+  #        pch = 21,
+  #        bg = heat.colors(10)[cut(model_data_complex$cover, breaks = 10)],
+  #        cex = 0.8)
+  # 
+  # 
+  # ################################## maps ##################################
+  # 
+  # 
+  # # library(viridis)
+  # library(sf)
+  # 
+  # # Convert predictions back to raster
+  # pred_raster <- rast(prediction_grid_clean[, c("x", "y", "predicted_cover")], 
+  #                     crs = crs(bathy_final))
+  # 
+  # # Create a nice map
+  # # Option 1: Using terra plot
+  # plot(pred_raster, 
+  #      main = "Predicted Coral Cover (%)",
+  #      col = viridis(100),
+  #      range = c(0, max(prediction_grid_clean$predicted_cover, na.rm = TRUE)))
+  # 
+  # # Add your actual survey points
+  # points(model_data_complex$x_utm, model_data_complex$y_utm, 
+  #        pch = 21, 
+  #        bg = heat.colors(10)[cut(model_data_complex$cover, breaks = 10)],
+  #        cex = 0.8)
+  # 
+  # # Add legend for points
+  # legend("topright", 
+  #        title = "Observed Cover",
+  #        legend = c("0-10%", "10-20%", "20-30%", "30%+"),
+  #        pch = 21,
+  #        pt.bg = heat.colors(4),
+  #        cex = 0.8)
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  
+  
+  
   ################################## Save objects/workspace ##################################
   
   # #updated way to handle saving of new objects
