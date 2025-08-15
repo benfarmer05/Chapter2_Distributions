@@ -1,115 +1,27 @@
-% % Simple MATLAB script to download PAR data from ERDDAP
-% % Downloads Photosynthetically Available Radiation data for one timepoint
-% 
-% clear; clc;
-% 
-% %% Define parameters
-% dataset_id = 'erdMH1par0mday';
-% base_url = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/';
-% 
-% % Time: 2010-12-16
-% time_str = '(2010-12-16T00:00:00Z)';
-% 
-% % Geographic bounds (your specified region)
-% lat_min = 17.0;
-% lat_max = 19.5;
-% lon_min = -68.0;
-% lon_max = -64.0;
-% 
-% % Variable to download
-% variable = 'par';
-% 
-% %% Construct download URL for NetCDF format
-% % Format: par[time][lat_min:lat_max][lon_min:lon_max]
-% query_str = sprintf('%s[%s][(%f):(%f)][(%f):(%f)]', ...
-%     variable, time_str, lat_min, lat_max, lon_min, lon_max);
-% 
-% % Complete URL for NetCDF download
-% download_url = sprintf('%s%s.nc?%s', base_url, dataset_id, query_str);
-% 
-% %% Download the data
-% filename = 'par_data.nc';
-% fprintf('Downloading data from ERDDAP...\n');
-% fprintf('URL: %s\n', download_url);
-% 
-% try
-%     % Download the file
-%     websave(filename, download_url);
-%     fprintf('Data successfully downloaded to: %s\n', filename);
-% 
-%     %% Read the NetCDF file
-%     fprintf('Reading NetCDF file...\n');
-% 
-%     % Read variables
-%     longitude = ncread(filename, 'longitude');
-%     latitude = ncread(filename, 'latitude');
-%     time = ncread(filename, 'time');
-%     par_data = ncread(filename, 'par');
-% 
-%     % Get time units and convert to readable date
-%     time_units = ncreadatt(filename, 'time', 'units');
-%     time_origin = ncreadatt(filename, 'time', 'time_origin');
-% 
-%     % Display basic information
-%     fprintf('\n--- Dataset Information ---\n');
-%     fprintf('Dataset: Photosynthetically Available Radiation (PAR)\n');
-%     fprintf('Time: %s\n', time_str);
-%     fprintf('Longitude range: %.4f to %.4f (degrees East)\n', min(longitude), max(longitude));
-%     fprintf('Latitude range: %.4f to %.4f (degrees North)\n', min(latitude), max(latitude));
-%     fprintf('Data dimensions: %d x %d\n', size(par_data, 1), size(par_data, 2));
-%     fprintf('PAR units: einstein m-2 day-1\n');
-% 
-%     % Display data statistics (excluding NaN values)
-%     valid_data = par_data(~isnan(par_data));
-%     if ~isempty(valid_data)
-%         fprintf('\n--- Data Statistics ---\n');
-%         fprintf('Valid data points: %d\n', length(valid_data));
-%         fprintf('Min PAR: %.3f\n', min(valid_data));
-%         fprintf('Max PAR: %.3f\n', max(valid_data));
-%         fprintf('Mean PAR: %.3f\n', mean(valid_data));
-%     else
-%         fprintf('No valid data found (all NaN values)\n');
-%     end
-% 
-%     %% Optional: Create a simple plot
-%     fprintf('\nCreating plot...\n');
-%     figure;
-% 
-%     % Create meshgrid for plotting
-%     [lon_grid, lat_grid] = meshgrid(longitude, latitude');
-% 
-%     % Plot the data
-%     pcolor(lon_grid, lat_grid, par_data');
-%     shading interp;
-%     colorbar;
-%     colormap(jet);
-% 
-%     title('Photosynthetically Available Radiation (PAR)');
-%     xlabel('Longitude (degrees East)');
-%     ylabel('Latitude (degrees North)');
-% 
-%     % Set color limits if there's valid data
-%     if ~isempty(valid_data)
-%         caxis([min(valid_data), max(valid_data)]);
-%     end
-% 
-% catch ME
-%     fprintf('Error downloading or processing data:\n');
-%     fprintf('%s\n', ME.message);
-%     fprintf('\nCheck your internet connection and verify the URL is accessible.\n');
-% end
-% 
-% fprintf('\nScript completed.\n');
-
-
-
 %% Script to pull PAR data
 % PAR Data Download with Progress Bar and Time Estimation
-% Downloads 2013-2018 NASA MODIS Aqua Photosynthetically Available Radiation data
+% Downloads NASA MODIS Aqua Photosynthetically Available Radiation data
 % Monthly composite global data via NOAA CoastWatch ERDDAP
 %   Based on MUR SST script structure
 
 clear;clc
+
+%% ========== CONFIGURATION SECTION ==========
+% Define your date range here
+START_YEAR = 2013;
+START_MONTH = 1;        % 1-12
+END_YEAR = 2018;
+END_MONTH = 11;         % 1-12
+
+% File handling option
+KEEP_FILES = false;     % Set to true to keep downloaded files, false to delete them
+
+% Puerto Rico/USVI region coordinates (matching SWAN and SST data)
+lat_min = 17.0;   % Southern boundary
+lat_max = 19.5;   % Northern boundary  
+lon_min = -68.0;  % Western boundary
+lon_max = -64.0;  % Eastern boundary
+%% =============================================
 
 % Get the project root directory
 projectPath = matlab.project.rootProject().RootFolder;
@@ -120,14 +32,25 @@ srcPath = fullfile(projectPath, 'src');
 outputPath = fullfile(projectPath, 'output');
 tempPath = fullfile(projectPath, 'temp');
 
-%% Setup
-years = [2013, 2014, 2015, 2016, 2017, 2018];
+%% Calculate total months and generate year/month list
+% Calculate total number of months in the date range
+total_months = (END_YEAR - START_YEAR) * 12 + (END_MONTH - START_MONTH + 1);
+
+% Generate list of all year-month combinations
+year_month_list = [];
+for year = START_YEAR:END_YEAR
+    start_month_for_year = (year == START_YEAR) * START_MONTH + (year ~= START_YEAR) * 1;
+    end_month_for_year = (year == END_YEAR) * END_MONTH + (year ~= END_YEAR) * 12;
+    
+    for month = start_month_for_year:end_month_for_year
+        year_month_list = [year_month_list; year, month];
+    end
+end
+
 % Initialize data arrays for PAR variables
 par_data = [];    % Photosynthetically Available Radiation
 times_data = [];
 
-% Calculate total number of months
-total_months = length(years) * 12;
 current_month = 0;
 
 % Initialize timing variables
@@ -137,180 +60,189 @@ month_times = [];
 % Create progress bar
 h = waitbar(0, 'Starting PAR data download...', 'Name', 'PAR Download Progress');
 
-% Puerto Rico/USVI region coordinates (matching SWAN and SST data)
-lat_min = 17.0;   % Southern boundary
-lat_max = 19.5;   % Northern boundary  
-lon_min = -68.0;  % Western boundary
-lon_max = -64.0;  % Eastern boundary
-
 fprintf('Downloading PAR data for Puerto Rico/USVI region:\n');
 fprintf('Lat: %.1f to %.1f, Lon: %.1f to %.1f\n', lat_min, lat_max, lon_min, lon_max);
-fprintf('Time period: %d-%d\n', years(1), years(end));
+fprintf('Time period: %d-%02d to %d-%02d\n', START_YEAR, START_MONTH, END_YEAR, END_MONTH);
+fprintf('Total months to download: %d\n', total_months);
+if KEEP_FILES
+    fprintf('File handling: Keeping files\n');
+else
+    fprintf('File handling: Deleting files after processing\n');
+end
 
 %% Main download loop
 try
-    for year = years
-        for month = 1:12
-            current_month = current_month + 1;
-            month_start_time = tic;
+    for i = 1:size(year_month_list, 1)
+        year = year_month_list(i, 1);
+        month = year_month_list(i, 2);
+        
+        current_month = current_month + 1;
+        month_start_time = tic;
+        
+        % Update progress bar with current status
+        progress = current_month / total_months;
+        status_msg = sprintf('Downloading %d-%02d (%d/%d months)', year, month, current_month, total_months);
+        
+        % Add time estimation if we have enough data
+        if current_month > 1
+            avg_time_per_month = mean(month_times);
+            remaining_months = total_months - current_month;
+            est_remaining_time = avg_time_per_month * remaining_months;
             
-            % Update progress bar with current status
-            progress = current_month / total_months;
-            status_msg = sprintf('Downloading %d-%02d (%d/%d months)', year, month, current_month, total_months);
-            
-            % Add time estimation if we have enough data
-            if current_month > 1
-                avg_time_per_month = mean(month_times);
-                remaining_months = total_months - current_month;
-                est_remaining_time = avg_time_per_month * remaining_months;
-                
-                status_msg = sprintf('%s\nEstimated time remaining: %.1f minutes', ...
-                    status_msg, est_remaining_time / 60);
-            end
-            
-            waitbar(progress, h, status_msg);
-            
-            % Construct monthly URL for PAR data
-            % PAR data is monthly composite, so we just need the month midpoint
-            start_date = sprintf('%d-%02d-16T00:00:00Z', year, month);
-            
-            % ERDDAP URL for PAR (monthly data)
-            base_url = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMH1par0mday.nc';
-            url = sprintf('%s?par[(%s)][(%.1f):(%.1f)][(%.1f):(%.1f)]', ...
-                         base_url, start_date, lat_min, lat_max, lon_min, lon_max);
-            
-            % Download with increased timeout and better error handling
-            filename = sprintf('par_%d_%02d.nc', year, month);
-            download_success = false;
-            retry_count = 0;
-            max_retries = 10;
-            
-            % Set longer timeout for data requests
-            options = weboptions('Timeout', 30, 'RequestMethod', 'get');
-            
-            while ~download_success && retry_count < max_retries
-                try
-                    websave(filename, url, options);
-                    fprintf('Downloaded: %s\n', filename);
-                    download_success = true;
-                catch ME
-                    retry_count = retry_count + 1;
-                    if retry_count < max_retries
-                        fprintf('Download failed, retrying (%d/%d): %s\n', retry_count, max_retries, filename);
-                        fprintf('Error: %s\n', ME.message);
-                        pause(5); % Longer wait before retry
-                    else
-                        warning('Failed to download %s after %d attempts: %s', filename, max_retries, ME.message);
-                    end
-                end
-            end
-            
-            if ~download_success
-                continue; % Skip to next month
-            end
-            
-            % Read monthly data with proper data handling
+            status_msg = sprintf('%s\nEstimated time remaining: %.1f minutes', ...
+                status_msg, est_remaining_time / 60);
+        end
+        
+        waitbar(progress, h, status_msg);
+        
+        % Construct monthly URL for PAR data
+        % PAR data is monthly composite, so we just need the month midpoint
+        start_date = sprintf('%d-%02d-16T00:00:00Z', year, month);
+        
+        % ERDDAP URL for PAR (monthly data)
+        base_url = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMH1par0mday.nc';
+        url = sprintf('%s?par[(%s)][(%.1f):(%.1f)][(%.1f):(%.1f)]', ...
+                     base_url, start_date, lat_min, lat_max, lon_min, lon_max);
+        
+        % Download with increased timeout and better error handling
+        filename = sprintf('par_%d_%02d.nc', year, month);
+        download_success = false;
+        retry_count = 0;
+        max_retries = 10;
+        
+        % Set longer timeout for data requests
+        options = weboptions('Timeout', 30, 'RequestMethod', 'get');
+        
+        while ~download_success && retry_count < max_retries
             try
-                monthly_par = ncread(filename, 'par');
-                monthly_time_data = ncread(filename, 'time');
-                
-                % Check for fill values and attributes
-                try
-                    fill_value = ncreadatt(filename, 'par', '_FillValue');
-                    fprintf('Fill value: %.2f\n', fill_value);
-                catch
-                    fill_value = NaN;
-                end
-                
-                try
-                    valid_min = ncreadatt(filename, 'par', 'valid_min');
-                    valid_max = ncreadatt(filename, 'par', 'valid_max');
-                    fprintf('Valid range: %.2f to %.2f\n', valid_min, valid_max);
-                catch
-                    valid_min = 0;
-                    valid_max = 130; % Based on dataset description
-                end
-                
-                % Apply proper fill value handling and range checks
-                monthly_par(monthly_par == fill_value) = NaN;
-                monthly_par(monthly_par < valid_min | monthly_par > valid_max) = NaN;
-                
-                % Check data quality
-                sample_val = monthly_par(~isnan(monthly_par));
-                if ~isempty(sample_val)
-                    sample_mean = mean(sample_val(1:min(100, length(sample_val))));
-                    fprintf('Sample mean PAR: %.2f einstein m-2 day-1\n', sample_mean);
-                else
-                    fprintf('Warning: No valid PAR data found for this month\n');
-                end
-                
-                % Concatenate data along time dimension with proper handling
-                if current_month == 1
-                    % First month - initialize the arrays
-                    par_data = monthly_par;
-                    times_data = monthly_time_data(:);  % Ensure column vector
-                else
-                    % Subsequent months - concatenate along 3rd dimension (time)
-                    par_data = cat(3, par_data, monthly_par);
-                    times_data = [times_data; monthly_time_data(:)];  % Ensure column vector
-                end
-                
-                fprintf('Month %d-%02d: Added %d time steps (Total so far: %d)\n', ...
-                    year, month, size(monthly_par, 3), size(par_data, 3));
-                
-                % Read coordinates on first iteration with metadata check
-                if current_month == 1
-                    latitude = ncread(filename, 'latitude');
-                    longitude = ncread(filename, 'longitude');
-                    fprintf('Grid dimensions: %d x %d\n', length(longitude), length(latitude));
-                    
-                    % Display metadata for debugging
-                    try
-                        par_units = ncreadatt(filename, 'par', 'units');
-                        fprintf('PAR units: %s\n', par_units);
-                    catch
-                        fprintf('PAR units: not specified\n');
-                    end
-                    
-                    try
-                        par_long_name = ncreadatt(filename, 'par', 'long_name');
-                        fprintf('PAR description: %s\n', par_long_name);
-                    catch
-                    end
-                    
-                    % Show actual data range for verification
-                    valid_par = monthly_par(~isnan(monthly_par));
-                    if ~isempty(valid_par)
-                        fprintf('Actual PAR range: %.2f to %.2f\n', min(valid_par), max(valid_par));
-                    end
-                end
-                
+                websave(filename, url, options);
+                fprintf('Downloaded: %s\n', filename);
+                download_success = true;
             catch ME
-                warning('Failed to read data from %s: %s', filename, ME.message);
+                retry_count = retry_count + 1;
+                if retry_count < max_retries
+                    fprintf('Download failed, retrying (%d/%d): %s\n', retry_count, max_retries, filename);
+                    fprintf('Error: %s\n', ME.message);
+                    pause(5); % Longer wait before retry
+                else
+                    warning('Failed to download %s after %d attempts: %s', filename, max_retries, ME.message);
+                end
+            end
+        end
+        
+        if ~download_success
+            continue; % Skip to next month
+        end
+        
+        % Read monthly data with proper data handling
+        try
+            monthly_par = ncread(filename, 'par');
+            monthly_time_data = ncread(filename, 'time');
+            
+            % Check for fill values and attributes
+            try
+                fill_value = ncreadatt(filename, 'par', '_FillValue');
+                fprintf('Fill value: %.2f\n', fill_value);
+            catch
+                fill_value = NaN;
             end
             
+            try
+                valid_min = ncreadatt(filename, 'par', 'valid_min');
+                valid_max = ncreadatt(filename, 'par', 'valid_max');
+                fprintf('Valid range: %.2f to %.2f\n', valid_min, valid_max);
+            catch
+                valid_min = 0;
+                valid_max = 130; % Based on dataset description
+            end
+            
+            % Apply proper fill value handling and range checks
+            monthly_par(monthly_par == fill_value) = NaN;
+            monthly_par(monthly_par < valid_min | monthly_par > valid_max) = NaN;
+            
+            % Check data quality
+            sample_val = monthly_par(~isnan(monthly_par));
+            if ~isempty(sample_val)
+                sample_mean = mean(sample_val(1:min(100, length(sample_val))));
+                fprintf('Sample mean PAR: %.2f einstein m-2 day-1\n', sample_mean);
+            else
+                fprintf('Warning: No valid PAR data found for this month\n');
+            end
+            
+            % Concatenate data along time dimension with proper handling
+            if current_month == 1
+                % First month - initialize the arrays
+                par_data = monthly_par;
+                times_data = monthly_time_data(:);  % Ensure column vector
+            else
+                % Subsequent months - concatenate along 3rd dimension (time)
+                par_data = cat(3, par_data, monthly_par);
+                times_data = [times_data; monthly_time_data(:)];  % Ensure column vector
+            end
+            
+            fprintf('Month %d-%02d: Added %d time steps (Total so far: %d)\n', ...
+                year, month, size(monthly_par, 3), size(par_data, 3));
+            
+            % Read coordinates on first iteration with metadata check
+            if current_month == 1
+                latitude = ncread(filename, 'latitude');
+                longitude = ncread(filename, 'longitude');
+                fprintf('Grid dimensions: %d x %d\n', length(longitude), length(latitude));
+                
+                % Display metadata for debugging
+                try
+                    par_units = ncreadatt(filename, 'par', 'units');
+                    fprintf('PAR units: %s\n', par_units);
+                catch
+                    fprintf('PAR units: not specified\n');
+                end
+                
+                try
+                    par_long_name = ncreadatt(filename, 'par', 'long_name');
+                    fprintf('PAR description: %s\n', par_long_name);
+                catch
+                end
+                
+                % Show actual data range for verification
+                valid_par = monthly_par(~isnan(monthly_par));
+                if ~isempty(valid_par)
+                    fprintf('Actual PAR range: %.2f to %.2f\n', min(valid_par), max(valid_par));
+                end
+            end
+            
+        catch ME
+            warning('Failed to read data from %s: %s', filename, ME.message);
+        end
+        
+        % File handling - keep or delete based on configuration
+        if KEEP_FILES
+            % Keep file (no cleanup)
+            % NOTE - use this instead of cleanup if desiring a full set
+            % of the data to be backed up. For PAR, this will be several GB
+            fprintf('Keeping file: %s\n', filename);
+        else
             % Clean up file
             if exist(filename, 'file')
                 delete(filename);
             end
+        end
+        
+        % Record timing for this month
+        month_time = toc(month_start_time);
+        month_times(end+1) = month_time;
+        
+        % Update console with detailed progress
+        elapsed_time = toc(start_time);
+        if current_month > 1
+            avg_time_per_month = mean(month_times);
+            est_total_time = avg_time_per_month * total_months;
+            est_remaining_time = est_total_time - elapsed_time;
             
-            % Record timing for this month
-            month_time = toc(month_start_time);
-            month_times(end+1) = month_time;
-            
-            % Update console with detailed progress
-            elapsed_time = toc(start_time);
-            if current_month > 1
-                avg_time_per_month = mean(month_times);
-                est_total_time = avg_time_per_month * total_months;
-                est_remaining_time = est_total_time - elapsed_time;
-                
-                fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Remaining: %.1f min | Current file: %.1f sec\n', ...
-                    current_month, total_months, progress*100, elapsed_time/60, est_remaining_time/60, month_time);
-            else
-                fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Current file: %.1f sec\n', ...
-                    current_month, total_months, progress*100, elapsed_time/60, month_time);
-            end
+            fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Remaining: %.1f min | Current file: %.1f sec\n', ...
+                current_month, total_months, progress*100, elapsed_time/60, est_remaining_time/60, month_time);
+        else
+            fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Current file: %.1f sec\n', ...
+                current_month, total_months, progress*100, elapsed_time/60, month_time);
         end
     end
     
@@ -349,7 +281,10 @@ overall_max_par = max(par_data(:), [], 'omitnan');
 overall_min_par = min(par_data(:), [], 'omitnan');
 overall_std_par = std(par_data(:), 'omitnan');
 
-fprintf('\n=== Photosynthetically Available Radiation Statistics (2013-2018) ===\n');
+% Create date range string for titles and filenames
+date_range_str = sprintf('%d-%02d to %d-%02d', START_YEAR, START_MONTH, END_YEAR, END_MONTH);
+
+fprintf('\n=== Photosynthetically Available Radiation Statistics (%s) ===\n', date_range_str);
 fprintf('Photosynthetically Available Radiation (PAR):\n');
 fprintf('  Mean: %.2f einstein m-2 day-1, Max: %.2f einstein m-2 day-1, Min: %.2f einstein m-2 day-1\n', ...
         overall_mean_par, overall_max_par, overall_min_par);
@@ -364,7 +299,7 @@ imagesc(longitude, latitude, mean_par');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Mean Photosynthetically Available Radiation (2013-2018)', 'FontSize', 14);
+title(sprintf('Mean Photosynthetically Available Radiation (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(mean_par(:)) max(mean_par(:))]);
@@ -377,7 +312,7 @@ imagesc(longitude, latitude, max_par');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Maximum Photosynthetically Available Radiation (2013-2018)', 'FontSize', 14);
+title(sprintf('Maximum Photosynthetically Available Radiation (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(max_par(:)) max(max_par(:))]);
@@ -390,7 +325,7 @@ imagesc(longitude, latitude, min_par');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Minimum Photosynthetically Available Radiation (2013-2018)', 'FontSize', 14);
+title(sprintf('Minimum Photosynthetically Available Radiation (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(min_par(:)) max(min_par(:))]);
@@ -403,7 +338,7 @@ imagesc(longitude, latitude, std_par');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Standard Deviation Photosynthetically Available Radiation (2013-2018)', 'FontSize', 14);
+title(sprintf('Standard Deviation Photosynthetically Available Radiation (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([0 max(std_par(:))]);
@@ -524,7 +459,7 @@ export_summary = {
     sprintf('- Grid size: %d x %d', length(longitude), length(latitude))
     sprintf('- Longitude range: %.3f to %.3f°W', min(longitude), max(longitude))
     sprintf('- Latitude range: %.3f to %.3f°N', min(latitude), max(latitude))
-    sprintf('- Time period: 2013-2018')
+    sprintf('- Time period: %s', date_range_str)
     sprintf('- Total time steps: %d', length(times_data))
     sprintf('- Variable: Photosynthetically Available Radiation (einstein m-2 day-1)')
     ''

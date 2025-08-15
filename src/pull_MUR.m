@@ -1,10 +1,26 @@
 %% Script to pull SST data
 % MUR SST Data Download with Progress Bar and Time Estimation
-% Downloads 2017-2018 NASA JPL MUR Sea Surface Temperature data
+% Downloads NASA JPL MUR Sea Surface Temperature data with configurable date range
 % 0.01° resolution (~1km) global data via NOAA CoastWatch ERDDAP
 %   16 July 2025
+%
+% https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.graph?analysed_sst[(2017-01-01T09:00:00Z):(2018-12-31T09:00:00Z)][(17.0):(19.5)][(-68.0):(-64.0)]&.draw=surface&.vars=longitude|latitude|analysed_sst&.colorBar=|||||
 
 clear;clc
+
+%% ========== CONFIGURATION SECTION ==========
+% Define your date range here
+START_YEAR = 2013;
+START_MONTH = 1;        % 1-12
+END_YEAR = 2018;
+END_MONTH = 11;         % 1-12
+
+% Puerto Rico/USVI region coordinates (adjust as needed)
+lat_min = 17.0;   % Southern boundary
+lat_max = 19.5;   % Northern boundary  
+lon_min = -68.0;  % Western boundary
+lon_max = -64.0;  % Eastern boundary
+%% =============================================
 
 % Get the project root directory
 projectPath = matlab.project.rootProject().RootFolder;
@@ -15,14 +31,25 @@ srcPath = fullfile(projectPath, 'src');
 outputPath = fullfile(projectPath, 'output');
 tempPath = fullfile(projectPath, 'temp');
 
-%% Setup
-years = [2017, 2018];
+%% Calculate total months and generate year/month list
+% Calculate total number of months in the date range
+total_months = (END_YEAR - START_YEAR) * 12 + (END_MONTH - START_MONTH + 1);
+
+% Generate list of all year-month combinations
+year_month_list = [];
+for year = START_YEAR:END_YEAR
+    start_month_for_year = (year == START_YEAR) * START_MONTH + (year ~= START_YEAR) * 1;
+    end_month_for_year = (year == END_YEAR) * END_MONTH + (year ~= END_YEAR) * 12;
+    
+    for month = start_month_for_year:end_month_for_year
+        year_month_list = [year_month_list; year, month];
+    end
+end
+
 % Initialize data arrays for SST variables
 analysed_sst_data = [];    % Analysed sea surface temperature
 times_data = [];
 
-% Calculate total number of months
-total_months = length(years) * 12;
 current_month = 0;
 
 % Initialize timing variables
@@ -32,205 +59,204 @@ month_times = [];
 % Create progress bar
 h = waitbar(0, 'Starting MUR SST data download...', 'Name', 'MUR SST Download Progress');
 
-% Puerto Rico/USVI region coordinates (adjust as needed)
-lat_min = 17.0;   % Southern boundary
-lat_max = 19.5;   % Northern boundary  
-lon_min = -68.0;  % Western boundary
-lon_max = -64.0;  % Eastern boundary
-
 fprintf('Downloading MUR SST data for Puerto Rico/USVI region:\n');
 fprintf('Lat: %.1f to %.1f, Lon: %.1f to %.1f\n', lat_min, lat_max, lon_min, lon_max);
-fprintf('Time period: %d-%d\n', years(1), years(end));
+fprintf('Time period: %d-%02d to %d-%02d\n', START_YEAR, START_MONTH, END_YEAR, END_MONTH);
+fprintf('Total months to download: %d\n', total_months);
 
 %% Main download loop
 try
-    for year = years
-        for month = 1:12
-            current_month = current_month + 1;
-            month_start_time = tic;
+    for i = 1:size(year_month_list, 1)
+        year = year_month_list(i, 1);
+        month = year_month_list(i, 2);
+        
+        current_month = current_month + 1;
+        month_start_time = tic;
+        
+        % Update progress bar with current status
+        progress = current_month / total_months;
+        status_msg = sprintf('Downloading %d-%02d (%d/%d months)', year, month, current_month, total_months);
+        
+        % Add time estimation if we have enough data
+        if current_month > 1
+            avg_time_per_month = mean(month_times);
+            remaining_months = total_months - current_month;
+            est_remaining_time = avg_time_per_month * remaining_months;
             
-            % Update progress bar with current status
-            progress = current_month / total_months;
-            status_msg = sprintf('Downloading %d-%02d (%d/%d months)', year, month, current_month, total_months);
-            
-            % Add time estimation if we have enough data
-            if current_month > 1
-                avg_time_per_month = mean(month_times);
-                remaining_months = total_months - current_month;
-                est_remaining_time = avg_time_per_month * remaining_months;
-                
-                status_msg = sprintf('%s\nEstimated time remaining: %.1f minutes', ...
-                    status_msg, est_remaining_time / 60);
-            end
-            
-            waitbar(progress, h, status_msg);
-            
-            % Construct monthly URL for MUR SST data with no overlap
-            start_date = sprintf('%d-%02d-01T09:00:00Z', year, month);
-            if month == 12
-                % December: go to Dec 31st, not Jan 1st of next year
-                end_date = sprintf('%d-12-31T09:00:00Z', year);
-            else
-                % Other months: go to last day of current month
-                days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-                % Handle leap year for February
-                if month == 2 && mod(year, 4) == 0 && (mod(year, 100) ~= 0 || mod(year, 400) == 0)
-                    days_in_month(2) = 29;
-                end
-                last_day = days_in_month(month);
-                end_date = sprintf('%d-%02d-%02dT09:00:00Z', year, month, last_day);
-            end
-            
-            % ERDDAP URL for MUR SST (daily data)
-            base_url = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc';
-            url = sprintf('%s?analysed_sst[(%s):(%s)][(%.1f):(%.1f)][(%.1f):(%.1f)]', ...
-                         base_url, start_date, end_date, lat_min, lat_max, lon_min, lon_max);
-            
-            % Download with increased timeout and better error handling
-            filename = sprintf('mur_sst_%d_%02d.nc', year, month);
-            download_success = false;
-            retry_count = 0;
-            max_retries = 10;
-            
-            % Set longer timeout for large data requests
-            options = weboptions('Timeout', 30, 'RequestMethod', 'get');
-            
-            while ~download_success && retry_count < max_retries
-                try
-                    websave(filename, url, options);
-                    fprintf('Downloaded: %s\n', filename);
-                    download_success = true;
-                catch ME
-                    retry_count = retry_count + 1;
-                    if retry_count < max_retries
-                        fprintf('Download failed, retrying (%d/%d): %s\n', retry_count, max_retries, filename);
-                        fprintf('Error: %s\n', ME.message);
-                        pause(5); % Longer wait before retry
-                    else
-                        warning('Failed to download %s after %d attempts: %s', filename, max_retries, ME.message);
-                    end
-                end
-            end
-            
-            if ~download_success
-                continue; % Skip to next month
-            end
-            
-            % Read monthly data with proper data handling
+            status_msg = sprintf('%s\nEstimated time remaining: %.1f minutes', ...
+                status_msg, est_remaining_time / 60);
+        end
+        
+        waitbar(progress, h, status_msg);
+        
+        % Construct monthly URL for MUR SST data
+        start_date = sprintf('%d-%02d-01T09:00:00Z', year, month);
+        
+        % Calculate end date for the month
+        days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        % Handle leap year for February
+        if month == 2 && mod(year, 4) == 0 && (mod(year, 100) ~= 0 || mod(year, 400) == 0)
+            days_in_month(2) = 29;
+        end
+        
+        last_day = days_in_month(month);
+        end_date = sprintf('%d-%02d-%02dT09:00:00Z', year, month, last_day);
+        
+        % ERDDAP URL for MUR SST (daily data)
+        base_url = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.nc';
+        url = sprintf('%s?analysed_sst[(%s):(%s)][(%.1f):(%.1f)][(%.1f):(%.1f)]', ...
+                     base_url, start_date, end_date, lat_min, lat_max, lon_min, lon_max);
+        
+        % Download with increased timeout and better error handling
+        filename = sprintf('mur_sst_%d_%02d.nc', year, month);
+        download_success = false;
+        retry_count = 0;
+        max_retries = 10;
+        
+        % Set longer timeout for large data requests
+        options = weboptions('Timeout', 30, 'RequestMethod', 'get');
+        
+        while ~download_success && retry_count < max_retries
             try
-                monthly_sst = ncread(filename, 'analysed_sst');
-                monthly_time_data = ncread(filename, 'time');
-                
-                % Check for fill values and scale factors
-                try
-                    fill_value = ncreadatt(filename, 'analysed_sst', '_FillValue');
-                    fprintf('Fill value: %.2f\n', fill_value);
-                catch
-                    fill_value = NaN;
-                end
-                
-                try
-                    scale_factor = ncreadatt(filename, 'analysed_sst', 'scale_factor');
-                    fprintf('Scale factor: %.6f\n', scale_factor);
-                catch
-                    scale_factor = 1;
-                end
-                
-                try
-                    add_offset = ncreadatt(filename, 'analysed_sst', 'add_offset');
-                    fprintf('Add offset: %.6f\n', add_offset);
-                catch
-                    add_offset = 0;
-                end
-                
-                % Apply proper scaling and fill value handling
-                monthly_sst(monthly_sst == fill_value) = NaN;
-                monthly_sst = monthly_sst * scale_factor + add_offset;
-                
-                % Check if data is in Kelvin (reasonable SST should be 270-310K or 15-35°C)
-                sample_val = monthly_sst(~isnan(monthly_sst));
-                if ~isempty(sample_val)
-                    sample_mean = mean(sample_val(1:min(100, length(sample_val))));
-                    fprintf('Sample mean before conversion: %.2f\n', sample_mean);
-                    
-                    % If values are in reasonable Kelvin range (270-310), convert to Celsius
-                    if sample_mean > 250 && sample_mean < 350
-                        monthly_sst = monthly_sst - 273.15;
-                        fprintf('Converted from Kelvin to Celsius\n');
-                    elseif sample_mean > -50 && sample_mean < 50
-                        fprintf('Data appears to already be in Celsius\n');
-                    else
-                        warning('Unexpected temperature range - check data quality');
-                    end
-                end
-                
-                % Concatenate data along time dimension with proper handling
-                if current_month == 1
-                    % First month - initialize the arrays
-                    analysed_sst_data = monthly_sst;
-                    times_data = monthly_time_data(:);  % Ensure column vector
-                else
-                    % Subsequent months - concatenate along 3rd dimension (time)
-                    analysed_sst_data = cat(3, analysed_sst_data, monthly_sst);
-                    times_data = [times_data; monthly_time_data(:)];  % Ensure column vector
-                end
-                
-                fprintf('Month %d-%02d: Added %d time steps (Total so far: %d)\n', ...
-                    year, month, size(monthly_sst, 3), size(analysed_sst_data, 3));
-                
-                % Read coordinates on first iteration with metadata check
-                if current_month == 1
-                    latitude = ncread(filename, 'latitude');
-                    longitude = ncread(filename, 'longitude');
-                    fprintf('Grid dimensions: %d x %d\n', length(longitude), length(latitude));
-                    
-                    % Display metadata for debugging
-                    try
-                        sst_units = ncreadatt(filename, 'analysed_sst', 'units');
-                        fprintf('SST units: %s\n', sst_units);
-                    catch
-                        fprintf('SST units: not specified\n');
-                    end
-                    
-                    try
-                        sst_long_name = ncreadatt(filename, 'analysed_sst', 'long_name');
-                        fprintf('SST description: %s\n', sst_long_name);
-                    catch
-                    end
-                    
-                    % Show actual data range for verification
-                    valid_sst = monthly_sst(~isnan(monthly_sst));
-                    if ~isempty(valid_sst)
-                        fprintf('Actual SST range: %.2f to %.2f\n', min(valid_sst), max(valid_sst));
-                    end
-                end
-                
+                websave(filename, url, options);
+                fprintf('Downloaded: %s\n', filename);
+                download_success = true;
             catch ME
-                warning('Failed to read data from %s: %s', filename, ME.message);
+                retry_count = retry_count + 1;
+                if retry_count < max_retries
+                    fprintf('Download failed, retrying (%d/%d): %s\n', retry_count, max_retries, filename);
+                    fprintf('Error: %s\n', ME.message);
+                    pause(5); % Longer wait before retry
+                else
+                    warning('Failed to download %s after %d attempts: %s', filename, max_retries, ME.message);
+                end
+            end
+        end
+        
+        if ~download_success
+            continue; % Skip to next month
+        end
+        
+        % Read monthly data with proper data handling
+        try
+            monthly_sst = ncread(filename, 'analysed_sst');
+            monthly_time_data = ncread(filename, 'time');
+            
+            % Check for fill values and scale factors
+            try
+                fill_value = ncreadatt(filename, 'analysed_sst', '_FillValue');
+                fprintf('Fill value: %.2f\n', fill_value);
+            catch
+                fill_value = NaN;
             end
             
-            % Clean up file
-            if exist(filename, 'file')
-                delete(filename);
+            try
+                scale_factor = ncreadatt(filename, 'analysed_sst', 'scale_factor');
+                fprintf('Scale factor: %.6f\n', scale_factor);
+            catch
+                scale_factor = 1;
             end
             
-            % Record timing for this month
-            month_time = toc(month_start_time);
-            month_times(end+1) = month_time;
+            try
+                add_offset = ncreadatt(filename, 'analysed_sst', 'add_offset');
+                fprintf('Add offset: %.6f\n', add_offset);
+            catch
+                add_offset = 0;
+            end
             
-            % Update console with detailed progress
-            elapsed_time = toc(start_time);
-            if current_month > 1
-                avg_time_per_month = mean(month_times);
-                est_total_time = avg_time_per_month * total_months;
-                est_remaining_time = est_total_time - elapsed_time;
+            % Apply proper scaling and fill value handling
+            monthly_sst(monthly_sst == fill_value) = NaN;
+            monthly_sst = monthly_sst * scale_factor + add_offset;
+            
+            % Check if data is in Kelvin (reasonable SST should be 270-310K or 15-35°C)
+            sample_val = monthly_sst(~isnan(monthly_sst));
+            if ~isempty(sample_val)
+                sample_mean = mean(sample_val(1:min(100, length(sample_val))));
+                fprintf('Sample mean before conversion: %.2f\n', sample_mean);
                 
-                fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Remaining: %.1f min | Current file: %.1f sec\n', ...
-                    current_month, total_months, progress*100, elapsed_time/60, est_remaining_time/60, month_time);
-            else
-                fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Current file: %.1f sec\n', ...
-                    current_month, total_months, progress*100, elapsed_time/60, month_time);
+                % If values are in reasonable Kelvin range (270-310), convert to Celsius
+                if sample_mean > 250 && sample_mean < 350
+                    monthly_sst = monthly_sst - 273.15;
+                    fprintf('Converted from Kelvin to Celsius\n');
+                elseif sample_mean > -50 && sample_mean < 50
+                    fprintf('Data appears to already be in Celsius\n');
+                else
+                    warning('Unexpected temperature range - check data quality');
+                end
             end
+            
+            % Concatenate data along time dimension with proper handling
+            if current_month == 1
+                % First month - initialize the arrays
+                analysed_sst_data = monthly_sst;
+                times_data = monthly_time_data(:);  % Ensure column vector
+            else
+                % Subsequent months - concatenate along 3rd dimension (time)
+                analysed_sst_data = cat(3, analysed_sst_data, monthly_sst);
+                times_data = [times_data; monthly_time_data(:)];  % Ensure column vector
+            end
+            
+            fprintf('Month %d-%02d: Added %d time steps (Total so far: %d)\n', ...
+                year, month, size(monthly_sst, 3), size(analysed_sst_data, 3));
+            
+            % Read coordinates on first iteration with metadata check
+            if current_month == 1
+                latitude = ncread(filename, 'latitude');
+                longitude = ncread(filename, 'longitude');
+                fprintf('Grid dimensions: %d x %d\n', length(longitude), length(latitude));
+                
+                % Display metadata for debugging
+                try
+                    sst_units = ncreadatt(filename, 'analysed_sst', 'units');
+                    fprintf('SST units: %s\n', sst_units);
+                catch
+                    fprintf('SST units: not specified\n');
+                end
+                
+                try
+                    sst_long_name = ncreadatt(filename, 'analysed_sst', 'long_name');
+                    fprintf('SST description: %s\n', sst_long_name);
+                catch
+                end
+                
+                % Show actual data range for verification
+                valid_sst = monthly_sst(~isnan(monthly_sst));
+                if ~isempty(valid_sst)
+                    fprintf('Actual SST range: %.2f to %.2f\n', min(valid_sst), max(valid_sst));
+                end
+            end
+            
+        catch ME
+            warning('Failed to read data from %s: %s', filename, ME.message);
+        end
+        
+        % Clean up file
+        if exist(filename, 'file')
+            delete(filename);
+        end
+
+        % % Keep file (no cleanup)
+        % % NOTE - use this instead of above clean-up if desiring a full set
+        % % of the data to be backed up. For MUR SST, this is only ~1.5 GB
+        % % total so very reasonable
+        % fprintf('Keeping file: %s\n', filename);
+        
+        % Record timing for this month
+        month_time = toc(month_start_time);
+        month_times(end+1) = month_time;
+        
+        % Update console with detailed progress
+        elapsed_time = toc(start_time);
+        if current_month > 1
+            avg_time_per_month = mean(month_times);
+            est_total_time = avg_time_per_month * total_months;
+            est_remaining_time = est_total_time - elapsed_time;
+            
+            fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Remaining: %.1f min | Current file: %.1f sec\n', ...
+                current_month, total_months, progress*100, elapsed_time/60, est_remaining_time/60, month_time);
+        else
+            fprintf('Progress: %d/%d (%.1f%%) | Elapsed: %.1f min | Current file: %.1f sec\n', ...
+                current_month, total_months, progress*100, elapsed_time/60, month_time);
         end
     end
     
@@ -269,7 +295,10 @@ overall_max_sst = max(analysed_sst_data(:), [], 'omitnan');
 overall_min_sst = min(analysed_sst_data(:), [], 'omitnan');
 overall_std_sst = std(analysed_sst_data(:), 'omitnan');
 
-fprintf('\n=== Sea Surface Temperature Statistics (2017-2018) ===\n');
+% Create date range string for titles and filenames
+date_range_str = sprintf('%d-%02d to %d-%02d', START_YEAR, START_MONTH, END_YEAR, END_MONTH);
+
+fprintf('\n=== Sea Surface Temperature Statistics (%s) ===\n', date_range_str);
 fprintf('Sea Surface Temperature (SST):\n');
 fprintf('  Mean: %.2f °C, Max: %.2f °C, Min: %.2f °C\n', overall_mean_sst, overall_max_sst, overall_min_sst);
 
@@ -283,7 +312,7 @@ imagesc(longitude, latitude, mean_sst');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Mean Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+title(sprintf('Mean Sea Surface Temperature (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(mean_sst(:)) max(mean_sst(:))]);
@@ -296,7 +325,7 @@ imagesc(longitude, latitude, max_sst');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Maximum Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+title(sprintf('Maximum Sea Surface Temperature (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(max_sst(:)) max(max_sst(:))]);
@@ -309,7 +338,7 @@ imagesc(longitude, latitude, min_sst');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Minimum Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+title(sprintf('Minimum Sea Surface Temperature (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([min(min_sst(:)) max(min_sst(:))]);
@@ -322,7 +351,7 @@ imagesc(longitude, latitude, std_sst');
 set(gca, 'YDir', 'normal');
 colorbar;
 colormap('jet');
-title('Standard Deviation Sea Surface Temperature (2017-2018)', 'FontSize', 14);
+title(sprintf('Standard Deviation Sea Surface Temperature (%s)', date_range_str), 'FontSize', 14);
 xlabel('Longitude (°W)', 'FontSize', 12);
 ylabel('Latitude (°N)', 'FontSize', 12);
 clim([0 max(std_sst(:))]);
@@ -443,7 +472,7 @@ export_summary = {
     sprintf('- Grid size: %d x %d', length(longitude), length(latitude))
     sprintf('- Longitude range: %.3f to %.3f°W', min(longitude), max(longitude))
     sprintf('- Latitude range: %.3f to %.3f°N', min(latitude), max(latitude))
-    sprintf('- Time period: 2017-2018')
+    sprintf('- Time period: %s', date_range_str)
     sprintf('- Total time steps: %d', length(times_data))
     sprintf('- Variable: Sea Surface Temperature (°C)')
     ''
