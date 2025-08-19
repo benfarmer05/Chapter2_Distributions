@@ -366,6 +366,8 @@
 % Variables: Chlorophyll-a, Kd490, and Suspended Particulate Matter
 % Daily data via NOAA CoastWatch ERDDAP
 %   VARIABLE-BY-VARIABLE approach (server-friendly)
+%
+% https://coastwatch.noaa.gov/erddap/griddap/noaacwNPPN20S3AkdSCIDINEOF2kmDaily.graph?kd_490%5B(2024-01-19T12:00:00Z)%5D%5B(0.0)%5D%5B(18.880205):(17.786455)%5D%5B(-66.005215):(-64.911465)%5D&.draw=surface&.vars=longitude%7Clatitude%7Ckd_490&.colorBar=%7C%7CLog%7C0.001%7C100%7C&.bgColor=0xffccccff
 
 clear;clc
 

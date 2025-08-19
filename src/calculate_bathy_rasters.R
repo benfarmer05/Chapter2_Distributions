@@ -211,7 +211,7 @@
   # # Sys.sleep(0.2)
   # # render_snapshot()
   # 
-  ################################## Test resolution/artifacts ##################################
+  ################################## derive bathy ##################################
   
   # Calculate terrain attributes. may consider Benthic Terrain Modeler (but need Arc & potentially arcgisbinding package in R) or MultiscaleDTM package (https://cran.r-project.org/web/packages/MultiscaleDTM/readme/README.html)
   #
@@ -244,7 +244,7 @@
   VRM_multiscale <- VRM(bathy_final, w = c(3, 3))
   # surfarea = SurfaceArea(bathy_final)
   # maxcurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'maxc')
-  meancurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'meanc')
+  # meancurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'meanc')
   planformcurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'planc')
   profilecurv_multiscale = Qfit(r = bathy_final, w = 3, metrics = 'profc')
   # depth = Qfit(r = bathy_final, metrics = 'elev')
@@ -254,51 +254,158 @@
   
   ################################## Import waves ##################################
   
-  wave_summary <- read.csv(here("output", "swan_wave_summary_for_R.csv"))
+  # # VERSION where SWAN data was pulled from ERDDAP (old)
+  # #
+  # # wave_summary <- read.csv(here("output", "swan_wave_summary_for_R.csv"))
+  # 
+  # # 2. Load coordinate information
+  # lon_vec <- read.csv(here("output", "swan_longitude.csv"))$longitude
+  # lat_vec <- read.csv(here("output", "swan_latitude.csv"))$latitude
+  # grid_info <- read.csv(here("output", "swan_grid_info.csv"))
+  # 
+  # # Get grid dimensions
+  # nlon <- length(lon_vec)
+  # nlat <- length(lat_vec)
+  # lon_range <- range(lon_vec)
+  # lat_range <- range(lat_vec)
+  # 
+  # # Function to load matrix and create raster
+  # create_raster <- function(filename, var_name) {
+  #   cat(sprintf("Loading %s...\n", filename))
+  #   matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
+  #   
+  #   # Flip matrix vertically to match MATLAB orientation
+  #   matrix_data <- matrix_data[nrow(matrix_data):1, ]
+  #   
+  #   # Create SpatRaster using terra
+  #   r <- rast(matrix_data,
+  #             extent = ext(min(lon_vec), max(lon_vec), min(lat_vec), max(lat_vec)),
+  #             crs = "EPSG:4326")
+  #   
+  #   names(r) <- var_name
+  #   return(r)
+  # }
+  # 
+  # # Create rasters for key variables
+  # mean_hsig_raster <- create_raster("mean_hsig_matrix.csv", "Mean_Hsig")
+  # max_hsig_raster <- create_raster("max_hsig_matrix.csv", "Max_Hsig")
+  # mean_hswell_raster <- create_raster("mean_hswell_matrix.csv", "Mean_Hswell")
+  # mean_dir_raster <- create_raster("mean_dir_matrix.csv", "Mean_Direction")
+  # mean_per_raster <- create_raster("mean_per_matrix.csv", "Mean_Period")
+  # 
+  # projected_crs = crs(bathy_final)
+  # 
+  # # Reproject to match bathy_final CRS first
+  # mean_hsig_raster <- project(mean_hsig_raster, projected_crs)
+  # max_hsig_raster <- project(max_hsig_raster, projected_crs)
+  # mean_hswell_raster <- project(mean_hswell_raster, projected_crs)
+  # mean_dir_raster <- project(mean_dir_raster, projected_crs)
+  # mean_per_raster <- project(mean_per_raster, projected_crs)
   
-  # 2. Load coordinate information
-  lon_vec <- read.csv(here("output", "swan_longitude.csv"))$longitude
-  lat_vec <- read.csv(here("output", "swan_latitude.csv"))$latitude
-  grid_info <- read.csv(here("output", "swan_grid_info.csv"))
+  # VERSION where SWAN data was provided directly from Miguel Canals
+  # 
+  TARGET_RESOLUTION <- 200  # Change this value: 50, 100, 200, 500 (meters)
   
-  # Get grid dimensions
-  nlon <- length(lon_vec)
-  nlat <- length(lat_vec)
-  lon_range <- range(lon_vec)
-  lat_range <- range(lat_vec)
+
+  # Load the comprehensive wave summary data
+  wave_summary <- read.csv(here("output", "swan_canals_comprehensive_summary_for_R.csv"))
   
-  # Function to load matrix and create raster
-  create_raster <- function(filename, var_name) {
-    cat(sprintf("Loading %s...\n", filename))
-    matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
+  # Clean the data
+  wave_summary <- wave_summary %>%
+    filter(!is.na(longitude) & !is.na(latitude))
+  
+  cat(sprintf("Loaded %d SWAN grid points\n", nrow(wave_summary)))
+  
+  # Create SpatVector from wave data
+  wave_points <- vect(wave_summary, 
+                      geom = c("longitude", "latitude"), 
+                      crs = "EPSG:4326")
+  
+  # Project to match bathymetry
+  wave_points_proj <- project(wave_points, crs(bathy_final))
+  
+  # Filter wave points to only water areas (non-NA bathymetry)
+  cat("Filtering wave points to water areas only...\n")
+  
+  # Extract bathymetry values at each wave point location
+  bathy_at_points <- extract(bathy_final, wave_points_proj)
+  
+  # Find points where bathymetry is NOT NA (i.e., water areas)
+  water_points_idx <- !is.na(bathy_at_points[,2])
+  
+  cat(sprintf("Points over water: %d/%d (%.1f%%)\n", 
+              sum(water_points_idx), length(water_points_idx), 
+              sum(water_points_idx)/length(water_points_idx)*100))
+  
+  # Keep only points that are over water
+  wave_points_water <- wave_points_proj[water_points_idx]
+  
+  cat(sprintf("After filtering to water: %d points\n", nrow(wave_points_water)))
+  
+
+  create_wave_raster <- function(wave_points, var_name, bathy_template, target_resolution) {
+    cat(sprintf("Creating %dm raster for %s...\n", target_resolution, var_name))
     
-    # Flip matrix vertically to match MATLAB orientation
-    matrix_data <- matrix_data[nrow(matrix_data):1, ]
+    # Filter to valid values
+    values <- values(wave_points)[[var_name]]
+    valid_idx <- !is.na(values) & values >= 0
     
-    # Create SpatRaster using terra
-    r <- rast(matrix_data,
-              extent = ext(min(lon_vec), max(lon_vec), min(lat_vec), max(lat_vec)),
-              crs = "EPSG:4326")
+    if (grepl("dir", var_name, ignore.case = TRUE)) {
+      valid_idx <- valid_idx & values <= 360
+    }
     
-    names(r) <- var_name
-    return(r)
+    wave_points_valid <- wave_points[valid_idx]
+    cat(sprintf("Using %d valid points\n", sum(valid_idx)))
+    
+    # Create template with target resolution
+    bathy_ext <- ext(bathy_template)
+    template_raster <- rast(bathy_ext, 
+                            resolution = target_resolution,
+                            crs = crs(bathy_template))
+    
+    n_cells <- ncell(template_raster)
+    cat(sprintf("Grid: %d x %d cells (%.1f million)\n", 
+                ncol(template_raster), nrow(template_raster), n_cells/1e6))
+    
+    # Memory safety check
+    if (n_cells > 25e6) {
+      stop(sprintf("Grid too large (%.1f million cells). Use resolution > 100m.", n_cells/1e6))
+    }
+    
+    if (n_cells > 10e6) {
+      warning(sprintf("Large grid (%.1f million cells) - may be slow", n_cells/1e6))
+    }
+    
+    # Rasterize wave points to template
+    result <- rasterize(wave_points_valid, template_raster, 
+                        field = var_name, 
+                        fun = mean)
+    
+    # Gap filling with focal operations
+    cat("Gap filling...\n")
+    result <- focal(result, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+    
+    # Additional gap filling pass for smoother results
+    result <- focal(result, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+    
+    # Resample bathymetry to match template and apply mask
+    bathy_resampled <- resample(bathy_template, template_raster, method = "near")
+    result <- mask(result, bathy_resampled)
+    
+    names(result) <- var_name
+    return(result)
   }
   
-  # Create rasters for key variables
-  mean_hsig_raster <- create_raster("mean_hsig_matrix.csv", "Mean_Hsig")
-  max_hsig_raster <- create_raster("max_hsig_matrix.csv", "Max_Hsig")
-  mean_hswell_raster <- create_raster("mean_hswell_matrix.csv", "Mean_Hswell")
-  mean_dir_raster <- create_raster("mean_dir_matrix.csv", "Mean_Direction")
-  mean_per_raster <- create_raster("mean_per_matrix.csv", "Mean_Period")
+
+  cat(sprintf("\n=== Creating all wave rasters at %dm resolution ===\n", TARGET_RESOLUTION))
   
-  projected_crs = crs(bathy_final)
-  
-  # Reproject to match bathy_final CRS first
-  mean_hsig_raster <- project(mean_hsig_raster, projected_crs)
-  max_hsig_raster <- project(max_hsig_raster, projected_crs)
-  mean_hswell_raster <- project(mean_hswell_raster, projected_crs)
-  mean_dir_raster <- project(mean_dir_raster, projected_crs)
-  mean_per_raster <- project(mean_per_raster, projected_crs)
+  # Create all wave variable rasters
+  mean_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmean", bathy_final, TARGET_RESOLUTION)
+  max_hsig_raster <- create_wave_raster(wave_points_water, "max_hmean", bathy_final, TARGET_RESOLUTION)
+  mean_hmax_raster <- create_wave_raster(wave_points_water, "mean_hmax", bathy_final, TARGET_RESOLUTION)
+  max_hmax_raster <- create_wave_raster(wave_points_water, "max_hmax", bathy_final, TARGET_RESOLUTION)
+  mean_per_raster <- create_wave_raster(wave_points_water, "mean_tp", bathy_final, TARGET_RESOLUTION)
+  mean_dir_raster <- create_wave_raster(wave_points_water, "mean_dir", bathy_final, TARGET_RESOLUTION)
   
   # Get extent and properties from bathy_final
   bathy_ext <- ext(bathy_final)
@@ -311,7 +418,7 @@
   # Resample wave rasters to match bathy_final
   mean_hsig_raster <- resample(mean_hsig_raster, template_raster, method = "bilinear")
   max_hsig_raster <- resample(max_hsig_raster, template_raster, method = "bilinear")
-  mean_hswell_raster <- resample(mean_hswell_raster, template_raster, method = "bilinear")
+  # mean_hswell_raster <- resample(mean_hswell_raster, template_raster, method = "bilinear")
   mean_dir_raster <- resample(mean_dir_raster, template_raster, method = "bilinear")
   mean_per_raster <- resample(mean_per_raster, template_raster, method = "bilinear")
   
@@ -353,6 +460,8 @@
   min_sst_raster <- create_raster("min_sst_matrix.csv", "Min_SST")
   std_sst_raster <- create_raster("std_sst_matrix.csv", "Std_SST")
   
+  projected_crs = crs(bathy_final)
+  
   #reproject
   mean_sst_raster = project(mean_sst_raster, projected_crs)
   max_sst_raster = project(max_sst_raster, projected_crs)
@@ -386,7 +495,8 @@
     r <- rast(matrix_data,
               extent = ext(min(par_lon_vec), max(par_lon_vec), min(par_lat_vec), max(par_lat_vec)),
               crs = "EPSG:4326")
-    
+              # extent = ext(min(par_lon_vec), max(par_lon_vec), min(par_lat_vec), max(par_lat_vec)))
+  
     names(r) <- var_name
     return(r)
   }
@@ -398,7 +508,16 @@
   std_par_raster <- create_par_raster("std_par_matrix.csv", "Std_PAR")
   
   # Reproject PAR rasters
+  
+  # STOPPING POINT - 19 August 2025
+  #   - hilarious error. I was importing/plotting PAR & Ocean Color data flipped
+  #       vertically in space. no wonder none of the landmasks made any sense!
+  
   mean_par_raster <- project(mean_par_raster, projected_crs)
+  
+  mean_par_raster <- project(mean_par_raster, projected_crs, res = 25)
+  
+  
   max_par_raster <- project(max_par_raster, projected_crs)
   min_par_raster <- project(min_par_raster, projected_crs)
   std_par_raster <- project(std_par_raster, projected_crs)
@@ -437,60 +556,45 @@
   
   ################################## Kd490 (Diffuse Attenuation Coefficient) ##################################
   
-  # Check if Kd490 data exists in the summary
-  if("mean_kd490" %in% names(ocean_color_summary)) {
+  # Create rasters for Kd490 variables  
+  mean_kd490_raster <- create_oc_raster("mean_kd490_matrix.csv", "Mean_Kd490")
+  max_kd490_raster <- create_oc_raster("max_kd490_matrix.csv", "Max_Kd490")
+  min_kd490_raster <- create_oc_raster("min_kd490_matrix.csv", "Min_Kd490")
+  std_kd490_raster <- create_oc_raster("std_kd490_matrix.csv", "Std_Kd490")
+  
+  # Reproject Kd490 rasters
+  mean_kd490_raster <- project(mean_kd490_raster, projected_crs)
+  max_kd490_raster <- project(max_kd490_raster, projected_crs)
+  min_kd490_raster <- project(min_kd490_raster, projected_crs)
+  std_kd490_raster <- project(std_kd490_raster, projected_crs)
+  
+  # Resample Kd490 rasters to match template
+  mean_kd490_raster <- resample(mean_kd490_raster, template_raster, method = "bilinear")
+  max_kd490_raster <- resample(max_kd490_raster, template_raster, method = "bilinear")
+  min_kd490_raster <- resample(min_kd490_raster, template_raster, method = "bilinear")
+  std_kd490_raster <- resample(std_kd490_raster, template_raster, method = "bilinear")
     
-    # Create rasters for Kd490 variables  
-    mean_kd490_raster <- create_oc_raster("mean_kd490_matrix.csv", "Mean_Kd490")
-    max_kd490_raster <- create_oc_raster("max_kd490_matrix.csv", "Max_Kd490")
-    min_kd490_raster <- create_oc_raster("min_kd490_matrix.csv", "Min_Kd490")
-    std_kd490_raster <- create_oc_raster("std_kd490_matrix.csv", "Std_Kd490")
-    
-    # Reproject Kd490 rasters
-    mean_kd490_raster <- project(mean_kd490_raster, projected_crs)
-    max_kd490_raster <- project(max_kd490_raster, projected_crs)
-    min_kd490_raster <- project(min_kd490_raster, projected_crs)
-    std_kd490_raster <- project(std_kd490_raster, projected_crs)
-    
-    # Resample Kd490 rasters to match template
-    mean_kd490_raster <- resample(mean_kd490_raster, template_raster, method = "bilinear")
-    max_kd490_raster <- resample(max_kd490_raster, template_raster, method = "bilinear")
-    min_kd490_raster <- resample(min_kd490_raster, template_raster, method = "bilinear")
-    std_kd490_raster <- resample(std_kd490_raster, template_raster, method = "bilinear")
-    
-    cat("Kd490 rasters created successfully.\n")
-  } else {
-    cat("Kd490 data not found in ocean color summary.\n")
-  }
   
   ################################## Chlorophyll-a ##################################
   
-  # Check if Chlorophyll-a data exists in the summary
-  if("mean_chlor_a" %in% names(ocean_color_summary)) {
-    
-    # Create rasters for Chlorophyll-a variables
-    mean_chlor_a_raster <- create_oc_raster("mean_chlor_a_matrix.csv", "Mean_Chlor_a")
-    max_chlor_a_raster <- create_oc_raster("max_chlor_a_matrix.csv", "Max_Chlor_a")
-    min_chlor_a_raster <- create_oc_raster("min_chlor_a_matrix.csv", "Min_Chlor_a")
-    std_chlor_a_raster <- create_oc_raster("std_chlor_a_matrix.csv", "Std_Chlor_a")
-    
-    # Reproject Chlorophyll-a rasters
-    mean_chlor_a_raster <- project(mean_chlor_a_raster, projected_crs)
-    max_chlor_a_raster <- project(max_chlor_a_raster, projected_crs)
-    min_chlor_a_raster <- project(min_chlor_a_raster, projected_crs)
-    std_chlor_a_raster <- project(std_chlor_a_raster, projected_crs)
-    
-    # Resample Chlorophyll-a rasters to match template
-    mean_chlor_a_raster <- resample(mean_chlor_a_raster, template_raster, method = "bilinear")
-    max_chlor_a_raster <- resample(max_chlor_a_raster, template_raster, method = "bilinear")
-    min_chlor_a_raster <- resample(min_chlor_a_raster, template_raster, method = "bilinear")
-    std_chlor_a_raster <- resample(std_chlor_a_raster, template_raster, method = "bilinear")
-    
-    cat("Chlorophyll-a rasters created successfully.\n")
-  } else {
-    cat("Chlorophyll-a data not found in ocean color summary.\n")
-  }
+  # Create rasters for Chlorophyll-a variables
+  mean_chlor_a_raster <- create_oc_raster("mean_chlor_a_matrix.csv", "Mean_Chlor_a")
+  max_chlor_a_raster <- create_oc_raster("max_chlor_a_matrix.csv", "Max_Chlor_a")
+  min_chlor_a_raster <- create_oc_raster("min_chlor_a_matrix.csv", "Min_Chlor_a")
+  std_chlor_a_raster <- create_oc_raster("std_chlor_a_matrix.csv", "Std_Chlor_a")
   
+  # Reproject Chlorophyll-a rasters
+  mean_chlor_a_raster <- project(mean_chlor_a_raster, projected_crs)
+  max_chlor_a_raster <- project(max_chlor_a_raster, projected_crs)
+  min_chlor_a_raster <- project(min_chlor_a_raster, projected_crs)
+  std_chlor_a_raster <- project(std_chlor_a_raster, projected_crs)
+  
+  # Resample Chlorophyll-a rasters to match template
+  mean_chlor_a_raster <- resample(mean_chlor_a_raster, template_raster, method = "bilinear")
+  max_chlor_a_raster <- resample(max_chlor_a_raster, template_raster, method = "bilinear")
+  min_chlor_a_raster <- resample(min_chlor_a_raster, template_raster, method = "bilinear")
+  std_chlor_a_raster <- resample(std_chlor_a_raster, template_raster, method = "bilinear")
+
   ################################## Suspended Particulate Matter (SPM) ##################################
   
   # Check if SPM data exists in the summary
@@ -529,7 +633,7 @@
   # Apply landmask to wave rasters
   mean_hsig_raster[landmask == 0] <- NA
   max_hsig_raster[landmask == 0] <- NA
-  mean_hswell_raster[landmask == 0] <- NA
+  # mean_hswell_raster[landmask == 0] <- NA
   mean_dir_raster[landmask == 0] <- NA
   mean_per_raster[landmask == 0] <- NA
   
@@ -545,51 +649,27 @@
   min_par_raster[landmask == 0] <- NA
   std_par_raster[landmask == 0] <- NA
   
-  # Apply landmask to Kd490 rasters (if they exist)
-  if(exists("mean_kd490_raster")) {
-    mean_kd490_raster[landmask == 0] <- NA
-    max_kd490_raster[landmask == 0] <- NA
-    min_kd490_raster[landmask == 0] <- NA
-    std_kd490_raster[landmask == 0] <- NA
-  }
-  
-  # Apply landmask to Chlorophyll-a rasters (if they exist)
-  if(exists("mean_chlor_a_raster")) {
-    mean_chlor_a_raster[landmask == 0] <- NA
-    max_chlor_a_raster[landmask == 0] <- NA
-    min_chlor_a_raster[landmask == 0] <- NA
-    std_chlor_a_raster[landmask == 0] <- NA
-  }
-  
-  # Apply landmask to SPM rasters (if they exist)
-  if(exists("mean_spm_raster")) {
-    mean_spm_raster[landmask == 0] <- NA
-    max_spm_raster[landmask == 0] <- NA
-    min_spm_raster[landmask == 0] <- NA
-    std_spm_raster[landmask == 0] <- NA
-  }
-  
+  mean_kd490_raster[landmask == 0] <- NA
+  max_kd490_raster[landmask == 0] <- NA
+  min_kd490_raster[landmask == 0] <- NA
+  std_kd490_raster[landmask == 0] <- NA
+
+  mean_chlor_a_raster[landmask == 0] <- NA
+  max_chlor_a_raster[landmask == 0] <- NA
+  min_chlor_a_raster[landmask == 0] <- NA
+  std_chlor_a_raster[landmask == 0] <- NA
+
+  mean_spm_raster[landmask == 0] <- NA
+  max_spm_raster[landmask == 0] <- NA
+  min_spm_raster[landmask == 0] <- NA
+  std_spm_raster[landmask == 0] <- NA
+
   #add SST range
   # NOTE - this should perhaps be done sooner upstream
   range_sst_raster = max_sst_raster - min_sst_raster
   
   # PAR range  
   range_par_raster <- max_par_raster - min_par_raster
-  
-  # Kd490 range (if exists)
-  if(exists("mean_kd490_raster")) {
-    range_kd490_raster <- max_kd490_raster - min_kd490_raster
-  }
-  
-  # Chlorophyll-a range (if exists)
-  if(exists("mean_chlor_a_raster")) {
-    range_chlor_a_raster <- max_chlor_a_raster - min_chlor_a_raster
-  }
-  
-  # SPM range (if exists)
-  if(exists("mean_spm_raster")) {
-    range_spm_raster <- max_spm_raster - min_spm_raster
-  }
   
   ################################## plots ##################################
   
