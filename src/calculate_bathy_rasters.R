@@ -304,9 +304,8 @@
   
   # VERSION where SWAN data was provided directly from Miguel Canals
   # 
-  TARGET_RESOLUTION <- 200  # Change this value: 50, 100, 200, 500 (meters)
+  SWAN_target_res <- 200
   
-
   # Load the comprehensive wave summary data
   wave_summary <- read.csv(here("output", "swan_canals_comprehensive_summary_for_R.csv"))
   
@@ -397,15 +396,15 @@
   }
   
 
-  cat(sprintf("\n=== Creating all wave rasters at %dm resolution ===\n", TARGET_RESOLUTION))
+  cat(sprintf("\n=== Creating all wave rasters at %dm resolution ===\n", SWAN_target_res))
   
   # Create all wave variable rasters
-  mean_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmean", bathy_final, TARGET_RESOLUTION)
-  max_hsig_raster <- create_wave_raster(wave_points_water, "max_hmean", bathy_final, TARGET_RESOLUTION)
-  mean_hmax_raster <- create_wave_raster(wave_points_water, "mean_hmax", bathy_final, TARGET_RESOLUTION)
-  max_hmax_raster <- create_wave_raster(wave_points_water, "max_hmax", bathy_final, TARGET_RESOLUTION)
-  mean_per_raster <- create_wave_raster(wave_points_water, "mean_tp", bathy_final, TARGET_RESOLUTION)
-  mean_dir_raster <- create_wave_raster(wave_points_water, "mean_dir", bathy_final, TARGET_RESOLUTION)
+  mean_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmean", bathy_final, SWAN_target_res)
+  # max_mean_hsig_raster <- create_wave_raster(wave_points_water, "max_hmean", bathy_final, SWAN_target_res)
+  # mean_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmax", bathy_final, SWAN_target_res)
+  max_hsig_raster <- create_wave_raster(wave_points_water, "max_hmax", bathy_final, SWAN_target_res)
+  per_at_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_tp", bathy_final, SWAN_target_res)
+  dir_at_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_dir", bathy_final, SWAN_target_res)
   
   # Get extent and properties from bathy_final
   bathy_ext <- ext(bathy_final)
@@ -417,10 +416,11 @@
   
   # Resample wave rasters to match bathy_final
   mean_hsig_raster <- resample(mean_hsig_raster, template_raster, method = "bilinear")
+  # max_mean_hsig_raster <- resample(max_mean_hsig_raster, template_raster, method = "bilinear")
+  # mean_max_hsig_raster <- resample(mean_max_hsig_raster, template_raster, method = "bilinear")
   max_hsig_raster <- resample(max_hsig_raster, template_raster, method = "bilinear")
-  # mean_hswell_raster <- resample(mean_hswell_raster, template_raster, method = "bilinear")
-  mean_dir_raster <- resample(mean_dir_raster, template_raster, method = "bilinear")
-  mean_per_raster <- resample(mean_per_raster, template_raster, method = "bilinear")
+  per_at_max_hsig_raster <- resample(per_at_max_hsig_raster, template_raster, method = "bilinear")
+  dir_at_max_hsig_raster <- resample(dir_at_max_hsig_raster, template_raster, method = "bilinear")
   
   ################################## Import SST ##################################
   
@@ -488,8 +488,8 @@
     cat(sprintf("Loading PAR %s...\n", filename))
     matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
     
-    # Flip matrix vertically to match MATLAB orientation
-    matrix_data <- matrix_data[nrow(matrix_data):1, ]
+    # # Flip matrix vertically to match MATLAB orientation
+    # matrix_data <- matrix_data[nrow(matrix_data):1, ]
     
     # Create SpatRaster using terra
     r <- rast(matrix_data,
@@ -508,16 +508,8 @@
   std_par_raster <- create_par_raster("std_par_matrix.csv", "Std_PAR")
   
   # Reproject PAR rasters
-  
-  # STOPPING POINT - 19 August 2025
-  #   - hilarious error. I was importing/plotting PAR & Ocean Color data flipped
-  #       vertically in space. no wonder none of the landmasks made any sense!
-  
   mean_par_raster <- project(mean_par_raster, projected_crs)
-  
-  mean_par_raster <- project(mean_par_raster, projected_crs, res = 25)
-  
-  
+  # mean_par_raster <- project(mean_par_raster, projected_crs, res = 25)
   max_par_raster <- project(max_par_raster, projected_crs)
   min_par_raster <- project(min_par_raster, projected_crs)
   std_par_raster <- project(std_par_raster, projected_crs)
@@ -542,8 +534,8 @@
     cat(sprintf("Loading Ocean Color %s...\n", filename))
     matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
     
-    # Flip matrix vertically to match MATLAB orientation
-    matrix_data <- matrix_data[nrow(matrix_data):1, ]
+    # # Flip matrix vertically to match MATLAB orientation
+    # matrix_data <- matrix_data[nrow(matrix_data):1, ]
     
     # Create SpatRaster using terra
     r <- rast(matrix_data,
@@ -573,7 +565,6 @@
   max_kd490_raster <- resample(max_kd490_raster, template_raster, method = "bilinear")
   min_kd490_raster <- resample(min_kd490_raster, template_raster, method = "bilinear")
   std_kd490_raster <- resample(std_kd490_raster, template_raster, method = "bilinear")
-    
   
   ################################## Chlorophyll-a ##################################
   
@@ -597,31 +588,23 @@
 
   ################################## Suspended Particulate Matter (SPM) ##################################
   
-  # Check if SPM data exists in the summary
-  if("mean_spm" %in% names(ocean_color_summary)) {
-    
-    # Create rasters for SPM variables
-    mean_spm_raster <- create_oc_raster("mean_spm_matrix.csv", "Mean_SPM")
-    max_spm_raster <- create_oc_raster("max_spm_matrix.csv", "Max_SPM")
-    min_spm_raster <- create_oc_raster("min_spm_matrix.csv", "Min_SPM")
-    std_spm_raster <- create_oc_raster("std_spm_matrix.csv", "Std_SPM")
-    
-    # Reproject SPM rasters
-    mean_spm_raster <- project(mean_spm_raster, projected_crs)
-    max_spm_raster <- project(max_spm_raster, projected_crs)
-    min_spm_raster <- project(min_spm_raster, projected_crs)
-    std_spm_raster <- project(std_spm_raster, projected_crs)
-    
-    # Resample SPM rasters to match template
-    mean_spm_raster <- resample(mean_spm_raster, template_raster, method = "bilinear")
-    max_spm_raster <- resample(max_spm_raster, template_raster, method = "bilinear")
-    min_spm_raster <- resample(min_spm_raster, template_raster, method = "bilinear")
-    std_spm_raster <- resample(std_spm_raster, template_raster, method = "bilinear")
-    
-    cat("SPM rasters created successfully.\n")
-  } else {
-    cat("SPM data not found in ocean color summary.\n")
-  }
+  # Create rasters for SPM variables
+  mean_spm_raster <- create_oc_raster("mean_spm_matrix.csv", "Mean_SPM")
+  max_spm_raster <- create_oc_raster("max_spm_matrix.csv", "Max_SPM")
+  min_spm_raster <- create_oc_raster("min_spm_matrix.csv", "Min_SPM")
+  std_spm_raster <- create_oc_raster("std_spm_matrix.csv", "Std_SPM")
+  
+  # Reproject SPM rasters
+  mean_spm_raster <- project(mean_spm_raster, projected_crs)
+  max_spm_raster <- project(max_spm_raster, projected_crs)
+  min_spm_raster <- project(min_spm_raster, projected_crs)
+  std_spm_raster <- project(std_spm_raster, projected_crs)
+  
+  # Resample SPM rasters to match template
+  mean_spm_raster <- resample(mean_spm_raster, template_raster, method = "bilinear")
+  max_spm_raster <- resample(max_spm_raster, template_raster, method = "bilinear")
+  min_spm_raster <- resample(min_spm_raster, template_raster, method = "bilinear")
+  std_spm_raster <- resample(std_spm_raster, template_raster, method = "bilinear")
   
   rm(template_raster)
   
@@ -633,9 +616,8 @@
   # Apply landmask to wave rasters
   mean_hsig_raster[landmask == 0] <- NA
   max_hsig_raster[landmask == 0] <- NA
-  # mean_hswell_raster[landmask == 0] <- NA
-  mean_dir_raster[landmask == 0] <- NA
-  mean_per_raster[landmask == 0] <- NA
+  per_at_max_hsig_raster[landmask == 0] <- NA
+  dir_at_max_hsig_raster[landmask == 0] <- NA
   
   # Apply landmask to SST rasters
   mean_sst_raster[landmask == 0] <- NA
@@ -649,6 +631,7 @@
   min_par_raster[landmask == 0] <- NA
   std_par_raster[landmask == 0] <- NA
   
+  # Apply landmask to ocean color rasters
   mean_kd490_raster[landmask == 0] <- NA
   max_kd490_raster[landmask == 0] <- NA
   min_kd490_raster[landmask == 0] <- NA
@@ -677,13 +660,13 @@
   # plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
   # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
   # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
   # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
-  # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
-
+  plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
+  
   # Slope
   plot(slope_terra,
        col = cmocean("deep")(100),
@@ -785,15 +768,28 @@
   #      col = cmocean("balance")(100),
   #      ext = plot_extents,
   #      main = "Max Curvature multiscale - Terra Raster with cmocean balance")
-
+  
   # Bathymetry
   depth_OG_clamp <- clamp(bathy_final, lower = -50, upper = 0)
-  # plot(bathy_final,
   plot(depth_OG_clamp,
        col = rev(cmocean("deep")(100)),  # Reversed color scheme
        ext = plot_extents,
        main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
   
+  plot(depth_OG_clamp,
+       col = rev(cmocean("deep")(100)),  # Reversed color scheme
+       main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
+  
+  plot(bathy_final,
+       col = rev(cmocean("deep")(100)),  # Reversed color scheme
+       ext = plot_extents,
+       main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
+  
+  plot(bathy_final,
+       col = rev(cmocean("deep")(100)),  # Reversed color scheme
+       main = "Bathymetry - Terra Raster with cmocean deep (reversed)")
+  
+  #plot SST
   plot(mean_sst_raster,
        col = cmocean("thermal")(100),
        ext = plot_extents)
@@ -821,19 +817,17 @@
   plot(range_sst_raster,
        col = cmocean("thermal")(100))
   
+  #plot waves
   plot(mean_hsig_raster,
        col = cmocean("amp")(100),
        ext = plot_extents)
   plot(max_hsig_raster,
        col = cmocean("amp")(100),
        ext = plot_extents)
-  plot(mean_hswell_raster,
-       col = cmocean("amp")(100),
-       ext = plot_extents)
-  plot(mean_dir_raster,
+  plot(dir_at_max_hsig_raster,
        col = cmocean("phase")(100),
        ext = plot_extents)
-  plot(mean_per_raster,
+  plot(per_at_max_hsig_raster,
        col = cmocean("amp")(100),
        ext = plot_extents)
   
@@ -841,15 +835,12 @@
        col = cmocean("amp")(100))
   plot(max_hsig_raster,
        col = cmocean("amp")(100))
-  plot(mean_hswell_raster,
-       col = cmocean("amp")(100))
-  plot(mean_dir_raster,
+  plot(dir_at_max_hsig_raster,
        col = cmocean("phase")(100))
-  plot(mean_per_raster,
+  plot(per_at_max_hsig_raster,
        col = cmocean("amp")(100))
   
-
-  # NOTE / STOPPING POINT (15 Aug 2025) - something very wrong with PAR in northern PR. hopefully fixable!
+  #plot PAR
   plot(mean_par_raster,
        col = cmocean("solar")(100),
        ext = plot_extents)
@@ -877,8 +868,7 @@
   plot(range_par_raster,
        col = cmocean("solar")(100))
   
-  ################################## Kd490 Plots ##################################
-  
+  #plot turbidity
   plot(mean_kd490_raster,
        col = cmocean("turbid")(100),
        ext = plot_extents)
@@ -904,10 +894,17 @@
   plot(std_kd490_raster,
        col = cmocean("turbid")(100))
   plot(range_kd490_raster,
+       col = cmocean("turbid")(100))
+  
+  mean_kd490_clamp <- clamp(mean_kd490_raster, lower = 0, upper = 0.5)
+  plot(mean_kd490_clamp,
+       col = cmocean("turbid")(100),
+       ext = plot_extents)
+  
+  plot(mean_kd490_clamp,
        col = cmocean("turbid")(100))
 
-  ################################## Chlorophyll-a Plots ##################################
-  
+  #plot chl-a
   plot(mean_chlor_a_raster,
        col = cmocean("algae")(100),
        ext = plot_extents)
@@ -935,8 +932,7 @@
   plot(range_chlor_a_raster,
        col = cmocean("algae")(100))
 
-  ################################## SPM Plots ##################################
-  
+  #plot particulates
   plot(mean_spm_raster,
        col = cmocean("matter")(100),
        ext = plot_extents)
@@ -962,6 +958,24 @@
   plot(std_spm_raster,
        col = cmocean("matter")(100))
   plot(range_spm_raster,
+       col = cmocean("matter")(100))
+  
+  # STOPPING POINT - 23 August 2025
+  #   - Okay, still need to put together BOVs, distance from mesophotic isobath,
+  #       and distance from shoreline. other than that, looking really good.
+  #   - strongly consider adding year as a variable, given that Viehman 2025 / NCRMP
+  #       clearly demonstrate a large decline in coral cover from 2013-2017.
+  #       I would not like to make this a full-blown spatiotemporal SDM, as I do
+  #       not think that is appropriate for the project scope - but should explore
+  #       to what degree adding in "time" is possible
+  #   - will ideally incorporate mean BOV and mean wave direction from Canals
+  
+  mean_spm_clamp <- clamp(mean_spm_raster, lower = 0, upper = 1)
+  plot(mean_spm_clamp,
+       col = cmocean("matter")(100),
+       ext = plot_extents)
+  
+  plot(mean_spm_clamp,
        col = cmocean("matter")(100))
 
   # NOTES - 18 May 2025
