@@ -4,6 +4,7 @@
   library(sf)
   library(here)
   library(terra) 
+  library(cmocean)
 
   source(here("src/functions.R"))
   
@@ -203,49 +204,655 @@
   
   
   
+  ################################## calculate BOV ##################################
   
-  
-  # STOPPING POINT - 24 August 2025
-  #   - took a stab at "max" BOV - could maybe use work. not sure if it makes sense that the
-  #       deeper shelf areas alone have high BOV
-  
+  # # VERSION with no chunking; easier to diagnose issues
+  # # Quick BOV Test on Small Subset (1000 cells south of St Thomas)
+  # # Constants
+  # g <- 9.81
+  # 
+  # # Make depth positive
+  # depth_raster <- abs(bathy_final)
+  # 
+  # cat("Creating test subset south of St Thomas...\n")
+  # 
+  # # Define a bounding box south of St Thomas in UTM coordinates
+  # # Based on your plot showing UTM coordinates (x: ~0-400000, y: ~1900000-2100000)
+  # # Let's take a small area in the south-central part
+  # # test_extent <- ext(280000, 305000, 2010000, 2030000)
+  # # test_extent <- ext(260000, 310000, 2000000, 2050000)
+  # # test_extent <- ext(200000, 320000, 2000000, 2060000)
+  # # test_extent <- ext(20000, 340000, 2000000, 2060000)
+  # test_extent <- ext(per_at_max_hsig_raster)  # 50km x 50km area
+  # 
+  # # Crop all rasters to test area
+  # per_test <- crop(per_at_max_hsig_raster, test_extent)
+  # 
+  # plot(per_test)
+  # 
+  # depth_test <- crop(depth_raster, test_extent)
+  # hsig_test <- crop(max_hsig_raster, test_extent)
+  # 
+  # cat(sprintf("Test area dimensions: %d x %d = %d cells\n", 
+  #             nrow(per_test), ncol(per_test), ncell(per_test)))
+  # 
+  # # Optimized solve_L function (same as before)
+  # solve_L_efficient <- function(T, h, g = 9.81) {
+  #   if (is.na(T) || is.na(h) || T <= 0 || h <= 0) {
+  #     return(NA)
+  #   }
+  #   
+  #   # Define the dispersion relation function
+  #   f <- function(L) {
+  #     k <- 2 * pi / L
+  #     return(((2 * pi) / T)^2 - g * k * tanh(k * h))
+  #   }
+  #   
+  #   # Smart interval selection based on water depth regime
+  #   L_shallow <- T * sqrt(g * h)  # Shallow water approximation
+  #   L_deep <- g * T^2 / (2 * pi)  # Deep water approximation
+  #   
+  #   # Create intervals based on the physics
+  #   L_min <- min(L_shallow, L_deep) * 0.1   
+  #   L_max <- max(L_shallow, L_deep) * 5     
+  #   
+  #   # Primary interval
+  #   interval_main <- c(L_min, L_max)
+  #   
+  #   # Try main interval first
+  #   solution <- tryCatch({
+  #     uniroot(f, interval = interval_main, tol = 1e-8)
+  #   }, error = function(e) NULL)
+  #   
+  #   if (!is.null(solution)) {
+  #     return(solution$root)
+  #   }
+  #   
+  #   # Fallback intervals if main fails
+  #   fallback_intervals <- list(
+  #     c(0.1, 500),      
+  #     c(0.01, 1000)     
+  #   )
+  #   
+  #   for (interval in fallback_intervals) {
+  #     solution <- tryCatch({
+  #       uniroot(f, interval = interval, tol = 1e-8)
+  #     }, error = function(e) NULL)
+  #     
+  #     if (!is.null(solution)) {
+  #       return(solution$root)
+  #     }
+  #   }
+  #   
+  #   return(NA)
+  # }
+  # 
+  # # Test the wavelength calculation on small subset
+  # cat("Testing wavelength calculation...\n")
+  # start_time <- Sys.time()
+  # 
+  # # Extract values for processing
+  # per_vals <- values(per_test)
+  # depth_vals <- values(depth_test)
+  # 
+  # # Pre-filter to valid cells only
+  # valid_mask <- !is.na(per_vals) & !is.na(depth_vals) & per_vals > 0 & depth_vals > 0
+  # valid_indices <- which(valid_mask)
+  # valid_cells <- length(valid_indices)
+  # cat(sprintf("Valid cells to process: %d\n", valid_cells))
+  # 
+  # # Process only valid cells
+  # L_vals_valid <- mapply(solve_L_efficient, 
+  #                        per_vals[valid_indices], 
+  #                        depth_vals[valid_indices], 
+  #                        MoreArgs = list(g = g), USE.NAMES = FALSE)
+  # 
+  # # Reconstruct full vector
+  # L_vals <- rep(NA, length(per_vals))
+  # L_vals[valid_indices] <- L_vals_valid
+  # 
+  #   # Create wavelength raster
+  # L_test <- per_test
+  # values(L_test) <- L_vals
+  # names(L_test) <- "wavelength"
+  # 
+  # end_time <- Sys.time()
+  # elapsed <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  # 
+  # # Check results
+  # na_count <- sum(is.na(L_vals) & !is.na(per_vals) & !is.na(depth_vals))
+  # success_rate <- (valid_cells - na_count) / valid_cells
+  # 
+  # cat("\nTest Results:\n")
+  # cat(sprintf("  Processing time: %.2f seconds\n", elapsed))
+  # cat(sprintf("  Successful solutions: %d/%d (%.1f%%)\n", 
+  #             valid_cells - na_count, valid_cells, success_rate * 100))
+  # 
+  # if (success_rate > 0) {
+  #   wavelength_range <- range(L_vals, na.rm = TRUE)
+  #   cat(sprintf("  Wavelength range: %.1f to %.1f m\n", 
+  #               wavelength_range[1], wavelength_range[2]))
+  #   
+  #   # Quick sanity check
+  #   sample_vals <- na.omit(L_vals)[1:min(10, sum(!is.na(L_vals)))]
+  #   cat(sprintf("  Sample wavelengths: %s m\n", 
+  #               paste(round(sample_vals, 1), collapse = ", ")))
+  #   
+  #   # Calculate BOV for test area
+  #   cat("\nTesting BOV calculation...\n")
+  #   k_h_test <- 2 * pi * depth_test / L_test
+  #   cosh_term_test <- cosh(k_h_test)
+  #   bov_test <- (hsig_test * g * per_test) / (2 * L_test * cosh_term_test)
+  #   names(bov_test) <- "BOV_test"
+  #   
+  #   bov_range <- range(values(bov_test), na.rm = TRUE)
+  #   cat(sprintf("  BOV range: %.3f to %.3f m/s\n", bov_range[1], bov_range[2]))
+  #   
+  #   # Detailed BOV analysis to find the outliers
+  #   bov_vals <- values(bov_test)
+  #   bov_valid <- bov_vals[!is.na(bov_vals)]
+  #   
+  #   cat("\nDetailed BOV Analysis:\n")
+  #   cat(sprintf("  Mean BOV: %.3f m/s\n", mean(bov_valid)))
+  #   cat(sprintf("  Median BOV: %.3f m/s\n", median(bov_valid)))
+  #   cat(sprintf("  95th percentile: %.3f m/s\n", quantile(bov_valid, 0.95)))
+  #   cat(sprintf("  99th percentile: %.3f m/s\n", quantile(bov_valid, 0.99)))
+  #   cat(sprintf("  99.9th percentile: %.3f m/s\n", quantile(bov_valid, 0.999)))
+  #   
+  #   # Count extreme values
+  #   extreme_count <- sum(bov_valid > 2.0)  # > 2 m/s is very high
+  #   very_extreme_count <- sum(bov_valid > 10.0)  # > 10 m/s is unreasonable
+  #   
+  #   cat(sprintf("  Cells with BOV > 2.0 m/s: %d (%.2f%%)\n", 
+  #               extreme_count, extreme_count/length(bov_valid)*100))
+  #   cat(sprintf("  Cells with BOV > 10.0 m/s: %d (%.2f%%)\n", 
+  #               very_extreme_count, very_extreme_count/length(bov_valid)*100))
+  #   
+  #   # Show the most extreme values and their conditions
+  #   if (very_extreme_count > 0) {
+  #     cat("\nExtreme value diagnosis:\n")
+  #     extreme_indices <- which(bov_vals > 10.0)
+  #     n_show <- min(5, length(extreme_indices))
+  #     
+  #     for (i in 1:n_show) {
+  #       idx <- extreme_indices[i]
+  #       bov_val <- bov_vals[idx]
+  #       hsig_val <- values(hsig_test)[idx]
+  #       per_val <- values(per_test)[idx]
+  #       depth_val <- values(depth_test)[idx]
+  #       L_val <- values(L_test)[idx]
+  #       
+  #       cat(sprintf("  Cell %d: BOV=%.1f, H=%.2f, T=%.1f, h=%.1f, L=%.1f\n",
+  #                   i, bov_val, hsig_val, per_val, depth_val, L_val))
+  #     }
+  #   }
+  #   
+  #   # Estimate time for full domain
+  #   cells_per_second <- valid_cells / elapsed
+  #   total_cells_estimate <- sum(!is.na(values(per_at_max_hsig_raster)) & 
+  #                                 !is.na(values(depth_raster)))
+  #   estimated_time_minutes <- total_cells_estimate / cells_per_second / 60
+  #   
+  #   cat(sprintf("\nFull domain estimate:\n"))
+  #   cat(sprintf("  Total cells to process: ~%d\n", total_cells_estimate))
+  #   cat(sprintf("  Estimated processing time: %.1f minutes\n", estimated_time_minutes))
+  #   
+  #   # Plot test results with better visualization
+  #   cat("\nPlotting test results...\n")
+  #   par(mfrow = c(2, 3))
+  #   plot(L_test, main = "Wavelength (m)")
+  #   
+  #   # # Plot BOV with reasonable range (clip extreme outliers)
+  #   # bov_reasonable <- bov_test
+  #   # bov_vals_clipped <- pmax(pmin(values(bov_test), 2.0), 0)  # Clip to 0-2 m/s
+  #   # values(bov_reasonable) <- bov_vals_clipped
+  #   # plot(bov_reasonable, main = "BOV (m/s) - Clipped to 0-2")
+  #   
+  #   # Dynamic upper limit based on 99th percentile
+  #   bov_upper_limit <- quantile(bov_valid, 0.99, na.rm = TRUE)
+  #   bov_reasonable <- bov_test
+  #   bov_vals_clipped <- pmax(pmin(values(bov_test), bov_upper_limit), 0)
+  #   values(bov_reasonable) <- bov_vals_clipped
+  #   plot(bov_reasonable, main = sprintf("BOV (m/s) - 0 to %.2f", bov_upper_limit))
+  #   
+  #   # # Also show the original with full range
+  #   # plot(bov_test, main = "BOV (m/s) - Full Range")
+  #   
+  #   # Create depth plot with outliers highlighted, limited color scale, and stars
+  #   outlier_mask <- values(bov_test) > 5.0 & !is.na(values(bov_test))
+  #   outlier_depths <- depth_test
+  #   values(outlier_depths)[!outlier_mask] <- NA
+  #   
+  #   # Plot background in gray first
+  #   plot(depth_test, main = "Depth (m) at BOV Outliers > 5 m/s", col = "gray", legend = FALSE)
+  #   
+  #   # Get the range of outlier depths and plot with limited color scale
+  #   if(sum(outlier_mask, na.rm = TRUE) > 0) {
+  #     outlier_range <- range(values(outlier_depths), na.rm = TRUE)
+  #     plot(outlier_depths, add = TRUE, zlim = outlier_range)
+  #     
+  #     # Add red stars at outlier locations
+  #     outlier_coords <- xyFromCell(bov_test, which(outlier_mask))
+  #     points(outlier_coords, pch = 8, col = "red", cex = 0.5)
+  #   }  
+  #   
+  #   plot(per_test, main = "Wave Period (s)")  
+  #   # plot(depth_test, main = "Depth (m)")
+  #   
+  #   # Clip depth for better visualization
+  #   depth_clipped <- depth_test
+  #   values(depth_clipped) <- pmin(values(depth_test), 90)
+  #   plot(depth_clipped, main = "Depth (m) - Clipped to 90m")
+  #   
+  #   plot(hsig_test, main = "Wave Height (m)")
+  #   par(mfrow = c(1, 1))
+  #   
+  #   # Create histogram of BOV values to see distribution
+  #   hist(bov_valid[bov_valid < 5], breaks = 50,
+  #        main = "BOV Distribution (< 5 m/s)", xlab = "BOV (m/s)")
+  #   
+  #   cat("\nReasonable BOV range should be ~0.01-2.0 m/s for most conditions\n")
+  #   cat("Values > 5 m/s suggest numerical issues (very shallow water, extreme waves, or wavelength errors)\n")
+  #   
+  # } else {
+  #   cat("  ERROR: No successful solutions! Check input data.\n")
+  #   
+  #   # Debug info
+  #   cat("\nDebug info:\n")
+  #   cat(sprintf("  Period range: %.2f to %.2f s\n", 
+  #               min(per_vals, na.rm = TRUE), max(per_vals, na.rm = TRUE)))
+  #   cat(sprintf("  Depth range: %.2f to %.2f m\n", 
+  #               min(depth_vals, na.rm = TRUE), max(depth_vals, na.rm = TRUE)))
+  # }
+
+  # VERSION with chunking
+  # Chunked BOV Processing for Full Domain (8 chunks)
   # Constants
   g <- 9.81
   
   # Make depth positive
   depth_raster <- abs(bathy_final)
   
-  # Initial wavelength guess using deep water approximation
-  L <- g * per_at_max_hsig_raster^2 / (2 * pi)
+  cat("Starting chunked BOV processing for full domain...\n")
   
-  # Iteratively solve dispersion relation (Newton-Raphson, 5 iterations should be enough)
-  cat("Solving dispersion relation...\n")
-  pb <- txtProgressBar(min = 0, max = 5, style = 3)
+  # Get full extent and divide into 8 chunks (2x4 grid)
+  full_extent <- ext(per_at_max_hsig_raster)
+  x_range <- c(full_extent[1], full_extent[2])
+  y_range <- c(full_extent[3], full_extent[4])
   
-  for (i in 1:5) {
-    k <- 2 * pi / L
-    omega_sq <- (2 * pi / per_at_max_hsig_raster)^2
-    f <- omega_sq - g * k * tanh(k * depth_raster)
-    df_dL <- g * (2 * pi / L^2) * (tanh(2 * pi * depth_raster / L) - 
-                                     (2 * pi * depth_raster / L) * (1 / cosh(2 * pi * depth_raster / L))^2)
-    L <- L + f / df_dL
+  # Create 8 chunks (2 rows x 4 columns)
+  n_x_chunks <- 4
+  n_y_chunks <- 2
+  
+  x_breaks <- seq(x_range[1], x_range[2], length.out = n_x_chunks + 1)
+  y_breaks <- seq(y_range[1], y_range[2], length.out = n_y_chunks + 1)
+  
+  cat(sprintf("Full domain extent: %.0f to %.0f, %.0f to %.0f\n", 
+              x_range[1], x_range[2], y_range[1], y_range[2]))
+  
+  # Optimized solve_L function
+  solve_L_efficient <- function(T, h, g = 9.81) {
+    if (is.na(T) || is.na(h) || T <= 0 || h <= 0) {
+      return(NA)
+    }
     
-    setTxtProgressBar(pb, i)
+    # Define the dispersion relation function
+    f <- function(L) {
+      k <- 2 * pi / L
+      return(((2 * pi) / T)^2 - g * k * tanh(k * h))
+    }
+    
+    # Smart interval selection based on water depth regime
+    L_shallow <- T * sqrt(g * h)  # Shallow water approximation
+    L_deep <- g * T^2 / (2 * pi)  # Deep water approximation
+    
+    # Create intervals based on the physics
+    L_min <- min(L_shallow, L_deep) * 0.1   
+    L_max <- max(L_shallow, L_deep) * 5     
+    
+    # Primary interval
+    interval_main <- c(L_min, L_max)
+    
+    # Try main interval first
+    solution <- tryCatch({
+      uniroot(f, interval = interval_main, tol = 1e-8)
+    }, error = function(e) NULL)
+    
+    if (!is.null(solution)) {
+      return(solution$root)
+    }
+    
+    # Fallback intervals if main fails
+    fallback_intervals <- list(
+      c(0.1, 500),      
+      c(0.01, 1000)     
+    )
+    
+    for (interval in fallback_intervals) {
+      solution <- tryCatch({
+        uniroot(f, interval = interval, tol = 1e-8)
+      }, error = function(e) NULL)
+      
+      if (!is.null(solution)) {
+        return(solution$root)
+      }
+    }
+    
+    return(NA)
   }
-  close(pb)
   
-  # Calculate BOV
-  k_h <- 2 * pi * depth_raster / L
-  cosh_term <- cosh(k_h)
-  max_bov_raster <- (max_hsig_raster * g * per_at_max_hsig_raster) / (2 * L * cosh_term)
+  # Initialize lists to store results
+  L_chunks <- list()
+  bov_chunks <- list()
+  total_start_time <- Sys.time()
   
-  # Set name
-  names(max_bov_raster) <- "max_BOV"
+  # Process each chunk
+  chunk_num <- 0
+  for (i in 1:n_y_chunks) {
+    for (j in 1:n_x_chunks) {
+      chunk_num <- chunk_num + 1
+      
+      # Define chunk extent
+      chunk_extent <- ext(x_breaks[j], x_breaks[j+1], 
+                          y_breaks[i], y_breaks[i+1])
+      
+      cat(sprintf("\n=== Processing Chunk %d of 8 ===\n", chunk_num))
+      cat(sprintf("Extent: %.0f to %.0f, %.0f to %.0f\n", 
+                  chunk_extent[1], chunk_extent[2], 
+                  chunk_extent[3], chunk_extent[4]))
+      
+      chunk_start_time <- Sys.time()
+      
+      # Crop rasters to chunk
+      per_chunk <- crop(per_at_max_hsig_raster, chunk_extent)
+      depth_chunk <- crop(depth_raster, chunk_extent)
+      hsig_chunk <- crop(max_hsig_raster, chunk_extent)
+      
+      cat(sprintf("Chunk dimensions: %d x %d = %d cells\n", 
+                  nrow(per_chunk), ncol(per_chunk), ncell(per_chunk)))
+      
+      # Extract values for processing
+      per_vals <- values(per_chunk)
+      depth_vals <- values(depth_chunk)
+      
+      # Pre-filter to valid cells only
+      valid_mask <- !is.na(per_vals) & !is.na(depth_vals) & per_vals > 0 & depth_vals > 0
+      valid_indices <- which(valid_mask)
+      valid_cells <- length(valid_indices)
+      
+      cat(sprintf("Valid cells to process: %d\n", valid_cells))
+      
+      if (valid_cells > 0) {
+        # Process only valid cells
+        L_vals_valid <- mapply(solve_L_efficient, 
+                               per_vals[valid_indices], 
+                               depth_vals[valid_indices], 
+                               MoreArgs = list(g = g), USE.NAMES = FALSE)
+        
+        # Reconstruct full vector
+        L_vals <- rep(NA, length(per_vals))
+        L_vals[valid_indices] <- L_vals_valid
+        
+        # Create wavelength raster
+        L_chunk <- per_chunk
+        values(L_chunk) <- L_vals
+        names(L_chunk) <- paste0("wavelength_chunk_", chunk_num)
+        
+        # Calculate BOV for chunk
+        k_h_chunk <- 2 * pi * depth_chunk / L_chunk
+        cosh_term_chunk <- cosh(k_h_chunk)
+        bov_chunk <- (hsig_chunk * g * per_chunk) / (2 * L_chunk * cosh_term_chunk)
+        names(bov_chunk) <- paste0("BOV_chunk_", chunk_num)
+        
+        # Store results
+        L_chunks[[chunk_num]] <- L_chunk
+        bov_chunks[[chunk_num]] <- bov_chunk
+        
+        # Check results
+        na_count <- sum(is.na(L_vals) & !is.na(per_vals) & !is.na(depth_vals))
+        success_rate <- (valid_cells - na_count) / valid_cells
+        
+        chunk_end_time <- Sys.time()
+        chunk_elapsed <- as.numeric(difftime(chunk_end_time, chunk_start_time, units = "secs"))
+        
+        cat(sprintf("Chunk processing time: %.1f seconds\n", chunk_elapsed))
+        cat(sprintf("Success rate: %.1f%%\n", success_rate * 100))
+        
+        if (success_rate > 0) {
+          wavelength_range <- range(L_vals, na.rm = TRUE)
+          bov_vals <- values(bov_chunk)
+          bov_range <- range(bov_vals, na.rm = TRUE)
+          
+          cat(sprintf("Wavelength range: %.1f to %.1f m\n", 
+                      wavelength_range[1], wavelength_range[2]))
+          cat(sprintf("BOV range: %.3f to %.3f m/s\n", bov_range[1], bov_range[2]))
+        }
+      } else {
+        cat("No valid cells in this chunk - skipping\n")
+        L_chunks[[chunk_num]] <- NULL
+        bov_chunks[[chunk_num]] <- NULL
+      }
+    }
+  }
   
-  # Summary
-  cat("BOV calculation complete!\n")
-  cat(sprintf("BOV range: %.3f to %.3f m/s\n", 
-              minmax(max_bov_raster)[1], minmax(max_bov_raster)[2]))
+  total_end_time <- Sys.time()
+  total_elapsed <- as.numeric(difftime(total_end_time, total_start_time, units = "mins"))
+  
+  cat(sprintf("\n=== PROCESSING COMPLETE ===\n"))
+  cat(sprintf("Total processing time: %.1f minutes\n", total_elapsed))
+  
+  # Merge chunks back together
+  cat("Merging chunks...\n")
+  
+  # Filter out NULL chunks
+  valid_L_chunks <- L_chunks[!sapply(L_chunks, is.null)]
+  valid_bov_chunks <- bov_chunks[!sapply(bov_chunks, is.null)]
+  
+  if (length(valid_L_chunks) > 0) {
+    # Merge wavelength rasters
+    L_full <- do.call(mosaic, valid_L_chunks)
+    names(L_full) <- "wavelength_full"
+    
+    # Merge BOV rasters
+    bov_full <- do.call(mosaic, valid_bov_chunks)
+    names(bov_full) <- "BOV_full"
+    
+    cat("Merging complete!\n")
+    
+    # Final analysis
+    bov_vals_all <- values(bov_full)
+    bov_valid_all <- bov_vals_all[!is.na(bov_vals_all)]
+    
+    cat("\n=== FINAL RESULTS ===\n")
+    cat(sprintf("Total valid BOV cells: %d\n", length(bov_valid_all)))
+    cat(sprintf("BOV range: %.3f to %.3f m/s\n", 
+                min(bov_valid_all), max(bov_valid_all)))
+    cat(sprintf("BOV mean: %.3f m/s\n", mean(bov_valid_all)))
+    cat(sprintf("BOV median: %.3f m/s\n", median(bov_valid_all)))
+    
+    # Count outliers
+    outlier_count <- sum(bov_valid_all > 5.0)
+    cat(sprintf("Cells with BOV > 5.0 m/s: %d (%.3f%%)\n", 
+                outlier_count, outlier_count/length(bov_valid_all)*100))
+    
+    # # Save results
+    # cat("\nSaving results...\n")
+    # writeRaster(L_full, "wavelength_full_domain.tif", overwrite = TRUE)
+    # writeRaster(bov_full, "BOV_full_domain.tif", overwrite = TRUE)
+    # 
+    # cat("Results saved as wavelength_full_domain.tif and BOV_full_domain.tif\n")
+    # 
+    # # Quick plot
+    # cat("Creating summary plot...\n")
+    # par(mfrow = c(1, 2))
+    # plot(L_full, main = "Wavelength (m) - Full Domain")
+    # 
+    # # Plot BOV with reasonable range
+    # bov_upper_limit <- quantile(bov_valid_all, 0.99, na.rm = TRUE)
+    # bov_plot <- bov_full
+    # values(bov_plot) <- pmax(pmin(values(bov_full), bov_upper_limit), 0)
+    # plot(bov_plot, main = sprintf("BOV (m/s) - 0 to %.2f", bov_upper_limit))
+    # par(mfrow = c(1, 1))
+    
+  } else {
+    cat("ERROR: No valid chunks processed!\n")
+  }
+  
+  # plot(bov_full)
+  # 
+  # BOV_clamp = clamp(bov_full, lower = 0, upper = 3)
+  # plot(BOV_clamp)
+  # 
+  # bathy_clamper = clamp(bathy_final, lower = -50, upper = 0)
+  # plot(bathy_clamper)
+  
+  ################################## distance from shore ##################################
+  
+  # Create landmask from bathy_crm_2024 which has positive values for land
+  cat("Creating landmask from bathy_crm_2024...\n")
+  # Load the raster with land elevations
+  bathy_crm_2024 <- rast(here('data/exportImage.tiff'))
+  # Create simple landmask: 1 for land (>0), 0 for water (<=0), NA stays NA
+  landmask <- bathy_crm_2024 > 0
+  landmask <- as.numeric(landmask)
+  names(landmask) <- "landmask"
+  cat("Landmask complete: 1=Land, 0=Water, NA=No Data\n")
+  plot(landmask)
+  
+  cat("Aligning landmask with bathy_final grid structure...\n")
+  # Assume bathy_final is already loaded - if not, load it first
+  # bathy_final <- rast("path/to/your/bathy_final.tif")
+  
+  # Get the CRS of bathy_final
+  target_crs <- crs(bathy_final)
+  cat("Target CRS:", target_crs, "\n")
+  
+  # Create a template raster based on bathy_final structure
+  bathy_template <- bathy_final
+  # Set all valid bathymetry cells to 0 (water), keep NA where bathy is NA
+  bathy_template[!is.na(bathy_template)] <- 0
+  
+  # Reproject and resample landmask to exactly match bathy_final grid
+  landmask_aligned <- project(landmask, bathy_template, method = "near")
+  
+  # Now combine: where landmask shows land (1), set to 1; otherwise keep as 0 or NA
+  # This creates a landmask that matches bathy_final's exact grid
+  landmask_on_bathy <- bathy_template
+  landmask_on_bathy[landmask_aligned == 1] <- 1
+  
+  names(landmask_on_bathy) <- "landmask_on_bathy_grid"
+  
+  cat("Landmask alignment complete\n")
+  cat("Grid dimensions - bathy_final:", dim(bathy_final), "\n")
+  cat("Grid dimensions - aligned landmask:", dim(landmask_on_bathy), "\n")
+  
+  # Plot comparison
+  par(mfrow = c(1, 2))
+  plot(bathy_final, main = "bathy_final")
+  plot(landmask_on_bathy, main = "Landmask on bathy_final grid")
+  par(mfrow = c(1, 1))
+  
+  cat("Calculating distance from each valid bathy_final cell to nearest land...\n")
+  
+  # Create binary raster for land cells only (1 = land, NA = everything else)
+  land_cells_binary <- landmask_on_bathy
+  land_cells_binary[land_cells_binary == 0] <- NA  # Set water to NA
+  # land_cells_binary now has: 1 = land, NA = water/no-data
+  
+  # Calculate distance from all cells (including water) to nearest land cell
+  distance_to_land <- distance(land_cells_binary)
+  
+  # Mask the distance raster to only show distances for valid bathy_final cells
+  distance_for_bathy_cells <- mask(distance_to_land, bathy_final)
+  names(distance_for_bathy_cells) <- "distance_to_land_m"
+  
+  cat("Distance calculation complete\n")
+  cat("Distance units are in map units of the target CRS\n")
+  
+  # Plot the results
+  par(mfrow = c(2, 2))
+  plot(bathy_final, main = "bathy_final (original)")
+  plot(landmask_on_bathy, main = "Landmask on bathy grid")
+  plot(distance_to_land, main = "Distance to land (all cells)")
+  plot(distance_for_bathy_cells, main = "Distance for valid bathy cells only")
+  par(mfrow = c(1, 1))
+  
+  cat("Checking if distance calculation introduced additional NAs...\n")
+  
+  # Count NAs in original bathy_final
+  na_count_bathy <- sum(is.na(values(bathy_final)))
+  total_cells_bathy <- ncell(bathy_final)
+  valid_cells_bathy <- total_cells_bathy - na_count_bathy
+  
+  # Count NAs in distance_for_bathy_cells  
+  na_count_distance <- sum(is.na(values(distance_for_bathy_cells)))
+  total_cells_distance <- ncell(distance_for_bathy_cells)
+  valid_cells_distance <- total_cells_distance - na_count_distance
+  
+  cat("bathy_final: ", valid_cells_bathy, " valid cells,", na_count_bathy, "NAs\n")
+  cat("distance_for_bathy_cells: ", valid_cells_distance, " valid cells,", na_count_distance, "NAs\n")
+  
+  if (na_count_distance > na_count_bathy) {
+    additional_nas <- na_count_distance - na_count_bathy
+    cat("WARNING: Distance calculation introduced", additional_nas, "additional NAs!\n")
+  } else if (na_count_distance == na_count_bathy) {
+    cat("GOOD: No additional NAs introduced - same NA pattern as bathy_final\n")
+  } else {
+    cat("UNEXPECTED: Distance raster has fewer NAs than bathy_final\n")
+  }
+  
+  # Convert to km if units are in meters
+  if (grepl("metre|meter|m", target_crs, ignore.case = TRUE)) {
+    dist_to_land_raster <- distance_for_bathy_cells / 1000
+    names(dist_to_land_raster) <- "distance_to_land_km"
+    
+    # Final plot in km
+    plot(dist_to_land_raster, main = "Distance to Land for Bathy Cells (km)")
+  }
+  
+  
+  ################################## distance from deep water ##################################
+
+  # Set depth threshold
+  depth_threshold <- 70  # meters
+  
+  # Create binary raster: 1 for deep water (deeper than threshold), NA otherwise  
+  # Assuming negative values for depth (e.g., -35m is deeper than -25m)
+  deep_water <- bathy_final < -depth_threshold
+  deep_water <- as.numeric(deep_water)
+  deep_water[deep_water == 0] <- NA  # Set shallow areas to NA
+  deep_water[is.na(bathy_final)] <- NA  # Preserve original NAs
+  
+  names(deep_water) <- paste0("deeper_than_", depth_threshold, "m")
+  
+  # Check how many deep water cells found
+  n_deep_cells <- sum(!is.na(values(deep_water)))
+  cat("Number of cells deeper than", depth_threshold, "m:", n_deep_cells, "\n")
+  
+  # Calculate distance to deep water
+  if (n_deep_cells > 0) {
+    distance_to_deep <- distance(deep_water)
+    distance_to_deep_masked <- mask(distance_to_deep, bathy_final)
+    
+    # Convert to kilometers
+    distance_to_deep_raster <- distance_to_deep_masked / 1000
+    names(distance_to_deep_raster) <- paste0("distance_to_", depth_threshold, "m_depth_km")
+    
+    # Plot results
+    par(mfrow = c(1, 3))
+    plot(bathy_final, main = "Bathymetry")
+    plot(deep_water, main = paste("Water >", depth_threshold, "m deep"))
+    plot(distance_to_deep_raster, main = paste("Distance to", depth_threshold, "m depth (km)"))
+    par(mfrow = c(1, 1))
+    
+    cat("Distance calculation complete!\n")
+  } else {
+    cat("No areas found deeper than", depth_threshold, "m\n")
+  }
+  
+  plot(distance_to_deep_raster)
+  
+
   
   ################################## Import SST ##################################
   
@@ -479,10 +1086,22 @@
   # PAR range  
   range_par_raster <- max_par_raster - min_par_raster
   
+  # Apply landmask to distance rasters
+  dist_to_land_raster[landmask == 0] <- NA
+  distance_to_deep_raster[landmask == 0] <- NA
   
+  ################################## plots ##################################
   
-  ##### plots #####
-  
+  # Define plot extent options
+  plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
+  # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
+  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
+  # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
+  # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
+  # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
+  # plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
   
   #plot SST
   plot(mean_sst_raster,
@@ -655,16 +1274,6 @@
   plot(range_spm_raster,
        col = cmocean("matter")(100))
   
-  # STOPPING POINT - 23 August 2025
-  #   - Okay, still need to put together BOVs, distance from mesophotic isobath,
-  #       and distance from shoreline. other than that, looking really good.
-  #   - strongly consider adding year as a variable, given that Viehman 2025 / NCRMP
-  #       clearly demonstrate a large decline in coral cover from 2013-2017.
-  #       I would not like to make this a full-blown spatiotemporal SDM, as I do
-  #       not think that is appropriate for the project scope - but should explore
-  #       to what degree adding in "time" is possible
-  #   - will ideally incorporate mean BOV and mean wave direction from Canals
-  
   mean_spm_clamp <- clamp(mean_spm_raster, lower = 0, upper = 1)
   plot(mean_spm_clamp,
        col = cmocean("matter")(100),
@@ -673,6 +1282,27 @@
   plot(mean_spm_clamp,
        col = cmocean("matter")(100))
   
+  
+  #plot distances
+  plot(dist_to_land_raster,
+       col = cmocean("solar")(100),
+       ext = plot_extents)
+  plot(distance_to_deep_raster,
+       col = cmocean("solar")(100),
+       ext = plot_extents)
+
+  plot(dist_to_land_raster,
+       col = cmocean("solar")(100))
+  plot(distance_to_deep_raster,
+       col = cmocean("solar")(100))
+  
+  # STOPPING POINT - 23 August 2025
+  #   - strongly consider adding year as a variable, given that Viehman 2025 / NCRMP
+  #       clearly demonstrate a large decline in coral cover from 2013-2017.
+  #       I would not like to make this a full-blown spatiotemporal SDM, as I do
+  #       not think that is appropriate for the project scope - but should explore
+  #       to what degree adding in "time" is possible
+  #   - will ideally incorporate mean BOV and mean wave direction from Canals
   
   ################################## Save objects/workspace ##################################
   

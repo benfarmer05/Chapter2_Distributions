@@ -29,8 +29,11 @@
   # Apply the stored CRS
   terra::crs(bathy_final) <- spatial_metadata$bathy_final$crs
 
-  #load derived bathy rasters
+  #load derived bathy rasters, and oceanographic rasters
   load_spat_objects(directory = 'output/output_calculate_bathy_rasters/')
+  load_spat_objects(directory = 'output/output_calculate_ocean_rasters/')
+  
+  #pull habitat grid
   source(here("src/functions.R"))
   load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
 
@@ -316,13 +319,19 @@
   ################################## complex site GAMs ##################################
   
   # Extract all the complexity variables at species locations
+  # env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
+  #                  planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
+  #                  mean_hsig_raster, mean_sst_raster, range_sst_raster)
   env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
-                   planformcurv_multiscale, SAPA, max_hsig_raster, mean_dir_raster,
-                   mean_hsig_raster, mean_sst_raster, range_sst_raster)
+                  planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
+                  mean_hsig_raster, mean_sst_raster, range_sst_raster, range_par_raster,
+                  mean_chlor_a_raster, mean_kd490_raster, mean_spm_raster, dist_to_land_raster,
+                  distance_to_deep_raster, bov_full)
   
   names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
-                          "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
-                          "range_SST")
+                          "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
+                          "range_SST", "range_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                          "dist_to_deep", "max_BOV")
   
   model_data_filtered <- spp_data %>%
     # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
@@ -346,10 +355,17 @@
   model_data_filtered$planform_curv <- species_env_complex$planform_curv
   model_data_filtered$SAPA <- species_env_complex$SAPA
   model_data_filtered$max_Hsig <- species_env_complex$max_Hsig
-  model_data_filtered$mean_dir <- species_env_complex$mean_dir
+  model_data_filtered$dir_at_max_hsig <- species_env_complex$dir_at_max_hsig
   model_data_filtered$mean_Hsig <- species_env_complex$mean_Hsig
   model_data_filtered$mean_SST <- species_env_complex$mean_SST
   model_data_filtered$range_SST <- species_env_complex$range_SST
+  model_data_filtered$range_PAR <- species_env_complex$range_PAR
+  model_data_filtered$mean_chla <- species_env_complex$mean_chla
+  model_data_filtered$mean_kd490 <- species_env_complex$mean_kd490
+  model_data_filtered$mean_spm <- species_env_complex$mean_spm
+  model_data_filtered$dist_to_land <- species_env_complex$dist_to_land
+  model_data_filtered$dist_to_deep <- species_env_complex$dist_to_deep
+  model_data_filtered$max_BOV <- species_env_complex$max_BOV
   model_data_filtered$year = year(model_data_filtered$date)
   # model_data_filtered$date = model_data_filtered$date
   
@@ -371,12 +387,18 @@
   #         139 observation points. good argument for removing!
   #           - and unfortunately, CARICOOS wave data causes a loss of 310 nearshore points.
   #               certainly an argument for favoring the higher-resolution model
+  #
   # complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
-  #                      "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  #                      "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
   #                      "range_SST", "year", "date", "lat", "lon", "cover")
-  
-  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
-                       "range_SST", "year", "date", "lat", "lon", "cover")
+  # complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv",
+  #                      "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
+                       "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
+                       "range_SST", "year", "date", "lat", "lon", "cover", "range_PAR",
+                       "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                       "dist_to_deep", "max_BOV")
   
   model_data_complex <- model_data_filtered[complete.cases(model_data_filtered[, complexity_vars]), ]
   
@@ -385,12 +407,24 @@
   
   # Fit expanded GAM models
   # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) + s(planform_curv) +
-  #                     s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') + s(max_Hsig) +
+  #                     s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') + s(max_Hsig) +
   #                      s(mean_Hsig),
   #                    data = model_data_complex,
   #                    family = tw())
-  gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
-                       s(range_SST) + s(mean_SST),
+  # gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+  #                      s(range_SST) + s(mean_SST),
+  #                    data = model_data_complex,
+  #                    family = tw())
+  # gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(complexity) + s(planform_curv) +
+  #                      s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') + s(max_Hsig) +
+  #                      s(mean_Hsig) + year + s(range_PAR) + s(mean_chla) + s(mean_kd490) + 
+  #                      s(mean_spm) + s(dist_to_land) + s(dist_to_deep) + s(max_BOV),
+  #                    data = model_data_complex,
+  #                    family = tw())
+  gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                       s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                       s(mean_Hsig) + year + s(range_PAR) + s(mean_chla) + s(mean_kd490) + 
+                       s(mean_spm) + s(dist_to_land) + s(dist_to_deep) + s(max_BOV),
                      data = model_data_complex,
                      family = tw())
   
@@ -399,6 +433,15 @@
   gam.check(gam_complex)
   draw(gam_complex)
 
+  
+  # STOPPING POINT - 25 August 2025
+  #   - have a decent draft with all variables of interest (other than maybe mean BOV & mean_dir)
+  #   - now need to refine how the models are selected, and interpret them by genera.
+  #   - most importantly, need to see how well prediction maps do, and start making figures/writing
+  
+  
+  
+  
   # Plot the relationships
   plot(gam_complex, pages = 2)  # Will create multiple pages
   
