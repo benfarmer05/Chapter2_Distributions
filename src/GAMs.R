@@ -423,16 +423,19 @@
   #                    family = tw())
   gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
                        s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-                       s(mean_Hsig) + year + s(range_PAR) + s(mean_chla) + s(mean_kd490) + 
-                       s(mean_spm) + s(dist_to_land) + s(dist_to_deep) + s(max_BOV),
+                       mean_Hsig + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                       s(dist_to_deep) + s(max_BOV) + s(year, k = 5),
                      data = model_data_complex,
                      family = tw())
   
   # Check the results
   summary(gam_complex)
+  AIC(gam_complex)
   gam.check(gam_complex)
   draw(gam_complex)
-
+  
+  # Plot the relationships
+  plot(gam_complex, pages = 2)  # Will create multiple pages
   
   # STOPPING POINT - 25 August 2025
   #   - have a decent draft with all variables of interest (other than maybe mean BOV & mean_dir)
@@ -441,20 +444,17 @@
   
   
   
-  
-  # Plot the relationships
-  plot(gam_complex, pages = 2)  # Will create multiple pages
-  
   # Compare model performance
   cat("Simple model AIC:", AIC(gam_tweedie), "\n")
   cat("Complex model AIC:", AIC(gam_complex), "\n")
-
+  
   # Check correlations between variables first
   # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
   #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
   complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "planform_curv",
-                                              "range_SST", "mean_SST", "mean_dir", "max_Hsig",
-                                              "mean_Hsig")]
+                                              "range_SST", "mean_SST", "dir_at_max_hsig", "max_Hsig",
+                                              "mean_Hsig", "year", "range_PAR", "mean_chla", "mean_kd490",
+                                              "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV")]
   cor_matrix <- cor(complexity_matrix, use = "complete.obs")
   print(round(cor_matrix, 2))
   
@@ -466,8 +466,14 @@
   #                               s(mean_Hsig),
   #                             data = model_data_complex,
   #                             family = binomial())
-  gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
-                                s(range_SST) + s(mean_SST),
+  # gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+  #                               s(range_SST) + s(mean_SST),
+  #                             data = model_data_complex,
+  #                             family = binomial())
+  gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                                s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                                s(range_PAR) + s(mean_chla) +
+                                s(dist_to_deep) + max_BOV,
                               data = model_data_complex,
                               family = binomial())
   
@@ -476,8 +482,14 @@
   #                                s(mean_Hsig),
   #                              data = model_data_complex[model_data_complex$cover > 0, ],
   #                              family = Gamma(link = "log"))
-  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
-                                 s(range_SST) + s(mean_SST),
+  # gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) + s(planform_curv) +
+  #                                s(range_SST) + s(mean_SST),
+  #                              data = model_data_complex[model_data_complex$cover > 0, ],
+  #                              family = Gamma(link = "log"))
+  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + complexity +
+                                 s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                                 mean_Hsig + s(range_PAR) + mean_chla + s(dist_to_land) +
+                                 s(dist_to_deep) + s(max_BOV),
                                data = model_data_complex[model_data_complex$cover > 0, ],
                                family = Gamma(link = "log"))
   
@@ -487,16 +499,77 @@
   # Create a reduced model with less correlated variables
   # Keep: bathymetry (depth), TPI (topographic position), VRM (rugosity)
   # These capture the main dimensions: depth, local position, and complexity
-
+  
   gam_reduced <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
                      data = model_data_complex,
                      family = tw())
 
   summary(gam_reduced)
 
-    # Plot the reduced model
+  # Plot the reduced model
   plot(gam_reduced, pages = 1)
 
+  
+  
+  
+  ################################## plot cover - sanity check ##################################
+  
+  # STOPPING POINT - 27 August 2025
+  #   - Seems very odd that coral cover appears to be doing the exact opposite as seen in
+  #       Viehman 2025...why would it be going up when their NCRMP data showed the opposite?
+  
+  plotting_model_data_filtered <- model_data_complex %>%
+    filter(grepl("NCRMP", dataset, ignore.case = TRUE)) %>%
+    filter(grepl("VI", PSU, ignore.case = TRUE))
+  # plotting_model_data_filtered <- model_data_complex %>%
+  #   filter(grepl("TCRMP", dataset, ignore.case = TRUE))
+  # plotting_model_data_filtered <- model_data_complex %>%
+  #   filter(!dataset %in% c("DCRMP", "NODICE", "SESAP", "TCRMP_benthic", "PRCRMP"))
+  
+  # Option 1: Basic boxplot
+  ggplot(plotting_model_data_filtered, aes(x = factor(year), y = cover)) +
+    geom_boxplot() +
+    geom_jitter(alpha = 0.3, width = 0.2, size = 0.5) +
+    labs(x = "Year", 
+         y = "Coral Cover (%)",
+         title = "Coral Cover Distribution by Year") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Option 2: Mean with error bars
+  cover_summary <- plotting_model_data_filtered %>%
+    group_by(year) %>%
+    summarise(
+      mean_cover = mean(cover, na.rm = TRUE),
+      se_cover = sd(cover, na.rm = TRUE) / sqrt(n()),
+      n_obs = n(),
+      .groups = 'drop'
+    )
+  
+  ggplot(cover_summary, aes(x = year, y = mean_cover)) +
+    geom_line(color = "blue", size = 1) +
+    geom_point(color = "blue", size = 2) +
+    geom_errorbar(aes(ymin = mean_cover - se_cover, ymax = mean_cover + se_cover),
+                  width = 0.2, color = "blue") +
+    labs(x = "Year",
+         y = "Mean Coral Cover (%) ± SE",
+         title = "Mean Coral Cover Over Time") +
+    theme_minimal()
+  
+  # Option 3: Violin plot (shows distribution shape)
+  ggplot(plotting_model_data_filtered, aes(x = factor(year), y = cover)) +
+    geom_violin(alpha = 0.7, fill = "lightblue") +
+    geom_boxplot(width = 0.1, alpha = 0.8) +
+    labs(x = "Year",
+         y = "Coral Cover (%)",
+         title = "Coral Cover Distribution by Year") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Print summary statistics
+  print("Summary by year:")
+  print(cover_summary)
+  
   ################################## orbicellid GAMs ##################################
   
   # Convert tibble to data.frame first
@@ -518,13 +591,24 @@
   spp_data$y_utm <- utm_coords$y
   
   # Extract all the complexity variables at species locations
+  # env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
+  #                  planformcurv_multiscale, max_hsig_raster, mean_dir_raster,
+  #                  mean_hsig_raster, mean_sst_raster, range_sst_raster)
+  # 
+  # names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+  #                         "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  #                         "range_SST")
+  
   env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
-                   planformcurv_multiscale, max_hsig_raster, mean_dir_raster,
-                   mean_hsig_raster, mean_sst_raster, range_sst_raster)
+                   planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
+                   mean_hsig_raster, mean_sst_raster, range_sst_raster, range_par_raster,
+                   mean_chlor_a_raster, mean_kd490_raster, mean_spm_raster, dist_to_land_raster,
+                   distance_to_deep_raster, bov_full)
   
   names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
-                          "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
-                          "range_SST")
+                          "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
+                          "range_SST", "range_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                          "dist_to_deep", "max_BOV")
   
   # Create simple environmental stack
   env_simple <- c(bathy_final, slope_terra)
@@ -540,10 +624,10 @@
   spp_data$slope <- species_env_values$slope
   
   orbicellids <- spp_data %>%
-    filter(!dataset %in% c("PRCRMP", "NODICE")) %>%  # Remove PRCRMP and NODICE datasets
-    filter(year(date) >= 2017) %>%
-    filter(depth_bathy >= -50) %>%
-    filter(!grepl("_PR", PSU)) %>%  # Remove any PSU containing '_PR' %>%
+    # filter(!dataset %in% c("NODICE")) %>%  # Remove PRCRMP and NODICE datasets
+    # filter(year(date) >= 2017) %>%
+    filter(depth_bathy >= -60) %>%
+    # filter(!grepl("_PR", PSU)) %>%  # Remove any PSU containing '_PR' %>%
     filter(grepl("Orbicella", spp))
   
   # Extract all environmental values at species locations
@@ -551,6 +635,20 @@
                                         cbind(orbicellids$x_utm,
                                               orbicellids$y_utm))
 
+  # # Add all variables to your filtered dataset
+  # orbicellids$depth_bathy <- species_env_complex$depth
+  # orbicellids$aspect <- species_env_complex$aspect
+  # orbicellids$slope <- species_env_complex$slope
+  # orbicellids$complexity <- species_env_complex$complexity
+  # orbicellids$TPI <- species_env_complex$TPI
+  # orbicellids$VRM <- species_env_complex$VRM
+  # orbicellids$planform_curv <- species_env_complex$planform_curv
+  # orbicellids$max_Hsig <- species_env_complex$max_Hsig
+  # orbicellids$mean_dir <- species_env_complex$mean_dir
+  # orbicellids$mean_Hsig <- species_env_complex$mean_Hsig
+  # orbicellids$mean_SST <- species_env_complex$mean_SST
+  # orbicellids$range_SST <- species_env_complex$range_SST
+  
   # Add all variables to your filtered dataset
   orbicellids$depth_bathy <- species_env_complex$depth
   orbicellids$aspect <- species_env_complex$aspect
@@ -559,16 +657,31 @@
   orbicellids$TPI <- species_env_complex$TPI
   orbicellids$VRM <- species_env_complex$VRM
   orbicellids$planform_curv <- species_env_complex$planform_curv
+  orbicellids$SAPA <- species_env_complex$SAPA
   orbicellids$max_Hsig <- species_env_complex$max_Hsig
-  orbicellids$mean_dir <- species_env_complex$mean_dir
+  orbicellids$dir_at_max_hsig <- species_env_complex$dir_at_max_hsig
   orbicellids$mean_Hsig <- species_env_complex$mean_Hsig
   orbicellids$mean_SST <- species_env_complex$mean_SST
   orbicellids$range_SST <- species_env_complex$range_SST
+  orbicellids$range_PAR <- species_env_complex$range_PAR
+  orbicellids$mean_chla <- species_env_complex$mean_chla
+  orbicellids$mean_kd490 <- species_env_complex$mean_kd490
+  orbicellids$mean_spm <- species_env_complex$mean_spm
+  orbicellids$dist_to_land <- species_env_complex$dist_to_land
+  orbicellids$dist_to_deep <- species_env_complex$dist_to_deep
+  orbicellids$max_BOV <- species_env_complex$max_BOV
+  orbicellids$year = year(model_data_filtered$date)
+  # orbicellids$date = model_data_filtered$date
   
   # Create complete cases dataset with all variables
-  complexity_vars <- c("depth_bathy", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
-                       "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST", "range_SST",
-                       "cover")
+  # complexity_vars <- c("depth_bathy", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+  #                      "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST", "range_SST",
+  #                      "cover")
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
+                       "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
+                       "range_SST", "year", "date", "lat", "lon", "cover", "range_PAR",
+                       "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                       "dist_to_deep", "max_BOV")
   
   model_data_complex <- orbicellids[complete.cases(orbicellids[, complexity_vars]), ]
 
@@ -583,17 +696,21 @@
   # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(planform_curv),
   #                    data = model_data_complex,
   #                    family = tw())
-  gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                       s(max_Hsig) + s(mean_Hsig),
+  # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+  #                      s(planform_curv) + s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+  #                      s(max_Hsig) + s(mean_Hsig),
+  #                    data = model_data_complex,
+  #                    family = tw())
+  gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                       s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                       s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                       s(dist_to_deep) + s(max_BOV) + year,
                      data = model_data_complex,
                      family = tw())
   
-  # STOPPING POINT - 18 July 2025
-  #   - continue to consider waves and SST, especially the landmasking for waves
-  
   # Check the results
   summary(gam_complex)
+  AIC(gam_complex)
   gam.check(gam_complex)
   
   # Plot the relationships
@@ -607,29 +724,50 @@
   # Check correlations between variables first
   # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
   #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
-  complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "complexity",
-                                              "planform_curv", "range_SST", "mean_SST",
-                                              "mean_dir", "max_Hsig", "mean_Hsig")]
+  # complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "complexity",
+  #                                             "planform_curv", "range_SST", "mean_SST",
+  #                                             "mean_dir", "max_Hsig", "mean_Hsig")]
+  complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "planform_curv",
+                                              "range_SST", "mean_SST", "dir_at_max_hsig", "max_Hsig",
+                                              "mean_Hsig", "year", "range_PAR", "mean_chla", "mean_kd490",
+                                              "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV")]
+  
   cor_matrix <- cor(complexity_matrix, use = "complete.obs")
   print(round(cor_matrix, 2))
   
   # Two-part model with complexity
   model_data_complex$present <- ifelse(model_data_complex$cover > 0, 1, 0)
   
-  gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                                s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                                s(max_Hsig) + s(mean_Hsig),
-                              data = model_data_complex,
-                              family = binomial())
+  # gam_presence_complex <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+  #                               s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+  #                               s(max_Hsig) + s(mean_Hsig),
+  #                             data = model_data_complex,
+  #                             family = binomial())
+  gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                       s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                       s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                       s(dist_to_deep) + s(max_BOV) + year,
+                     data = model_data_complex,
+                     family = binomial())
   
-  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
-                                 s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
-                                 s(max_Hsig) + s(mean_Hsig),
-                               data = model_data_complex[model_data_complex$cover > 0, ],
-                               family = Gamma(link = "log"))
+  # gam_abundance_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+  #                                s(planform_curv) + s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+  #                                s(max_Hsig) + s(mean_Hsig),
+  #                              data = model_data_complex[model_data_complex$cover > 0, ],
+  #                              family = Gamma(link = "log"))
+  gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                                s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                                s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                                s(dist_to_deep) + s(max_BOV) + s(year, k = 5),
+                              data = model_data_complex[model_data_complex$cover > 0, ],
+                              family = Gamma(link = "log"))
   
   summary(gam_presence_complex)
+  AIC(gam_presence_complex)
   summary(gam_abundance_complex)
+  AIC(gam_abundance_complex)
+  
+  draw(gam_abundance_complex)
   
   gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + TPI + s(planform_curv),
                      data = model_data_complex,
