@@ -49,9 +49,9 @@
   #         https://www.bco-dmo.org/project/2272, though (from https://coralreefs.csun.edu/data/)
   
   
-  #TEST
-  load(here('data/NCRMP_STX_2015_23_percent_cover_site.rda'))
-  #TEST
+  # #TEST
+  # load(here('data/NCRMP_STX_2015_23_percent_cover_site.rda'))
+  # #TEST
   
   load(here('data/USVI_2013_benthic_cover.rda'))
   load(here('data/USVI_2015_benthic_cover.rda'))
@@ -1620,7 +1620,7 @@
   # Get all unique species levels (should be 23)
   all_species_levels <- levels(combined_benthic_data_trimmed$spp)
   
-  # Create main susceptibility lookup BEFORE splitting datasets
+  # Create main susceptibility look-up BEFORE splitting datasets
   main_susc_lookup <- combined_benthic_data_trimmed %>% 
     select(spp, susc) %>% 
     distinct()
