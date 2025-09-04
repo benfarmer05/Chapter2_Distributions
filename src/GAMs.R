@@ -369,19 +369,6 @@
   model_data_filtered$year = year(model_data_filtered$date)
   # model_data_filtered$date = model_data_filtered$date
   
-  
-  # STOPPING POINT - 12 August 2025
-  #   - in the model of a few issues...
-  #   - wave data is severely limiting sample size because of loss of nearshore reef observations
-  #       - need to seriously consider interpolating, or layering in higher-res wave data
-  #   - wrapping up a test, assessing whether PR & 2013-2016 data is appropriate 
-  #   - deciding if current data is fine, or if need to extend waves/SST to 2013-onward, and/or
-  #       bring in water quality, velocities, etc.
-  #   - considering things like distance from 50-m depth contour, lat, lon, year. year and date
-  #       seem to cause some real issues for some reason right now in the GAM
-  #   - anyways, a lot of this can wait until I have more code developed for model selection and
-  #       evaluation. it is most of the way there already I think!
-  
   # Create complete cases dataset with all variables
   # NOTE - VRM, complexity, and SAPA create a BIG NA buffer around them which cause a loss of
   #         139 observation points. good argument for removing!
@@ -424,7 +411,7 @@
   gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
                        s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
                        mean_Hsig + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
-                       s(dist_to_deep) + s(max_BOV) + s(year, k = 5),
+                       s(dist_to_deep) + s(max_BOV), # + s(year, k = 5)
                      data = model_data_complex,
                      family = tw())
   
@@ -496,6 +483,13 @@
   summary(gam_presence_complex)
   summary(gam_abundance_complex)
   
+  # Check the results
+  summary(gam_abundance_complex)
+  AIC(gam_abundance_complex)
+  gam.check(gam_abundance_complex)
+  draw(gam_abundance_complex)
+  
+  
   # Create a reduced model with less correlated variables
   # Keep: bathymetry (depth), TPI (topographic position), VRM (rugosity)
   # These capture the main dimensions: depth, local position, and complexity
@@ -512,65 +506,11 @@
   
   
   
-  ################################## plot cover - sanity check ##################################
-  
-  # STOPPING POINT - 27 August 2025
-  #   - Seems very odd that coral cover appears to be doing the exact opposite as seen in
-  #       Viehman 2025...why would it be going up when their NCRMP data showed the opposite?
-  
-  plotting_model_data_filtered <- model_data_complex %>%
-    filter(grepl("NCRMP", dataset, ignore.case = TRUE)) %>%
-    filter(grepl("VI", PSU, ignore.case = TRUE))
-  # plotting_model_data_filtered <- model_data_complex %>%
-  #   filter(grepl("TCRMP", dataset, ignore.case = TRUE))
-  # plotting_model_data_filtered <- model_data_complex %>%
-  #   filter(!dataset %in% c("DCRMP", "NODICE", "SESAP", "TCRMP_benthic", "PRCRMP"))
-  
-  # Option 1: Basic boxplot
-  ggplot(plotting_model_data_filtered, aes(x = factor(year), y = cover)) +
-    geom_boxplot() +
-    geom_jitter(alpha = 0.3, width = 0.2, size = 0.5) +
-    labs(x = "Year", 
-         y = "Coral Cover (%)",
-         title = "Coral Cover Distribution by Year") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  # Option 2: Mean with error bars
-  cover_summary <- plotting_model_data_filtered %>%
-    group_by(year) %>%
-    summarise(
-      mean_cover = mean(cover, na.rm = TRUE),
-      se_cover = sd(cover, na.rm = TRUE) / sqrt(n()),
-      n_obs = n(),
-      .groups = 'drop'
-    )
-  
-  ggplot(cover_summary, aes(x = year, y = mean_cover)) +
-    geom_line(color = "blue", size = 1) +
-    geom_point(color = "blue", size = 2) +
-    geom_errorbar(aes(ymin = mean_cover - se_cover, ymax = mean_cover + se_cover),
-                  width = 0.2, color = "blue") +
-    labs(x = "Year",
-         y = "Mean Coral Cover (%) ± SE",
-         title = "Mean Coral Cover Over Time") +
-    theme_minimal()
-  
-  # Option 3: Violin plot (shows distribution shape)
-  ggplot(plotting_model_data_filtered, aes(x = factor(year), y = cover)) +
-    geom_violin(alpha = 0.7, fill = "lightblue") +
-    geom_boxplot(width = 0.1, alpha = 0.8) +
-    labs(x = "Year",
-         y = "Coral Cover (%)",
-         title = "Coral Cover Distribution by Year") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  # Print summary statistics
-  print("Summary by year:")
-  print(cover_summary)
-  
   ################################## orbicellid GAMs ##################################
+  
+  # STOPPING POINT - 4 SEP 2025
+  #   - Need to stop doing "complete cases", or at least make it more consistent.
+  #       - as is, it may be reducing the sample size arbitrarily
   
   # Convert tibble to data.frame first
   species_df <- as.data.frame(combined_benthic_data_averaged)
@@ -683,8 +623,9 @@
                        "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
                        "dist_to_deep", "max_BOV")
   
-  model_data_complex <- orbicellids[complete.cases(orbicellids[, complexity_vars]), ]
-
+  # model_data_complex <- orbicellids[complete.cases(orbicellids[, complexity_vars]), ]
+  model_data_complex = orbicellids #option to not reduce sample size prior to model fitting
+  
   # Check how much data you have left
   cat("Observations with all complexity variables:", nrow(model_data_complex), "\n")
   
@@ -704,7 +645,7 @@
   gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
                        s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
                        s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
-                       s(dist_to_deep) + s(max_BOV) + year,
+                       s(dist_to_deep) + s(max_BOV), # + year
                      data = model_data_complex,
                      family = tw())
   
@@ -712,16 +653,10 @@
   summary(gam_complex)
   AIC(gam_complex)
   gam.check(gam_complex)
-  
-  # Plot the relationships
-  plot(gam_complex, pages = 2)  # Will create multiple pages
+  plot(gam_complex, pages = 2)
   draw(gam_complex)
   
-  # Compare model performance
-  cat("Simple model AIC:", AIC(gam_tweedie), "\n")
-  cat("Complex model AIC:", AIC(gam_complex), "\n")
-  
-  # Check correlations between variables first
+  #linear variable correlations (use caution when interpreting for GAMs)
   # complexity_matrix <- model_data_complex[, c("bathymetry", "aspect", "slope", "TPI", "roughness", "VRM",
   #                                             "max_curv", "mean_curv", "planform_curv", "profile_curv")]
   # complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "complexity",
@@ -746,7 +681,7 @@
   gam_presence_complex <- gam(present ~ s(depth_bathy) + s(TPI) + s(complexity) +
                        s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
                        s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
-                       s(dist_to_deep) + s(max_BOV) + year,
+                       s(dist_to_deep) + s(max_BOV), # + year
                      data = model_data_complex,
                      family = binomial())
   
@@ -758,15 +693,16 @@
   gam_abundance_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
                                 s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
                                 s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
-                                s(dist_to_deep) + s(max_BOV) + s(year, k = 5),
+                                s(dist_to_deep) + s(max_BOV), # + s(year, k = 5)
                               data = model_data_complex[model_data_complex$cover > 0, ],
                               family = Gamma(link = "log"))
   
   summary(gam_presence_complex)
-  AIC(gam_presence_complex)
   summary(gam_abundance_complex)
+  AIC(gam_presence_complex)
   AIC(gam_abundance_complex)
   
+  draw(gam_presence_complex)
   draw(gam_abundance_complex)
   
   gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + TPI + s(planform_curv),
@@ -777,6 +713,17 @@
   
   # Plot the reduced model
   plot(gam_reduced, pages = 1)
+  
+  
+  summary(gam_complex)
+  summary(gam_presence_complex)
+  summary(gam_abundance_complex)
+  summary(gam_reduced)
+  
+  AIC(gam_complex)
+  AIC(gam_presence_complex)
+  AIC(gam_abundance_complex)
+  AIC(gam_reduced)
   
   ################################## spp GAMs ##################################
   
@@ -796,8 +743,13 @@
   #                      "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
   #                      "range_SST", "year", "date", "lat", "lon", "cover")
   
-  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
-                       "range_SST", "year", "date", "lat", "lon", "cover")
+  # complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
+                       "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
+                       "range_SST", "year", "date", "lat", "lon", "cover", "range_PAR",
+                       "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                       "dist_to_deep", "max_BOV")
   
   # # Get all unique species from the dataset and add remaining ones
   # all_species <- unique(spp_data$spp)
@@ -808,14 +760,16 @@
   gam_results <- list()
   
   # STOPPING POINT - 11 August 2025
-  #   - need to collapse all Isophyllia
   #   - still in the middle of figuring out exactly how I want to pursue model selection
   #   - should probably test for spatial and maybe temporal autocorrelation at some point
-  #   - Investigate increasing sample size (years / PR), why montastraea & pseudodip. are struggling, hurdle vs. beta vs. gamma vs. Tweedie
   
   # Loop through each species
   for(sp in species_list) {
     cat("\n==================== Processing", sp, "====================\n")
+    
+    # # TEST
+    # sp = "Agaricia"
+    # # TEST
     
     # Filter data for current species
     species_data <- spp_data %>%
@@ -836,6 +790,20 @@
     species_env_complex <- terra::extract(env_complex, cbind(species_data$x_utm, species_data$y_utm))
     
     # Add environmental variables
+    # species_data$depth_bathy <- species_env_complex$depth
+    # species_data$aspect <- species_env_complex$aspect
+    # species_data$slope <- species_env_complex$slope
+    # species_data$complexity <- species_env_complex$complexity
+    # species_data$TPI <- species_env_complex$TPI
+    # species_data$VRM <- species_env_complex$VRM
+    # species_data$planform_curv <- species_env_complex$planform_curv
+    # species_data$max_Hsig <- species_env_complex$max_Hsig
+    # species_data$mean_dir <- species_env_complex$mean_dir
+    # species_data$mean_Hsig <- species_env_complex$mean_Hsig
+    # species_data$mean_SST <- species_env_complex$mean_SST
+    # species_data$range_SST <- species_env_complex$range_SST
+    # species_data$year <- year(species_data$date)
+    
     species_data$depth_bathy <- species_env_complex$depth
     species_data$aspect <- species_env_complex$aspect
     species_data$slope <- species_env_complex$slope
@@ -843,12 +811,21 @@
     species_data$TPI <- species_env_complex$TPI
     species_data$VRM <- species_env_complex$VRM
     species_data$planform_curv <- species_env_complex$planform_curv
+    species_data$SAPA <- species_env_complex$SAPA
     species_data$max_Hsig <- species_env_complex$max_Hsig
-    species_data$mean_dir <- species_env_complex$mean_dir
+    species_data$dir_at_max_hsig <- species_env_complex$dir_at_max_hsig
     species_data$mean_Hsig <- species_env_complex$mean_Hsig
     species_data$mean_SST <- species_env_complex$mean_SST
     species_data$range_SST <- species_env_complex$range_SST
-    species_data$year <- year(species_data$date)
+    species_data$range_PAR <- species_env_complex$range_PAR
+    species_data$mean_chla <- species_env_complex$mean_chla
+    species_data$mean_kd490 <- species_env_complex$mean_kd490
+    species_data$mean_spm <- species_env_complex$mean_spm
+    species_data$dist_to_land <- species_env_complex$dist_to_land
+    species_data$dist_to_deep <- species_env_complex$dist_to_deep
+    species_data$max_BOV <- species_env_complex$max_BOV
+    species_data$year = year(species_data$date)
+    # species_data$date = species_data$date
     
     # Create complete cases dataset
     model_data_complete <- species_data[complete.cases(species_data[, complexity_vars]), ]
@@ -867,9 +844,15 @@
       #                      s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
       #                      s(max_Hsig) + s(mean_Hsig),
       #                    data = model_data_complete, family = tw())
-      gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
-                           s(planform_curv) + s(range_SST) + s(mean_SST),
-                         data = model_data_complete, family = tw())
+      # gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                      s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                    data = model_data_complete, family = tw())
+      gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                           s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                           s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                           s(dist_to_deep) + s(max_BOV), # + year
+                         data = model_data_complex,
+                         family = tw())
       
       cat("Complex GAM AIC:", AIC(gam_complex), "\n")
       
@@ -886,8 +869,13 @@
       #                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
       #                       s(max_Hsig) + s(mean_Hsig),
       #                     data = model_data_complete, family = binomial())
-      gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) +
-                            s(planform_curv) + s(range_SST) + s(mean_SST),
+      # gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                       s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                     data = model_data_complete, family = binomial())
+      gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                            s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                            s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                            s(dist_to_deep) + s(max_BOV),
                           data = model_data_complete, family = binomial())
       
       # gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
@@ -895,11 +883,17 @@
       #                        s(max_Hsig) + s(mean_Hsig),
       #                      data = model_data_complete[model_data_complete$cover > 0, ],
       #                      family = Gamma(link = "log"))
-      gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
-                             s(planform_curv) + s(range_SST) + s(mean_SST),
+      # gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                        s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                      data = model_data_complete[model_data_complete$cover > 0, ],
+      #                      family = Gamma(link = "log"))
+      gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                             s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                             s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                             s(dist_to_deep) + s(max_BOV),
                            data = model_data_complete[model_data_complete$cover > 0, ],
                            family = Gamma(link = "log"))
-      
+
       # Store results
       gam_results[[sp]] <- list(
         data = model_data_complete,
@@ -952,9 +946,11 @@
   
   # Presence/absence model
   summary(gam_results[["Agaricia"]]$presence)
+  draw(gam_results[["Agaricia"]]$presence)
   
   # Abundance model
   summary(gam_results[["Agaricia"]]$abundance)
+  draw(gam_results[["Agaricia"]]$abundance)
   
   
   
@@ -1279,6 +1275,561 @@
   
   # Abundance model
   summary(gam_results[["Meandrina"]]$abundance)
+  
+  
+  
+  ################################## spp GAMs w/ pausing ##################################
+  
+  # Define species list (starting with your priority species)
+  #  NOTE - will add the rarely observed and SCTLD-susceptibility-poor ones into one group
+  species_list <- c("Agaricia", "Helioseris", "Madracis", "Montastraea", "Pseudodiploria", "Porites",
+                    "Orbicella", "Colpophyllia", "Dendrogyra", "Solenastrea", "Dichocoenia",
+                    "Diploria", "Eusmilia", "Meandrina",
+                    "Siderastrea")
+  
+  # Create complete cases dataset with all variables
+  # NOTE - VRM, complexity, and SAPA create a BIG NA buffer around them which cause a loss of
+  #         139 observation points. good argument for removing!
+  #           - and unfortunately, CARICOOS wave data causes a loss of 310 nearshore points.
+  #               certainly an argument for favoring the higher-resolution model
+  # complexity_vars <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
+  #                      "SAPA", "max_Hsig", "mean_dir", "mean_Hsig", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  
+  # complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", "mean_SST",
+  #                      "range_SST", "year", "date", "lat", "lon", "cover")
+  complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
+                       "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
+                       "range_SST", "year", "date", "lat", "lon", "cover", "range_PAR",
+                       "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                       "dist_to_deep", "max_BOV")
+  
+  # # Get all unique species from the dataset and add remaining ones
+  # all_species <- unique(spp_data$spp)
+  # remaining_species <- all_species[!grepl(paste(c("Orbicella", species_list), collapse = "|"), all_species)]
+  # species_list <- c(species_list, remaining_species)
+  
+  # Initialize results storage
+  gam_results <- list()
+  
+  # STOPPING POINT - 11 August 2025
+  #   - still in the middle of figuring out exactly how I want to pursue model selection
+  #   - should probably test for spatial and maybe temporal autocorrelation at some point
+  
+  # Loop through each species
+  for(sp in species_list) {
+    cat("\n==================== Processing", sp, "====================\n")
+    
+    # # TEST
+    # sp = "Agaricia"
+    # # TEST
+    
+    # Filter data for current species
+    species_data <- spp_data %>%
+      # filter(!dataset %in% c("PRCRMP", "NODICE")) %>%
+      # filter(!grepl("_PR", PSU)) %>%
+      filter(!dataset %in% c("NODICE")) %>%
+      # filter(year(date) >= 2017) %>%
+      filter(depth_bathy >= -60) %>%
+      filter(grepl(sp, spp))
+    
+    # Check if we have enough data
+    if(nrow(species_data) < 10) {
+      cat("Insufficient data for", sp, "- only", nrow(species_data), "observations\n")
+      next
+    }
+    
+    # Extract environmental values
+    species_env_complex <- terra::extract(env_complex, cbind(species_data$x_utm, species_data$y_utm))
+    
+    # Add environmental variables
+    # species_data$depth_bathy <- species_env_complex$depth
+    # species_data$aspect <- species_env_complex$aspect
+    # species_data$slope <- species_env_complex$slope
+    # species_data$complexity <- species_env_complex$complexity
+    # species_data$TPI <- species_env_complex$TPI
+    # species_data$VRM <- species_env_complex$VRM
+    # species_data$planform_curv <- species_env_complex$planform_curv
+    # species_data$max_Hsig <- species_env_complex$max_Hsig
+    # species_data$mean_dir <- species_env_complex$mean_dir
+    # species_data$mean_Hsig <- species_env_complex$mean_Hsig
+    # species_data$mean_SST <- species_env_complex$mean_SST
+    # species_data$range_SST <- species_env_complex$range_SST
+    # species_data$year <- year(species_data$date)
+    
+    species_data$depth_bathy <- species_env_complex$depth
+    species_data$aspect <- species_env_complex$aspect
+    species_data$slope <- species_env_complex$slope
+    species_data$complexity <- species_env_complex$complexity
+    species_data$TPI <- species_env_complex$TPI
+    species_data$VRM <- species_env_complex$VRM
+    species_data$planform_curv <- species_env_complex$planform_curv
+    species_data$SAPA <- species_env_complex$SAPA
+    species_data$max_Hsig <- species_env_complex$max_Hsig
+    species_data$dir_at_max_hsig <- species_env_complex$dir_at_max_hsig
+    species_data$mean_Hsig <- species_env_complex$mean_Hsig
+    species_data$mean_SST <- species_env_complex$mean_SST
+    species_data$range_SST <- species_env_complex$range_SST
+    species_data$range_PAR <- species_env_complex$range_PAR
+    species_data$mean_chla <- species_env_complex$mean_chla
+    species_data$mean_kd490 <- species_env_complex$mean_kd490
+    species_data$mean_spm <- species_env_complex$mean_spm
+    species_data$dist_to_land <- species_env_complex$dist_to_land
+    species_data$dist_to_deep <- species_env_complex$dist_to_deep
+    species_data$max_BOV <- species_env_complex$max_BOV
+    species_data$year = year(species_data$date)
+    # species_data$date = species_data$date
+    
+    # Create complete cases dataset
+    model_data_complete <- species_data[complete.cases(species_data[, complexity_vars]), ]
+    
+    
+    cat("Complete observations:", nrow(model_data_complete), "\n")
+    
+    if(nrow(model_data_complete) < 10) {
+      cat("Insufficient complete data for", sp, "\n")
+      next
+    }
+    
+    # Fit complex GAM
+    tryCatch({
+      # gam_complex <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                      s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                      s(max_Hsig) + s(mean_Hsig),
+      #                    data = model_data_complete, family = tw())
+      # gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                      s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                    data = model_data_complete, family = tw())
+      gam_complex <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                           s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                           s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                           s(dist_to_deep) + s(max_BOV), # + year
+                         data = model_data_complex,
+                         family = tw())
+      
+      cat("Complex GAM AIC:", AIC(gam_complex), "\n")
+      
+      # Fit reduced GAM
+      gam_reduced <- gam(cover ~ s(depth_bathy) + s(slope) + s(TPI) + s(planform_curv),
+                         data = model_data_complete, family = tw())
+      
+      cat("Reduced GAM AIC:", AIC(gam_reduced), "\n")
+      
+      # Two-part models
+      model_data_complete$present <- ifelse(model_data_complete$cover > 0, 1, 0)
+      
+      # gam_presence <- gam(present ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                       s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                       s(max_Hsig) + s(mean_Hsig),
+      #                     data = model_data_complete, family = binomial())
+      # gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                       s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                     data = model_data_complete, family = binomial())
+      gam_presence <- gam(present ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                            s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                            s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                            s(dist_to_deep) + s(max_BOV),
+                          data = model_data_complete, family = binomial())
+      
+      # gam_abundance <- gam(cover ~ s(depth_bathy) + TPI + s(slope) + s(complexity) +
+      #                        s(planform_curv) + s(range_SST) + s(mean_SST) + s(mean_dir, bs = 'cc') +
+      #                        s(max_Hsig) + s(mean_Hsig),
+      #                      data = model_data_complete[model_data_complete$cover > 0, ],
+      #                      family = Gamma(link = "log"))
+      # gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(slope) +
+      #                        s(planform_curv) + s(range_SST) + s(mean_SST),
+      #                      data = model_data_complete[model_data_complete$cover > 0, ],
+      #                      family = Gamma(link = "log"))
+      gam_abundance <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
+                             s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
+                             s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+                             s(dist_to_deep) + s(max_BOV),
+                           data = model_data_complete[model_data_complete$cover > 0, ],
+                           family = Gamma(link = "log"))
+      
+      # Store results
+      gam_results[[sp]] <- list(
+        data = model_data_complete,
+        complex = gam_complex,
+        reduced = gam_reduced,
+        presence = gam_presence,
+        abundance = gam_abundance,
+        n_obs = nrow(model_data_complete),
+        n_presence = sum(model_data_complete$cover > 0)
+      )
+      
+      # Print summaries for priority species
+      if(sp %in% c("Agaricia", "Montastraea", "Pseudodiploria", "Porites")) {
+        cat("\n--- Summary for", sp, "---\n")
+        print(summary(gam_complex))
+        cat("\n--- Plotting", sp, "---\n")
+        plot(gam_complex, pages = 1, main = paste(sp, "GAM"))
+      }
+      
+    }, error = function(e) {
+      cat("Error fitting GAM for", sp, ":", e$message, "\n")
+    })
+  }
+  
+  # Print overall results summary
+  cat("\n==================== SUMMARY ====================\n")
+  for(sp in names(gam_results)) {
+    result <- gam_results[[sp]]
+    cat(sp, "- N obs:", result$n_obs, "- N presence:", result$n_presence, 
+        "- Complex AIC:", round(AIC(result$complex), 1), 
+        "- Reduced AIC:", round(AIC(result$reduced), 1), "\n")
+  }
+  
+  
+  
+  
+  # AGARICIA
+  summary(gam_results[["Agaricia"]]$complex)
+  gam.check(gam_results[["Agaricia"]]$complex)
+  plot(gam_results[["Agaricia"]]$complex, pages = 2)
+  draw(gam_results[["Agaricia"]]$complex)
+  
+  # Complex model
+  summary(gam_results[["Agaricia"]]$complex)
+  plot(gam_results[["Agaricia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Agaricia"]]$reduced)
+  plot(gam_results[["Agaricia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Agaricia"]]$presence)
+  draw(gam_results[["Agaricia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Agaricia"]]$abundance)
+  draw(gam_results[["Agaricia"]]$abundance)
+  
+  
+  
+  
+  # MONTASTRAEA
+  summary(gam_results[["Montastraea"]]$complex)
+  gam.check(gam_results[["Montastraea"]]$complex)
+  plot(gam_results[["Montastraea"]]$complex, pages = 2)
+  draw(gam_results[["Montastraea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Montastraea"]]$complex)
+  plot(gam_results[["Montastraea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Montastraea"]]$reduced)
+  plot(gam_results[["Montastraea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Montastraea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Montastraea"]]$abundance)
+  
+  
+  
+  
+  # PSEUDODIPLORIA
+  summary(gam_results[["Pseudodiploria"]]$complex)
+  gam.check(gam_results[["Pseudodiploria"]]$complex)
+  plot(gam_results[["Pseudodiploria"]]$complex, pages = 2)
+  draw(gam_results[["Pseudodiploria"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Pseudodiploria"]]$complex)
+  plot(gam_results[["Pseudodiploria"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Pseudodiploria"]]$reduced)
+  plot(gam_results[["Pseudodiploria"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Pseudodiploria"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Pseudodiploria"]]$abundance)
+  
+  
+  
+  # PORITES
+  summary(gam_results[["Porites"]]$complex)
+  gam.check(gam_results[["Porites"]]$complex)
+  plot(gam_results[["Porites"]]$complex, pages = 2)
+  draw(gam_results[["Porites"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Porites"]]$complex)
+  plot(gam_results[["Porites"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Porites"]]$reduced)
+  plot(gam_results[["Porites"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Porites"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Porites"]]$abundance)
+  
+  
+  # ORBICELLA
+  summary(gam_results[["Orbicella"]]$complex)
+  gam.check(gam_results[["Orbicella"]]$complex)
+  plot(gam_results[["Orbicella"]]$complex, pages = 2)
+  draw(gam_results[["Orbicella"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Orbicella"]]$complex)
+  plot(gam_results[["Orbicella"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Orbicella"]]$reduced)
+  plot(gam_results[["Orbicella"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Orbicella"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Orbicella"]]$abundance)
+  
+  
+  # COLPOPHYLLIA
+  summary(gam_results[["Colpophyllia"]]$complex)
+  gam.check(gam_results[["Colpophyllia"]]$complex)
+  plot(gam_results[["Colpophyllia"]]$complex, pages = 2)
+  draw(gam_results[["Colpophyllia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Colpophyllia"]]$complex)
+  plot(gam_results[["Colpophyllia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Colpophyllia"]]$reduced)
+  plot(gam_results[["Colpophyllia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Colpophyllia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Colpophyllia"]]$abundance)
+  
+  
+  
+  # DENDROGYRA
+  summary(gam_results[["Dendrogyra"]]$complex)
+  gam.check(gam_results[["Dendrogyra"]]$complex)
+  plot(gam_results[["Dendrogyra"]]$complex, pages = 2)
+  draw(gam_results[["Dendrogyra"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Dendrogyra"]]$complex)
+  plot(gam_results[["Dendrogyra"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Dendrogyra"]]$reduced)
+  plot(gam_results[["Dendrogyra"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Dendrogyra"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Dendrogyra"]]$abundance)
+  
+  
+  # SIDERASTREA
+  summary(gam_results[["Siderastrea"]]$complex)
+  gam.check(gam_results[["Siderastrea"]]$complex)
+  plot(gam_results[["Siderastrea"]]$complex, pages = 2)
+  draw(gam_results[["Siderastrea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Siderastrea"]]$complex)
+  plot(gam_results[["Siderastrea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Siderastrea"]]$reduced)
+  plot(gam_results[["Siderastrea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Siderastrea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Siderastrea"]]$abundance)
+  
+  
+  
+  # HELIOSERIS
+  summary(gam_results[["Helioseris"]]$complex)
+  gam.check(gam_results[["Helioseris"]]$complex)
+  plot(gam_results[["Helioseris"]]$complex, pages = 2)
+  draw(gam_results[["Helioseris"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Helioseris"]]$complex)
+  plot(gam_results[["Helioseris"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Helioseris"]]$reduced)
+  plot(gam_results[["Helioseris"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Helioseris"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Helioseris"]]$abundance)
+  
+  
+  
+  
+  # MADRACIS
+  summary(gam_results[["Madracis"]]$complex)
+  gam.check(gam_results[["Madracis"]]$complex)
+  plot(gam_results[["Madracis"]]$complex, pages = 2)
+  draw(gam_results[["Madracis"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Madracis"]]$complex)
+  plot(gam_results[["Madracis"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Madracis"]]$reduced)
+  plot(gam_results[["Madracis"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Madracis"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Madracis"]]$abundance)
+  
+  
+  # SOLENASTREA
+  summary(gam_results[["Solenastrea"]]$complex)
+  gam.check(gam_results[["Solenastrea"]]$complex)
+  plot(gam_results[["Solenastrea"]]$complex, pages = 2)
+  draw(gam_results[["Solenastrea"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Solenastrea"]]$complex)
+  plot(gam_results[["Solenastrea"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Solenastrea"]]$reduced)
+  plot(gam_results[["Solenastrea"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Solenastrea"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Solenastrea"]]$abundance)
+  
+  
+  
+  
+  # DICHOCOENIA
+  summary(gam_results[["Dichocoenia"]]$complex)
+  gam.check(gam_results[["Dichocoenia"]]$complex)
+  plot(gam_results[["Dichocoenia"]]$complex, pages = 2)
+  draw(gam_results[["Dichocoenia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Dichocoenia"]]$complex)
+  plot(gam_results[["Dichocoenia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Dichocoenia"]]$reduced)
+  plot(gam_results[["Dichocoenia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Dichocoenia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Dichocoenia"]]$abundance)
+  
+  
+  
+  
+  
+  # DIPLORIA
+  summary(gam_results[["Diploria"]]$complex)
+  gam.check(gam_results[["Diploria"]]$complex)
+  plot(gam_results[["Diploria"]]$complex, pages = 2)
+  draw(gam_results[["Diploria"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Diploria"]]$complex)
+  plot(gam_results[["Diploria"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Diploria"]]$reduced)
+  plot(gam_results[["Diploria"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Diploria"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Diploria"]]$abundance)
+  
+  
+  
+  # EUSMILIA
+  summary(gam_results[["Eusmilia"]]$complex)
+  gam.check(gam_results[["Eusmilia"]]$complex)
+  plot(gam_results[["Eusmilia"]]$complex, pages = 2)
+  draw(gam_results[["Eusmilia"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Eusmilia"]]$complex)
+  plot(gam_results[["Eusmilia"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Eusmilia"]]$reduced)
+  plot(gam_results[["Eusmilia"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Eusmilia"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Eusmilia"]]$abundance)
+  
+  
+  
+  # MEANDRINA
+  summary(gam_results[["Meandrina"]]$complex)
+  gam.check(gam_results[["Meandrina"]]$complex)
+  plot(gam_results[["Meandrina"]]$complex, pages = 2)
+  draw(gam_results[["Meandrina"]]$complex)
+  
+  
+  # Complex model
+  summary(gam_results[["Meandrina"]]$complex)
+  plot(gam_results[["Meandrina"]]$complex, pages = 2)
+  
+  # Reduced model  
+  summary(gam_results[["Meandrina"]]$reduced)
+  plot(gam_results[["Meandrina"]]$reduced, pages = 1)
+  
+  # Presence/absence model
+  summary(gam_results[["Meandrina"]]$presence)
+  
+  # Abundance model
+  summary(gam_results[["Meandrina"]]$abundance)
+  
+  
   
   
   # ################################## 80/20 w/ Tweedie ##################################

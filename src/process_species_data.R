@@ -183,9 +183,8 @@
   PRCRMP_long = PRCRMP_long %>%
     filter(year >= startyear & date <= as.Date(enddate))
   
-  # PRCRMP_test = PRCRMP_long
-  # PRCRMP_test = PRCRMP_test %>%
-  #   mutate(spp = as.factor(spp))
+  PRCRMP_long <- PRCRMP_long %>%
+    mutate(region = "PRICO", .after = year)
   
   ################################## wrangle DeepLion ##################################
   
@@ -243,6 +242,9 @@
       PSU = location_id,
       spp = species_name
     )
+  
+  DeepLion_long <- DeepLion_long %>%
+    mutate(region = "STTSTJ", .after = date)
   
   ################################## wrangle NODICE ##################################
   
@@ -354,6 +356,9 @@
   NODICE_long = NODICE_long %>%
     mutate(date = as.POSIXct("2015-10-23"))
   
+  NODICE_long <- NODICE_long %>%
+    mutate(region = "STTSTJ", .after = PSU)
+  
   ################################## wrangle SESAP ##################################
   
   #convert from wide to long format
@@ -400,6 +405,12 @@
   #   - some filming dates were actually out to at least 2013-10-04, but doesn't matter for this analysis
   SESAP_long = SESAP_long %>%
     mutate(date = as.POSIXct("2013-08-22"))
+  
+  # NOTE - some of the southwestern most lat/lons extend into PR territory (El Seco mesophotic area).
+  #         this shouldn't matter since I am mostly looking for general source region of the sampling
+  #         programs, but should return to this if doing real summary statistics by region
+  SESAP_long <- SESAP_long %>%
+    mutate(region = "STTSTJ", .after = PSU)
   
   ################################## wrangle DCRMP ##################################
   
@@ -516,6 +527,12 @@
   
   DCRMP_long = DCRMP_long_cleaned
   
+  # NOTE - some of the southwestern most lat/lons may extend into PR territory (El Seco mesophotic area).
+  #         this shouldn't matter since I am mostly looking for general source region of the sampling
+  #         programs, but should return to this if doing real summary statistics by region
+  DCRMP_long <- DCRMP_long %>%
+    mutate(region = "STTSTJ", .after = date)
+  
   ################################## wrangle TCRMP ##################################
   
   # benthic
@@ -558,7 +575,7 @@
   
   #bring in lat/lons
   TCRMP_benthic_long <- TCRMP_benthic_long %>%
-    left_join(TCRMP_benthic_metadata %>% select(Location, Latitude, Longitude, Depth), 
+    left_join(TCRMP_benthic_metadata %>% select(Location, Latitude, Longitude, Depth, Island), 
               by = c("location_id" = "Location")) %>%
     rename(lat = Latitude, lon = Longitude)
   
@@ -579,7 +596,16 @@
       spp = species_name
     )
   
+  TCRMP_benthic_long <- TCRMP_benthic_long %>%
+    mutate(region = case_when(
+      island %in% c("STT", "STJ") ~ "STTSTJ",
+      island == "STX" ~ "STX",
+      TRUE ~ NA_character_  # for any unexpected values
+    ), .after = date) %>%
+    select(-island)
+  
   #demographic (health)
+  # NOTE - could add regional info (STT/STJ, STX) as above, if desired later
   #
   #filter out coral recruitment surveys - these only looked at very small juvenile corals,
   #   and are not suitable for averaging with regular surveys
@@ -675,9 +701,9 @@
       PRIMARY_SAMPLE_UNIT = paste(PRIMARY_SAMPLE_UNIT, region_id, sep = "_"),
       PRIMARY_SAMPLE_UNIT = as.factor(PRIMARY_SAMPLE_UNIT)
     ) %>%
-    select(-REGION, -STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
+    select(-STATION_NR, -RUGOSITY_CD, -WTD_RUG, -MAPGRID_NR, -HABITAT_CD, -STRAT, -SUB_REGION_NAME, -SUB_REGION_NR,
            -ZONE_NAME, -ZONE_NR, -MPA_NAME, -MPA_NR, -ADMIN, -PROT, -DEPTH_STRAT, -region_id)
-
+  
   #calculate average depth (this will come from bathymetry later anyways, but interesting to compare)
   NCRMP_benthic_long = NCRMP_benthic_long %>%
     mutate(depth = (MIN_DEPTH + MAX_DEPTH)/2) %>%
@@ -751,7 +777,7 @@
   points_within <- relate(ncrmp_points_proj, hydro_extent_corrected, "within")
   #
   # Filter the original dataframe to keep only rows within the extent
-  NCRMP_benthic_long <- NCRMP_benthic_long[points_within, ]
+  NCRMP_benthic_long_hydro <- NCRMP_benthic_long[points_within, ]
   #
   # Plot the results
   plot(hydro_extent_corrected, main = "NCRMP Points Within Hydro Extent", 
@@ -770,14 +796,14 @@
          col = c("lightblue", "gray", "red"),
          pch = c(15, 16, 16),
          cex = 0.8)  
-  test <- vect(NCRMP_benthic_long,
+  test <- vect(NCRMP_benthic_long_hydro,
                             geom = c("lon", "lat"),
                             crs = "EPSG:4269")  # NAD83
   plot(test)
   
   #drop species code
-  NCRMP_benthic_long_withcode = NCRMP_benthic_long
-  NCRMP_benthic_long = NCRMP_benthic_long %>%
+  NCRMP_benthic_long_hydro_withcode = NCRMP_benthic_long_hydro
+  NCRMP_benthic_long_hydro = NCRMP_benthic_long_hydro %>%
     select(-code)
   
   #demo
@@ -847,7 +873,7 @@
   points_within <- relate(ncrmp_points_proj, hydro_extent_corrected, "within")
   #
   # Filter the original dataframe to keep only rows within the extent
-  NCRMP_demo_long <- NCRMP_demo_long[points_within, ]
+  NCRMP_demo_long_hydro <- NCRMP_demo_long[points_within, ]
   #
   # Plot the results
   plot(hydro_extent_corrected, main = "NCRMP Points Within Hydro Extent", 
@@ -866,14 +892,14 @@
          col = c("lightblue", "gray", "red"),
          pch = c(15, 16, 16),
          cex = 0.8)  
-  test <- vect(NCRMP_demo_long,
+  test <- vect(NCRMP_demo_long_hydro,
                             geom = c("lon", "lat"),
                             crs = "EPSG:4269")  # NAD83
   plot(test)
   
   #drop species code
-  NCRMP_demo_long_withcode = NCRMP_demo_long
-  NCRMP_demo_long = NCRMP_demo_long %>%
+  NCRMP_demo_long_hydro_withcode = NCRMP_demo_long_hydro
+  NCRMP_demo_long_hydro = NCRMP_demo_long_hydro %>%
     select(-code)
   
   ################################## collate benthic data ##################################
@@ -908,7 +934,7 @@
     
     # Select and reorder columns consistently
     df <- df %>%
-      select(dataset, date, PSU, transect, lat, lon, cover, spp, depth) %>%
+      select(dataset, date, region, PSU, transect, lat, lon, cover, spp, depth) %>%
       # Move dataset to leftmost position
       relocate(dataset, .before = everything())
     
@@ -935,8 +961,9 @@
     PRCRMP_std
   )
   
-  # Convert spp to factor
+  # Convert spp and region to factor
   combined_benthic_data$spp <- as.factor(combined_benthic_data$spp)
+  combined_benthic_data$region <- as.factor(combined_benthic_data$region)
   
   # Show all species levels
   #   NOTE - this became less useful after adding in PRCMRP data, which includes non-corals
@@ -1027,7 +1054,6 @@
   cat("\n=== END MULTIPLE VISITS CHECK ===\n")  
   
   ################################## check incomplete benthic absences ##################################
-  
   
   # NOTE / STOPPING POINT - 30 June 2025
   #   - will need to account for the fact that, in my current code, spp levels are not identical
@@ -1298,7 +1324,7 @@
                    'Meandrina jacksoni', 'Meandrina meandrites', 'Meandrina spp', 'Mycetophyllia aliciae',
                    'Mycetophyllia danaana', 'Mycetophyllia daniana', 'Mycetophyllia ferox',
                    'Mycetophyllia lamarckiana', 'Mycetophyllia reesi', 'Mycetophyllia species',
-                   'Mycetophyllia spp.', 'Pseudodiploria clivosa', 'Pseudodiploria spp', 'Diploria strigosa',
+                   'Mycetophyllia spp.', 'Mycetophyllia spp', 'Pseudodiploria clivosa', 'Pseudodiploria spp', 'Diploria strigosa',
                    'Diploria clivosa', 'Pseudodiploria strigosa', 'Isophyllastrea rigida',
                    'Isophyllia rigida',
                    'Isopyhyllastrea rigida', 'Isophyllia sinuosa', 'Manicina areolata',
@@ -1354,6 +1380,9 @@
   #          - but also a large effect on Porites, since there is now no distinction between branching and
   #             P. astreoides
   #          - effect on Madracis may be important because of certain species being prevalent deep
+  #     NOTE - technically, there was full delineation in the field between Isophyllia rigida and
+  #             and Isophyllia sinuosa. collapsing them here anyways, since their sample size will be
+  #             vanishingly low for SDM purposes. will probably be lumped into a broader rare/HS group
   combined_benthic_data_trimmed = combined_benthic_data_trimmed %>%
     mutate(
       spp = case_when(
@@ -1367,6 +1396,7 @@
         grepl('Scolymia', spp) ~ 'Scolymia spp',
         grepl('Siderastrea', spp) ~ 'Siderastrea spp',
         grepl('Solenastrea', spp) ~ 'Solenastrea spp',
+        grepl('Isophyllia', spp) ~ 'Isophyllia spp',
         TRUE ~ spp  # keep all other species names unchanged
       )
     ) %>%
@@ -1584,6 +1614,7 @@
         grepl('Scolymia', spp) ~ 'Scolymia spp',
         grepl('Siderastrea', spp) ~ 'Siderastrea spp',
         grepl('Solenastrea', spp) ~ 'Solenastrea spp',
+        grepl('Isophyllia', spp) ~ 'Isophyllia spp',
         TRUE ~ spp  # keep all other species names unchanged
       )
     ) %>%
@@ -1614,10 +1645,9 @@
     pull(output) %>%
     cat(sep = "\n\n")
   
-  
   ################################## absences: benthic ##################################
   
-  # Get all unique species levels (should be 23)
+  # Get all unique species levels (should be 22)
   all_species_levels <- levels(combined_benthic_data_trimmed$spp)
   
   # Create main susceptibility look-up BEFORE splitting datasets
@@ -1632,11 +1662,11 @@
     
     if (has_transect) {
       # Has transect level (like TCRMP)
-      grouping_vars <- c("dataset", "date", "PSU", "transect")
+      grouping_vars <- c("dataset", "date", "region", "PSU", "transect")  # ADD region here
       
       # Get sampling units with metadata
       sampling_units <- data %>%
-        group_by(dataset, date, PSU, transect) %>%
+        group_by(dataset, date, region, PSU, transect) %>%  # ADD region here
         summarise(
           lat = first(lat),
           lon = first(lon),
@@ -1646,18 +1676,18 @@
       
       # Get actual cover data
       cover_data <- data %>%
-        group_by(dataset, date, PSU, transect, spp) %>%
+        group_by(dataset, date, region, PSU, transect, spp) %>%  # ADD region here
         summarise(actual_cover = sum(cover, na.rm = TRUE), .groups = "drop")
       
-      join_vars <- c("dataset", "date", "PSU", "transect", "spp")
+      join_vars <- c("dataset", "date", "region", "PSU", "transect", "spp")  # ADD region here
       
     } else {
       # No transect level (other datasets)
-      grouping_vars <- c("dataset", "date", "PSU")
+      grouping_vars <- c("dataset", "date", "region", "PSU")  # ADD region here
       
       # Get sampling units with metadata
       sampling_units <- data %>%
-        group_by(dataset, date, PSU) %>%
+        group_by(dataset, date, region, PSU) %>%  # ADD region here
         summarise(
           lat = first(lat),
           lon = first(lon),
@@ -1668,10 +1698,10 @@
       
       # Get actual cover data
       cover_data <- data %>%
-        group_by(dataset, date, PSU, spp) %>%
+        group_by(dataset, date, region, PSU, spp) %>%  # ADD region here
         summarise(actual_cover = sum(cover, na.rm = TRUE), .groups = "drop")
       
-      join_vars <- c("dataset", "date", "PSU", "spp")
+      join_vars <- c("dataset", "date", "region", "PSU", "spp")  # ADD region here
     }
     
     # Create complete grid of all combinations
@@ -1692,7 +1722,7 @@
       ) %>%
       select(-actual_cover) %>%
       # Reorder columns to match original
-      select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
+      select(dataset, date, region, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
     
     return(complete_grid)
   }
@@ -1714,7 +1744,7 @@
       .groups = "drop"
     )
   
-  cat("Species count per sampling unit (should all be 24):\n")
+  cat("Species count per sampling unit (should all be 22):\n")
   print(table(sampling_unit_check$n_species))
   
   # Additional check: verify susceptibility data is complete
@@ -1740,11 +1770,6 @@
   
   # FILL IN SITES WITH ABSOLUTE ZERO CORAL COVER (these were filtered out upstream for NCRMP)
   
-  
-  # Read in original NCRMP_benthic data to identify all PSUs
-  # Assuming your original data is stored in a variable called 'NCRMP_benthic'
-  # If it's in a file, you'll need to read it in first
-  
   # Get all unique PSUs from original NCRMP_benthic data with metadata
   all_ncrmp_psus <- NCRMP_benthic %>%
     # Create PSU with region suffix to match combined dataset format
@@ -1764,6 +1789,7 @@
       lon = first(LON_DEGREES),
       depth = mean(c(MIN_DEPTH, MAX_DEPTH), na.rm = TRUE),
       date = first(date),
+      region = first(REGION),
       .groups = "drop"
     ) %>%
     mutate(dataset = "NCRMP_benthic")
@@ -1797,7 +1823,7 @@
         inferred_absence = "Y"  # All are inferred absences
       ) %>%
       # Reorder columns to match combined dataset
-      select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
+      select(dataset, date, region, PSU, transect, lat, lon, cover, spp, depth, susc, inferred_absence)
     
     # Combine with existing complete dataset
     combined_benthic_data_complete <- bind_rows(
@@ -1828,7 +1854,7 @@
   
   cat("\nNCRMP PSU summary:\n")
   cat("PSUs with zero total coral cover:", sum(ncrmp_summary$total_cover == 0), "\n")
-  cat("All PSUs should have 24 species. Species counts:\n")
+  cat("All PSUs should have 22 species. Species counts:\n")
   print(table(ncrmp_summary$n_species))
   
   # Verify susceptibility data is still complete
@@ -2128,7 +2154,7 @@
   
   # Average coral cover across transects and dates for each PSU
   combined_benthic_data_averaged <- combined_benthic_data_summed %>%
-    group_by(dataset, PSU, spp) %>%
+    group_by(dataset, region, PSU, spp) %>%
     summarise(
       # Average cover across all transects/dates within each PSU
       cover = mean(cover, na.rm = TRUE),
@@ -2143,7 +2169,7 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns to match original structure
-    select(dataset, date, PSU, transect, lat, lon, cover, spp, depth, susc)  
+    select(dataset, date, region, PSU, transect, lat, lon, cover, spp, depth, susc)  
   
   #summation by PSU/susc, which accounts for repeat observations but also 
   #   multiple transects in the case of TCRMP. also handles lack of 'date' information
@@ -2151,7 +2177,7 @@
   #
   # Sum cover values with dataset-specific grouping by susceptibility group
   combined_benthic_data_summed_susc = combined_benthic_data_summed %>%
-    group_by(dataset, PSU, date,
+    group_by(dataset, region, PSU, date,
              transect = if_else(dataset %in% c("TCRMP_benthic", "PRCRMP"), transect, NA_real_),
              susc  # Group by susceptibility instead of species
     ) %>%
@@ -2166,11 +2192,11 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns to match structure
-    select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)  
+    select(dataset, date, PSU, region, transect, lat, lon, cover, susc, depth, species_count)  
   
   # Average coral cover across transects and dates for each PSU by susceptibility group
   combined_benthic_data_averaged_susc <- combined_benthic_data_summed_susc %>%
-    group_by(dataset, PSU, susc) %>%
+    group_by(dataset, region, PSU, susc) %>%
     summarise(
       # Average cover across all transects/dates within each PSU
       cover = mean(cover, na.rm = TRUE),
@@ -2186,7 +2212,7 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns to match structure
-    select(dataset, date, PSU, transect, lat, lon, cover, susc, depth, species_count)
+    select(dataset, date, region, PSU, transect, lat, lon, cover, susc, depth, species_count)
   
   ## DEMO
   #
@@ -2537,7 +2563,7 @@
   # Sum cover values across all species with dataset-specific grouping
   combined_benthic_data_summed_psu <- combined_benthic_data_summed %>%
     group_by(
-      dataset, PSU, date,
+      dataset, region, PSU, date,
       # # Keep original date column for grouping, but handle NAs properly
       # date = if_else(dataset %in% c("SESAP", "NODICE"), as.Date(NA), date),
       # Keep original transect, but set to NA for non-TCRMP datasets
@@ -2558,12 +2584,12 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns
-    select(dataset, date, PSU, transect, lat, lon, depth, cover, 
+    select(dataset, date, region, PSU, transect, lat, lon, depth, cover, 
            total_species_count, high_susc_count, moderate_susc_count, low_susc_count)  
   
   # Average total coral cover across transects and dates for each PSU
   combined_benthic_data_averaged_psu <- combined_benthic_data_summed_psu %>%
-    group_by(dataset, PSU) %>%
+    group_by(dataset, region, PSU) %>%
     summarise(
       # Average cover across all transects/dates within each PSU
       cover = mean(cover, na.rm = TRUE),
@@ -2582,7 +2608,7 @@
       .groups = 'drop'
     ) %>%
     # Reorder columns
-    select(dataset, date, PSU, transect, lat, lon, cover, depth,
+    select(dataset, date, region, PSU, transect, lat, lon, cover, depth,
            total_species_count, high_susc_count, moderate_susc_count, low_susc_count) %>%
     mutate(PSU = as.factor(PSU))
   
@@ -3141,7 +3167,70 @@
   print("PSU Summary by Dataset:")
   print(psu_summary)
   
+  ################################## Coral cover map ##################################
   
+  # Get unique PSU locations with coral cover data
+  psu_cover_data <- combined_benthic_data_averaged_psu %>%
+    # filter(dataset == "NCRMP_benthic" & grepl("_PR", PSU)) %>%
+    group_by(PSU) %>%
+    summarise(
+      lat = first(lat),
+      lon = first(lon),
+      dataset = first(dataset),
+      avg_cover = mean(cover, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Create color palette for coral cover (yellow to red)
+  color_pal <- colorNumeric(
+    palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
+    domain = psu_cover_data$avg_cover,
+    na.color = "gray"
+  )
+  
+  # Create the interactive leaflet map
+  coral_cover_map <- leaflet(psu_cover_data) %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addCircleMarkers(
+      lng = ~lon, 
+      lat = ~lat,
+      popup = ~paste0(
+        "<b>PSU:</b> ", PSU, "<br>",
+        "<b>Dataset:</b> ", dataset, "<br>",
+        "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
+        "<b>Latitude:</b> ", round(lat, 5), "<br>",
+        "<b>Longitude:</b> ", round(lon, 5)
+      ),
+      label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
+      radius = 8,
+      color = "white",
+      fillColor = ~color_pal(avg_cover),
+      fillOpacity = 0.8,
+      weight = 2,
+      stroke = TRUE
+    ) %>%
+    addLegend(
+      "bottomright",
+      pal = color_pal,
+      values = ~avg_cover,
+      title = "Coral Cover (%)",
+      opacity = 1,
+      labFormat = labelFormat(suffix = "%")
+    ) %>%
+    addLayersControl(
+      baseGroups = c("OpenStreetMap", "Satellite"),
+      options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    fitBounds(
+      lng1 = min(psu_cover_data$lon, na.rm = TRUE) - 0.1,
+      lat1 = min(psu_cover_data$lat, na.rm = TRUE) - 0.1,
+      lng2 = max(psu_cover_data$lon, na.rm = TRUE) + 0.1,
+      lat2 = max(psu_cover_data$lat, na.rm = TRUE) + 0.1
+    )
+  
+  # Display the map
+  coral_cover_map
   ################################## Save output ##################################
   
   # # Save specific combined datasets in an .rda file for stats downstream
