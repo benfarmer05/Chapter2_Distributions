@@ -17,6 +17,73 @@
   
   source(here("src/functions.R"))
   
+  
+  #### TEST !!! from 10 Sep
+  
+  ################################## Simplified Usage Examples ##################################
+  
+  # Set species of interest
+  sppofinterest <- "agaricia"  # Change this to any species name
+  
+  # Simple model retrieval - just get the objects directly
+  presence_model <- get(paste0(sppofinterest, "_gam_presence_binom"))
+  abundance_model <- get(paste0(sppofinterest, "_gam_abundance_gamma"))
+  
+  # Create simple structure for the validation function
+  species_models <- list(
+    presence = presence_model,
+    abundance = abundance_model,
+    data = presence_model$model  # Use presence model's data
+  )
+  
+  # Example 1: Hurdle model validation
+  cat("=== Hurdle Model Validation ===\n")
+  result_hurdle <- gam_train_test_split(gam_model = NULL,
+                                        gam_results_entry = species_models,
+                                        train_percent = 80,
+                                        use_hurdle = TRUE,
+                                        seed = 123)
+  
+  if(!is.null(result_hurdle)) {
+    plot_validation_maps(result_hurdle)
+  }
+  
+  # Example 2: Test multiple species
+  species_list <- c("agaricia", "orbicella", "porites", "madracis")
+  
+  for(sp in species_list) {
+    cat("\n=== Processing", sp, "===\n")
+    
+    # Get models
+    presence_mod <- get(paste0(sp, "_gam_presence_binom"))
+    abundance_mod <- get(paste0(sp, "_gam_abundance_gamma"))
+    
+    # Create structure
+    sp_models <- list(
+      presence = presence_mod,
+      abundance = abundance_mod,
+      data = presence_mod$model
+    )
+    
+    # Run validation
+    result <- gam_train_test_split(gam_model = NULL,
+                                   gam_results_entry = sp_models,
+                                   train_percent = 80,
+                                   use_hurdle = TRUE,
+                                   seed = sample(1:1000, 1))
+    
+    if(!is.null(result)) {
+      plot_validation_maps(result)
+    }
+  }
+  
+  #### TEST !!! from 10 Sep
+  
+  
+  
+  
+  
+  
   ################################## setup ##################################
   
   load(here("output", "all_combined_data.rda"))
