@@ -1936,6 +1936,252 @@
   #       mean wavedir, and mean PAR if needed
   #   - also will go back upstream to group the rare HS corals....but can wait on that for now
   
+  
+  ################################## test prediction of Orbicella ##################################
+  
+  # Manually specify required variables (using raster layer names)
+  presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
+  abundance_vars <- c("depth", "range_SST", "mean_chla")
+  required_vars <- unique(c(presence_vars, abundance_vars))
+  
+  # Subset raster stack to only required variables
+  env_subset <- env_complex[[required_vars]]
+  
+  # Convert subset raster to dataframe
+  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  
+  # Rename depth column to match model expectation
+  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  
+  # Take only 1/100th of the data for testing
+  sample_size <- ceiling(nrow(env_df) / 100)
+  set.seed(123)  # For reproducible sampling
+  sample_indices <- sample(nrow(env_df), sample_size)
+  env_df_sample <- env_df[sample_indices, ]
+  
+  cat("Full dataset size:", nrow(env_df), "cells\n")
+  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  
+  # Test predictions on sample
+  cat("Testing presence prediction...\n")
+  start_time <- Sys.time()
+  presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
+  presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  
+  cat("Testing abundance prediction...\n")
+  start_time <- Sys.time()
+  abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  
+  # Create hurdle predictions
+  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  
+  # Add predictions to sample dataframe
+  env_df_sample$presence_prob <- presence_prob_sample
+  env_df_sample$abundance_pred <- abundance_pred_sample
+  env_df_sample$hurdle_pred <- hurdle_pred_sample
+  
+  # Estimate full dataset time
+  total_sample_time <- as.numeric(presence_time + abundance_time)
+  estimated_full_time <- total_sample_time * 100
+  
+  cat("\nSample results summary:\n")
+  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  
+  cat("\nTime estimates:\n")
+  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  if(estimated_full_time > 60) {
+    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  }
+  cat("\n")
+  
+  # Quick plot of sample results
+  library(ggplot2)
+  library(viridis)
+  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.5, 1)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle("Orbicella Presence Probability")
+  
+  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  
+  ################################## test prediction of Agaricia ##################################
+  
+  # Manually specify required variables for agaricia models
+  presence_vars <- c("depth", "VRM", "aspect", "TPI", "mean_SST", "dir_at_max_hsig", "max_BOV")
+  abundance_vars <- c("depth", "complexity", "dir_at_max_hsig", "mean_chla")
+  required_vars <- unique(c(presence_vars, abundance_vars))
+  
+  # Subset raster stack to only required variables
+  env_subset <- env_complex[[required_vars]]
+  
+  # Convert subset raster to dataframe
+  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  
+  # Rename depth column to match model expectation
+  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  
+  # Take only 1/100th of the data for testing
+  sample_size <- ceiling(nrow(env_df) / 100)
+  set.seed(123)
+  sample_indices <- sample(nrow(env_df), sample_size)
+  env_df_sample <- env_df[sample_indices, ]
+  
+  cat("Full dataset size:", nrow(env_df), "cells\n")
+  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  
+  # Test predictions on sample - using AGARICIA models
+  cat("Testing presence prediction...\n")
+  start_time <- Sys.time()
+  presence_prob_sample <- predict(agaricia_gam_presence_binom, newdata = env_df_sample, type = "response")
+  presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  
+  cat("Testing abundance prediction...\n")
+  start_time <- Sys.time()
+  abundance_pred_sample <- predict(agaricia_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  
+  # Create hurdle predictions
+  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  
+  # Add predictions to sample dataframe
+  env_df_sample$presence_prob <- presence_prob_sample
+  env_df_sample$abundance_pred <- abundance_pred_sample
+  env_df_sample$hurdle_pred <- hurdle_pred_sample
+  
+  # Estimate full dataset time
+  total_sample_time <- as.numeric(presence_time + abundance_time)
+  estimated_full_time <- total_sample_time * 100
+  
+  cat("\nSample results summary:\n")
+  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  
+  cat("\nTime estimates:\n")
+  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  if(estimated_full_time > 60) {
+    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  }
+  cat("\n")
+  
+  # Quick plot of sample results
+  library(ggplot2)
+  library(viridis)
+  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle("Agaricia Presence Probability")
+  
+  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for agaricia range
+    # scale_color_viridis_c(name = "Predicted\nCover") +  # Adjusted for agaricia range
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste("Agaricia Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  
+  
+  
+  ################################## test prediction of Pseudodiploria ##################################
+  
+  # Manually specify required variables for pseudodiploria models
+  presence_vars <- c("depth", "slope", "VRM", "mean_Hsig", "mean_chla")
+  abundance_vars <- c("depth", "VRM", "mean_Hsig", "mean_SST")
+  required_vars <- unique(c(presence_vars, abundance_vars))
+  
+  # Subset raster stack to only required variables
+  env_subset <- env_complex[[required_vars]]
+  
+  # Convert subset raster to dataframe
+  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  
+  # Rename depth column to match model expectation
+  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  
+  # Take only 1/100th of the data for testing
+  sample_size <- ceiling(nrow(env_df) / 100)
+  set.seed(123)
+  sample_indices <- sample(nrow(env_df), sample_size)
+  env_df_sample <- env_df[sample_indices, ]
+  
+  cat("Full dataset size:", nrow(env_df), "cells\n")
+  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  
+  # Test predictions on sample - using PSEUDODIPLORIA models
+  cat("Testing presence prediction...\n")
+  start_time <- Sys.time()
+  presence_prob_sample <- predict(pseudodiploria_gam_presence_binom, newdata = env_df_sample, type = "response")
+  presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  
+  cat("Testing abundance prediction...\n")
+  start_time <- Sys.time()
+  abundance_pred_sample <- predict(pseudodiploria_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  
+  # Create hurdle predictions
+  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  
+  # Add predictions to sample dataframe
+  env_df_sample$presence_prob <- presence_prob_sample
+  env_df_sample$abundance_pred <- abundance_pred_sample
+  env_df_sample$hurdle_pred <- hurdle_pred_sample
+  
+  # Estimate full dataset time
+  total_sample_time <- as.numeric(presence_time + abundance_time)
+  estimated_full_time <- total_sample_time * 100
+  
+  cat("\nSample results summary:\n")
+  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  
+  cat("\nTime estimates:\n")
+  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  if(estimated_full_time > 60) {
+    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  }
+  cat("\n")
+  
+  # Quick plot of sample results
+  library(ggplot2)
+  library(viridis)
+  # Plot presence probability only
+  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle("Pseudodiploria Presence Probability")
+  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for pseudodiploria range
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste("Pseudodiploria Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  
+  
+  
   ################################## Save objects/workspace ##################################
   
   # #updated way to handle saving of new objects
