@@ -17,17 +17,28 @@
   
   source(here("src/functions.R"))
   
+  ################################## TEST !!! from 10 Sep ##################################
   
-  #### TEST !!! from 10 Sep
-  
-  ################################## Simplified Usage Examples ##################################
+
+  # Simplified Usage Examples 
   
   # Set species of interest
   sppofinterest <- "agaricia"  # Change this to any species name
   
-  # Simple model retrieval - just get the objects directly
-  presence_model <- get(paste0(sppofinterest, "_gam_presence_binom"))
-  abundance_model <- get(paste0(sppofinterest, "_gam_abundance_gamma"))
+  all_objects <- ls(envir = .GlobalEnv)
+  species_gam_objects <- grep(paste0("^", sppofinterest, "_gam_"), all_objects, value = TRUE)
+  
+  presence_model_name <- grep("_presence_binom$", species_gam_objects, value = TRUE)
+  abundance_model_name <- grep("_abundance_gamma$", species_gam_objects, value = TRUE)
+  
+  # Check if models were found
+  if(length(presence_model_name) == 0 || length(abundance_model_name) == 0) {
+    stop(paste("Could not find GAM models for species:", sppofinterest))
+  }
+  
+  
+  presence_model <- get(presence_model_name)
+  abundance_model <- get(abundance_model_name)
   
   # Create simple structure for the validation function
   species_models <- list(
@@ -48,15 +59,33 @@
     plot_validation_maps(result_hurdle)
   }
   
-  # Example 2: Test multiple species
-  species_list <- c("agaricia", "orbicella", "porites", "madracis")
+  # Example 2: Test multiple species - now dynamically finds available species
+  all_objects <- ls(envir = .GlobalEnv)
+  all_gam_objects <- grep("_gam_(presence_binom|abundance_gamma)$", all_objects, value = TRUE)
+  
+  # Extract unique species names
+  species_list <- unique(gsub("_gam_(presence_binom|abundance_gamma)$", "", all_gam_objects))
+  
+  cat("\nFound species:", paste(species_list, collapse = ", "), "\n")
   
   for(sp in species_list) {
     cat("\n=== Processing", sp, "===\n")
     
+    # Find models for this species using grep
+    sp_gam_objects <- grep(paste0("^", sp, "_gam_"), all_objects, value = TRUE)
+    
+    presence_mod_name <- grep("_presence_binom$", sp_gam_objects, value = TRUE)
+    abundance_mod_name <- grep("_abundance_gamma$", sp_gam_objects, value = TRUE)
+    
+    # Skip if either model is missing
+    if(length(presence_mod_name) == 0 || length(abundance_mod_name) == 0) {
+      cat("  Skipping - missing models for", sp, "\n")
+      next
+    }
+    
     # Get models
-    presence_mod <- get(paste0(sp, "_gam_presence_binom"))
-    abundance_mod <- get(paste0(sp, "_gam_abundance_gamma"))
+    presence_mod <- get(presence_mod_name)
+    abundance_mod <- get(abundance_mod_name)
     
     # Create structure
     sp_models <- list(
@@ -75,13 +104,7 @@
     if(!is.null(result)) {
       plot_validation_maps(result)
     }
-  }
-  
-  #### TEST !!! from 10 Sep
-  
-  
-  
-  
+  }  
   
   
   ################################## setup ##################################
@@ -106,17 +129,47 @@
   source(here("src/functions.R"))
   load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
   
-  #load fitted GAM models
-  model_files <- list.files(here("output", "output_GAMs"), 
-                            pattern = "_model\\.rds$", 
-                            full.names = TRUE)
-  for(file in model_files) {
-    # Extract the base filename without extension
-    model_name <- tools::file_path_sans_ext(basename(file))
-    
-    # Load the model and assign to global environment
-    assign(model_name, readRDS(file), envir = .GlobalEnv)
-  }
+  
+  
+  
+  
+  # FIGURING THIS OUT
+  
+  # #load GAMs
+  # load_spat_objects(directory = 'output/output_calculate_bathy_rasters/')
+  # load_spat_objects(directory = 'output/output_calculate_ocean_rasters/')
+  
+  
+  # # Load fitted GAM models
+  # load_all_files <- TRUE #Toggle: set to TRUE to load all .rds files, FALSE to load only GAM models
+  # #
+  # if(load_all_files) {
+  #   # Load all .rds files in the folder
+  #   model_files <- list.files(here("output", "output_GAMs"), 
+  #                             pattern = "\\.rds$", 
+  #                             full.names = TRUE)
+  # } else {
+  #   # Load only GAM model files
+  #   model_files <- list.files(here("output", "output_GAMs"), 
+  #                             pattern = "_gam_(abundance_gamma|presence_binom)\\.rds$", 
+  #                             full.names = TRUE)
+  # }
+  # 
+  # for(file in model_files) {
+  #   # Extract the base filename without extension
+  #   model_name <- tools::file_path_sans_ext(basename(file))
+  #   
+  #   # Load the model and assign to global environment
+  #   assign(model_name, readRDS(file), envir = .GlobalEnv)
+  # }  
+  
+  
+  
+  
+  # FIGURING THIS OUT
+  
+  
+  
   
   
   #save information for exporting new objects later

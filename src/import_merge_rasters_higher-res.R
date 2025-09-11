@@ -676,13 +676,13 @@
   # 
   ################################## Save objects/workspace  ##################################
   
-  # #save terra objects #and then workspace for use in downstream scripts
-  # save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
-  # 
-  # # Get all non-spatial objects
-  # non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
-  # 
-  # # Save only non-spatial objects
-  # # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
-  # save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
+  #save terra objects #and then workspace for use in downstream scripts
+  save_spat_objects(output_dir = 'output/output_import_merge_rasters_higher-res/') #call from functions.R
+  
+  # Get all non-spatial objects
+  non_spatial <- ls()[!sapply(ls(), function(x) inherits(get(x), c("SpatRaster", "SpatVector", "SpatExtent")))]
+  
+  # Save only non-spatial objects
+  # NOTE - this helps with avoiding 'pointer' warnings/errors when loading everything again downstream
+  save(list = non_spatial, file = here('output', 'output_import_merge_rasters_higher-res/import_merge_rasters_workspace.RData'))
   
