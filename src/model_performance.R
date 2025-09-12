@@ -17,95 +17,537 @@
   
   source(here("src/functions.R"))
   
-  ################################## TEST !!! from 10 Sep ##################################
   
-
-  # Simplified Usage Examples 
+  ################################## TESTING, AND SHOWING PROMISE ##################################
   
-  # Set species of interest
-  sppofinterest <- "agaricia"  # Change this to any species name
+  # COMPLETE BETA vs GAMMA HURDLE VALIDATION FUNCTION - Copy and paste this entire block
   
-  all_objects <- ls(envir = .GlobalEnv)
-  species_gam_objects <- grep(paste0("^", sppofinterest, "_gam_"), all_objects, value = TRUE)
-  
-  presence_model_name <- grep("_presence_binom$", species_gam_objects, value = TRUE)
-  abundance_model_name <- grep("_abundance_gamma$", species_gam_objects, value = TRUE)
-  
-  # Check if models were found
-  if(length(presence_model_name) == 0 || length(abundance_model_name) == 0) {
-    stop(paste("Could not find GAM models for species:", sppofinterest))
-  }
-  
-  
-  presence_model <- get(presence_model_name)
-  abundance_model <- get(abundance_model_name)
-  
-  # Create simple structure for the validation function
-  species_models <- list(
-    presence = presence_model,
-    abundance = abundance_model,
-    data = presence_model$model  # Use presence model's data
-  )
-  
-  # Example 1: Hurdle model validation
-  cat("=== Hurdle Model Validation ===\n")
-  result_hurdle <- gam_train_test_split(gam_model = NULL,
-                                        gam_results_entry = species_models,
-                                        train_percent = 80,
-                                        use_hurdle = TRUE,
-                                        seed = 123)
-  
-  if(!is.null(result_hurdle)) {
-    plot_validation_maps(result_hurdle)
-  }
-  
-  # Example 2: Test multiple species - now dynamically finds available species
-  all_objects <- ls(envir = .GlobalEnv)
-  all_gam_objects <- grep("_gam_(presence_binom|abundance_gamma)$", all_objects, value = TRUE)
-  
-  # Extract unique species names
-  species_list <- unique(gsub("_gam_(presence_binom|abundance_gamma)$", "", all_gam_objects))
-  
-  cat("\nFound species:", paste(species_list, collapse = ", "), "\n")
-  
-  for(sp in species_list) {
-    cat("\n=== Processing", sp, "===\n")
+  validate_hurdle_simple <- function(species_name, train_percent = 80, seed = 123, presence_threshold = 0.5, 
+                                     auto_plot = TRUE, use_beta = FALSE) {
     
-    # Find models for this species using grep
-    sp_gam_objects <- grep(paste0("^", sp, "_gam_"), all_objects, value = TRUE)
+    library(mgcv)
+    library(pROC)
     
-    presence_mod_name <- grep("_presence_binom$", sp_gam_objects, value = TRUE)
-    abundance_mod_name <- grep("_abundance_gamma$", sp_gam_objects, value = TRUE)
+    set.seed(seed)
     
-    # Skip if either model is missing
-    if(length(presence_mod_name) == 0 || length(abundance_mod_name) == 0) {
-      cat("  Skipping - missing models for", sp, "\n")
-      next
+    # Get models based on distribution choice
+    all_objects <- ls(envir = .GlobalEnv)
+    species_gam_objects <- grep(paste0("^", species_name, "_gam_"), all_objects, value = TRUE)
+    
+    presence_model_name <- grep("_presence_binom$", species_gam_objects, value = TRUE)
+    
+    if(use_beta) {
+      abundance_model_name <- grep("_abundance_beta$", species_gam_objects, value = TRUE)
+      cat("Using BETA distribution for abundance model\n")
+    } else {
+      abundance_model_name <- grep("_abundance_gamma$", species_gam_objects, value = TRUE)
+      cat("Using GAMMA distribution for abundance model\n")
     }
     
-    # Get models
-    presence_mod <- get(presence_mod_name)
-    abundance_mod <- get(abundance_mod_name)
+    if(length(presence_model_name) == 0 || length(abundance_model_name) == 0) {
+      missing_models <- c()
+      if(length(presence_model_name) == 0) missing_models <- c(missing_models, paste0(species_name, "_gam_presence_binom"))
+      if(use_beta && length(abundance_model_name) == 0) missing_models <- c(missing_models, paste0(species_name, "_gam_abundance_beta"))
+      if(!use_beta && length(abundance_model_name) == 0) missing_models <- c(missing_models, paste0(species_name, "_gam_abundance_gamma"))
+      stop("Could not find required models: ", paste(missing_models, collapse = ", "))
+    }
     
-    # Create structure
-    sp_models <- list(
-      presence = presence_mod,
-      abundance = abundance_mod,
-      data = presence_mod$model
+    presence_model <- get(presence_model_name, envir = .GlobalEnv)
+    abundance_model <- get(abundance_model_name, envir = .GlobalEnv)
+    
+    # Get data
+    data_name <- paste0(species_name, "_model_data")
+    if(data_name %in% all_objects) {
+      model_data <- get(data_name, envir = .GlobalEnv)
+    } else {
+      model_data <- presence_model$model
+    }
+    
+    # Get complete data
+    presence_vars <- all.vars(formula(presence_model))
+    abundance_vars <- all.vars(formula(abundance_model))
+    all_vars <- unique(c(presence_vars, abundance_vars))
+    complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+    
+    # Train-test split
+    n <- nrow(complete_data)
+    train_size <- floor((train_percent / 100) * n)
+    train_idx <- sample(1:n, size = train_size)
+    
+    train_data <- complete_data[train_idx, ]
+    test_data <- complete_data[-train_idx, ]
+    
+    cat("Training on", nrow(train_data), "observations\n")
+    cat("Testing on", nrow(test_data), "observations\n")
+    cat("Train/test split:", train_percent, "/", 100 - train_percent, "\n")
+    cat("Presence threshold:", presence_threshold, "\n")
+    cat("Random seed:", seed, "\n")
+    cat("Abundance model distribution:", ifelse(use_beta, "Beta", "Gamma"), "\n")
+    
+    # Fit models
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+    
+    # Prepare abundance training data and fit abundance model
+    abundance_train_data <- train_data[train_data$cover > 0, ]
+    
+    if(use_beta) {
+      # For beta models, need to work with proportions
+      abundance_train_data$cover_prop <- abundance_train_data$cover / 100
+      abundance_formula_adj <- update(formula(abundance_model), cover_prop ~ .)
+      abundance_fit <- gam(abundance_formula_adj, data = abundance_train_data, family = betar())
+    } else {
+      # For gamma models, work with original cover scale
+      abundance_fit <- gam(formula(abundance_model), data = abundance_train_data, family = Gamma(link = "log"))
+    }
+    
+    # Make predictions
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    
+    if(use_beta) {
+      # Beta model predictions are on 0-1 scale, convert to percentage
+      abundance_pred_prop <- predict(abundance_fit, newdata = test_data, type = "response")
+      abundance_pred <- abundance_pred_prop * 100  # Convert back to 0-100 scale
+    } else {
+      # Gamma model predictions are already on 0-100 scale
+      abundance_pred <- predict(abundance_fit, newdata = test_data, type = "response")
+    }
+    
+    # HURDLE MODEL: Binary presence threshold, then multiply
+    presence_binary <- ifelse(presence_prob > presence_threshold, 1, 0)
+    hurdle_predictions <- presence_binary * abundance_pred  # Only abundance where predicted present
+    
+    actual <- test_data$cover
+    actual_binary <- ifelse(actual > 0, 1, 0)
+    
+    # Sample sizes
+    n_total <- length(actual)
+    n_actual_present <- sum(actual > 0)
+    n_predicted_present <- sum(presence_binary == 1)
+    n_both_present <- sum(actual > 0 & presence_binary == 1)
+    n_actual_absent <- sum(actual == 0)
+    
+    # Overall metrics
+    overall_r2 <- cor(actual, hurdle_predictions, use = "complete.obs")^2
+    overall_rmse <- sqrt(mean((actual - hurdle_predictions)^2))
+    overall_mae <- mean(abs(actual - hurdle_predictions))
+    
+    # Absence prediction metrics (renamed from "zero" to "absence")
+    actual_absences <- sum(actual == 0)
+    predicted_absences <- sum(hurdle_predictions == 0)
+    correct_absences <- sum(actual == 0 & hurdle_predictions == 0)
+    absence_accuracy <- if(actual_absences > 0) correct_absences / actual_absences else NA
+    
+    # Presence prediction accuracy metrics
+    actual_presences <- sum(actual > 0)
+    predicted_presences <- sum(presence_binary == 1)
+    correct_presences <- sum(actual > 0 & presence_binary == 1)  # True positives
+    false_positives <- sum(actual == 0 & presence_binary == 1)   # Predicted present but actually absent
+    false_negatives <- sum(actual > 0 & presence_binary == 0)   # Predicted absent but actually present
+    true_negatives <- sum(actual == 0 & presence_binary == 0)   # Correctly predicted absent
+    
+    # Calculate standard classification metrics
+    presence_accuracy <- (correct_presences + true_negatives) / n_total  # Overall accuracy
+    presence_sensitivity <- if(actual_presences > 0) correct_presences / actual_presences else NA  # True positive rate
+    presence_specificity <- if(actual_absences > 0) true_negatives / actual_absences else NA  # True negative rate
+    presence_precision <- if(predicted_presences > 0) correct_presences / predicted_presences else NA  # Positive predictive value
+    
+    # Method A: All actual presence sites
+    method_A_r2 <- NA
+    method_A_mae <- NA
+    if(n_actual_present > 5) {
+      actual_present <- actual[actual > 0]
+      pred_present <- abundance_pred[actual > 0]
+      method_A_r2 <- cor(actual_present, pred_present, use = "complete.obs")^2
+      method_A_mae <- mean(abs(actual_present - pred_present))
+    }
+    
+    # Method B: Both actual and predicted present
+    method_B_r2 <- NA
+    method_B_mae <- NA
+    if(n_both_present > 5) {
+      mask <- actual > 0 & presence_binary == 1
+      actual_both <- actual[mask]
+      pred_both <- abundance_pred[mask]
+      method_B_r2 <- cor(actual_both, pred_both, use = "complete.obs")^2
+      method_B_mae <- mean(abs(actual_both - pred_both))
+    }
+    
+    # Method C: All predicted present sites (regardless of actual)
+    method_C_r2 <- NA
+    method_C_mae <- NA
+    if(n_predicted_present > 5) {
+      mask_C <- presence_binary == 1
+      actual_pred_present <- actual[mask_C]
+      pred_pred_present <- abundance_pred[mask_C]
+      method_C_r2 <- cor(actual_pred_present, pred_pred_present, use = "complete.obs")^2
+      method_C_mae <- mean(abs(actual_pred_present - pred_pred_present))
+    }
+    
+    # Presence AUC
+    presence_auc <- as.numeric(auc(actual > 0, presence_prob))
+    
+    # Print results
+    cat("\n=== RESULTS ===\n")
+    cat("Sample sizes:\n")
+    cat("  Total test sites:", n_total, "\n")
+    cat("  Actual presence sites:", n_actual_present, "\n")
+    cat("  Predicted presence sites:", n_predicted_present, "\n")
+    cat("  Both actual AND predicted present:", n_both_present, "\n")
+    cat("  Actual absence sites:", n_actual_absent, "\n\n")
+    
+    cat("Overall performance (all sites including absences):\n")
+    cat("  R²:", round(overall_r2, 3), "\n")
+    cat("  RMSE:", round(overall_rmse, 3), "\n")
+    cat("  MAE:", round(overall_mae, 3), "\n\n")
+    
+    cat("Absence prediction performance:\n")
+    cat("  Actual absences:", actual_absences, "/ Predicted absences:", predicted_absences, "\n")
+    cat("  Correctly predicted absences:", correct_absences, "\n")
+    cat("  Absence prediction accuracy:", round(absence_accuracy, 3), "\n\n")
+    
+    cat("Presence prediction performance:\n")
+    cat("  Overall accuracy:", round(presence_accuracy, 3), "\n")
+    cat("  Sensitivity (true positive rate):", round(presence_sensitivity, 3), "\n")
+    cat("  Specificity (true negative rate):", round(presence_specificity, 3), "\n")
+    cat("  Precision (positive predictive value):", round(presence_precision, 3), "\n")
+    cat("  AUC:", round(presence_auc, 3), "\n")
+    cat("  Presence threshold used:", presence_threshold, "\n\n")
+    
+    cat("Abundance model - Method A (all actual presence sites):\n")
+    if(!is.na(method_A_r2)) {
+      cat("  R²:", round(method_A_r2, 3), "\n")
+      cat("  MAE:", round(method_A_mae, 3), "\n")
+      cat("  Sites used:", n_actual_present, "\n\n")
+    } else {
+      cat("  Cannot calculate (insufficient sites)\n\n")
+    }
+    
+    cat("Abundance model - Method B (both actual and predicted present):\n")
+    if(!is.na(method_B_r2)) {
+      cat("  R²:", round(method_B_r2, 3), "\n")
+      cat("  MAE:", round(method_B_mae, 3), "\n")
+      cat("  Sites used:", n_both_present, "\n\n")
+    } else {
+      cat("  Cannot calculate (insufficient sites)\n\n")
+    }
+    
+    cat("Abundance model - Method C (all predicted present sites):\n")
+    if(!is.na(method_C_r2)) {
+      cat("  R²:", round(method_C_r2, 3), "\n")
+      cat("  MAE:", round(method_C_mae, 3), "\n")
+      cat("  Sites used:", n_predicted_present, "\n\n")
+    } else {
+      cat("  Cannot calculate (insufficient sites)\n\n")
+    }
+    
+    # Create test results for mapping
+    test_results <- test_data
+    test_results$predicted <- hurdle_predictions
+    test_results$presence_prob <- presence_prob
+    test_results$presence_binary <- presence_binary
+    test_results$abundance_pred <- abundance_pred
+    test_results$residuals <- actual - hurdle_predictions
+    test_results$actual_binary <- actual_binary
+    
+    result <- list(
+      test_results = test_results,
+      species = species_name,
+      response_variable = "cover",
+      train_percent = train_percent,
+      seed = seed,
+      presence_threshold = presence_threshold,
+      use_beta = use_beta,
+      abundance_distribution = ifelse(use_beta, "Beta", "Gamma"),
+      n_total = n_total,
+      n_actual_present = n_actual_present,
+      n_predicted_present = n_predicted_present,
+      n_both_present = n_both_present,
+      overall_r2 = overall_r2,
+      overall_mae = overall_mae,
+      actual_absences = actual_absences,
+      predicted_absences = predicted_absences,
+      correct_absences = correct_absences,
+      absence_accuracy = absence_accuracy,
+      presence_accuracy = presence_accuracy,
+      presence_sensitivity = presence_sensitivity,
+      presence_specificity = presence_specificity,
+      presence_precision = presence_precision,
+      method_A_r2 = method_A_r2,
+      method_A_mae = method_A_mae,
+      method_B_r2 = method_B_r2,
+      method_B_mae = method_B_mae,
+      method_C_r2 = method_C_r2,
+      method_C_mae = method_C_mae,
+      presence_auc = presence_auc
     )
     
-    # Run validation
-    result <- gam_train_test_split(gam_model = NULL,
-                                   gam_results_entry = sp_models,
-                                   train_percent = 80,
-                                   use_hurdle = TRUE,
-                                   seed = sample(1:1000, 1))
-    
-    if(!is.null(result)) {
-      plot_validation_maps(result)
+    # Auto-plot if requested
+    if(auto_plot) {
+      plot_hurdle_complete(result)
     }
-  }  
+    
+    return(result)
+  }
   
+  # Complete plotting function with all 8 plots and shared axis limits
+  plot_hurdle_complete <- function(result) {
+    library(ggplot2)
+    library(viridis)
+    library(gridExtra)
+    
+    plot_data <- result$test_results
+    
+    # Find coordinate columns
+    coord_cols <- c("lon", "longitude", "lat", "latitude")
+    available_coords <- coord_cols[coord_cols %in% colnames(plot_data)]
+    
+    if(length(available_coords) < 2) {
+      stop("Could not find coordinate columns. Available: ", paste(colnames(plot_data), collapse = ", "))
+    }
+    
+    x_col <- available_coords[grepl("lon", available_coords)][1]
+    y_col <- available_coords[grepl("lat", available_coords)][1]
+    
+    cat("Using coordinates:", x_col, "and", y_col, "\n")
+    
+    # Common theme for maps
+    map_theme <- theme_minimal() +
+      theme(
+        axis.text = element_text(size = 8),
+        plot.title = element_text(size = 9, hjust = 0.5),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 7)
+      )
+    
+    # Calculate shared color scale for cover values
+    actual_values <- plot_data$cover
+    predicted_values <- plot_data$predicted
+    shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
+    shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
+    
+    # SPATIAL MAPS (Top two rows)
+    # Plot 1: Actual cover values
+    p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "cover")) +
+      geom_point(size = 1.5, alpha = 0.7) +
+      scale_color_viridis_c(name = "Actual", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = "Actual Cover", x = "Longitude", y = "Latitude") +
+      map_theme
+    
+    # Plot 2: Predicted cover values
+    p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
+      geom_point(size = 1.5, alpha = 0.7) +
+      scale_color_viridis_c(name = "Predicted", option = "plasma", limits = c(shared_min, shared_max)) +
+      labs(title = "Predicted Cover", x = "Longitude", y = "Latitude") +
+      map_theme
+    
+    # Plot 3: Observed presence/absence (binary)
+    p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "factor(actual_binary)")) +
+      geom_point(size = 1.5, alpha = 0.7) +
+      scale_color_manual(name = "Observed", values = c("0" = "red", "1" = "blue"), 
+                         labels = c("0" = "Absent", "1" = "Present")) +
+      labs(title = "Observed Presence/Absence", x = "Longitude", y = "Latitude") +
+      map_theme
+    
+    # Plot 4: Predicted presence probability (continuous)
+    p4 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "presence_prob")) +
+      geom_point(size = 1.5, alpha = 0.7) +
+      scale_color_viridis_c(name = "P(Presence)", option = "viridis") +
+      labs(title = "Predicted Presence Probability", x = "Longitude", y = "Latitude") +
+      map_theme
+    
+    # Plot 5: Predicted presence/absence (binary, based on threshold)
+    p5 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "factor(presence_binary)")) +
+      geom_point(size = 1.5, alpha = 0.7) +
+      scale_color_manual(name = "Predicted", values = c("0" = "red", "1" = "blue"), 
+                         labels = c("0" = "Absent", "1" = "Present")) +
+      labs(title = paste("Predicted P/A (threshold =", result$presence_threshold, ")"), 
+           x = "Longitude", y = "Latitude") +
+      map_theme
+    
+    # ABUNDANCE SCATTER PLOTS (Bottom row) - WITH SHARED AXIS LIMITS
+    # Prepare data for abundance scatter plots
+    # Method A: All actual presence sites
+    method_A_data <- plot_data[plot_data$cover > 0, ]
+    
+    # Method B: Both actual and predicted present
+    method_B_data <- plot_data[plot_data$cover > 0 & plot_data$presence_binary == 1, ]
+    
+    # Method C: All predicted present sites
+    method_C_data <- plot_data[plot_data$presence_binary == 1, ]
+    
+    # Calculate shared axis limits for all three scatter plots
+    all_actual_values <- c(method_A_data$cover, method_B_data$cover, method_C_data$cover)
+    all_pred_values <- c(method_A_data$abundance_pred, method_B_data$abundance_pred, method_C_data$abundance_pred)
+    
+    scatter_min <- min(c(all_actual_values, all_pred_values), na.rm = TRUE)
+    scatter_max <- max(c(all_actual_values, all_pred_values), na.rm = TRUE)
+    
+    # Add a small buffer to axis limits
+    axis_buffer <- (scatter_max - scatter_min) * 0.05
+    axis_min <- scatter_min - axis_buffer
+    axis_max <- scatter_max + axis_buffer
+    
+    # Plot 6: Method A scatter plot
+    p6 <- ggplot(method_A_data, aes(x = abundance_pred, y = cover)) +
+      geom_point(alpha = 0.6, color = "darkgreen", size = 1) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      xlim(axis_min, axis_max) +
+      ylim(axis_min, axis_max) +
+      labs(title = paste("Method A: Actual Present\n(R² =", round(result$method_A_r2, 3), ", n =", nrow(method_A_data), ")"),
+           x = "Abundance Prediction", y = "Actual Cover") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 8))
+    
+    # Plot 7: Method B scatter plot  
+    p7 <- ggplot(method_B_data, aes(x = abundance_pred, y = cover)) +
+      geom_point(alpha = 0.6, color = "darkblue", size = 1) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      xlim(axis_min, axis_max) +
+      ylim(axis_min, axis_max) +
+      labs(title = paste("Method B: Both Actual & Predicted Present\n(R² =", round(result$method_B_r2, 3), ", n =", nrow(method_B_data), ")"),
+           x = "Abundance Prediction", y = "Actual Cover") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 8))
+    
+    # Plot 8: Method C scatter plot
+    p8 <- ggplot(method_C_data, aes(x = abundance_pred, y = cover)) +
+      geom_point(alpha = 0.6, color = "darkorange", size = 1) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      xlim(axis_min, axis_max) +
+      ylim(axis_min, axis_max) +
+      labs(title = paste("Method C: Predicted Present\n(R² =", round(result$method_C_r2, 3), ", n =", nrow(method_C_data), ")"),
+           x = "Abundance Prediction", y = "Actual Cover") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 8))
+    
+    # Plot 9: Overall scatter plot (all sites, using hurdle predictions)
+    p9 <- ggplot(plot_data, aes(x = predicted, y = cover)) +
+      geom_point(alpha = 0.6, color = "purple", size = 1) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      labs(title = paste("Overall Scatter\n(R² =", round(result$overall_r2, 3), ", n =", nrow(plot_data), ")"),
+           x = "Hurdle Prediction", y = "Actual Cover") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 8))
+    
+    
+    # # Arrange all 8 plots in 3x3 grid (with one empty space)
+    # grid.arrange(p1, p2, p3, p4, p5, 
+    #              p6, p7, p8, 
+    #              ncol = 3, nrow = 3,
+    #              top = paste("Hurdle Validation Results -", result$species, 
+    #                          "(", result$abundance_distribution, "abundance model)"),
+    #              layout_matrix = rbind(c(1,2,3), c(4,5,6), c(7,8,NA)))
+    # Arrange all 9 plots in 3x3 grid (fills last empty spot)
+    grid.arrange(p1, p2, p3, 
+                 p4, p5, p6, 
+                 p7, p8, p9,
+                 ncol = 3, nrow = 3,
+                 top = paste("Hurdle Validation Results -", result$species, 
+                             "(", result$abundance_distribution, " abundance model)"))
+    
+    # return(invisible(list(actual_cover = p1, predicted_cover = p2, 
+    #                       observed_binary = p3, predicted_prob = p4, predicted_binary = p5,
+    #                       method_A_scatter = p6, method_B_scatter = p7, method_C_scatter = p8)))
+    return(invisible(list(actual_cover = p1, predicted_cover = p2, 
+                          observed_binary = p3, predicted_prob = p4, predicted_binary = p5,
+                          method_A_scatter = p6, method_B_scatter = p7, method_C_scatter = p8)))
+    
+  }
+  
+  # Test function to compare thresholds (updated to include beta parameter)
+  test_thresholds <- function(species_name, thresholds = c(0.3, 0.4, 0.5, 0.6, 0.7), seed = 123, use_beta = FALSE) {
+    results <- list()
+    
+    cat("Testing presence thresholds for", species_name, "with", ifelse(use_beta, "Beta", "Gamma"), "abundance model:\n")
+    
+    for(thresh in thresholds) {
+      cat("\n--- Threshold:", thresh, "---\n")
+      result <- validate_hurdle_simple(species_name, seed = seed, presence_threshold = thresh, 
+                                       auto_plot = FALSE, use_beta = use_beta)
+      results[[as.character(thresh)]] <- result
+    }
+    
+    # Summary table
+    cat("\n=== THRESHOLD COMPARISON SUMMARY ===\n")
+    summary_df <- data.frame(
+      Threshold = thresholds,
+      Predicted_Present = sapply(results, function(x) x$n_predicted_present),
+      Both_Present = sapply(results, function(x) x$n_both_present),
+      Absence_Accuracy = sapply(results, function(x) round(x$absence_accuracy, 3)),
+      Presence_Accuracy = sapply(results, function(x) round(x$presence_accuracy, 3)),
+      Overall_R2 = sapply(results, function(x) round(x$overall_r2, 3)),
+      Method_A_R2 = sapply(results, function(x) round(x$method_A_r2, 3)),
+      Method_B_R2 = sapply(results, function(x) round(x$method_B_r2, 3)),
+      Method_C_R2 = sapply(results, function(x) round(x$method_C_r2, 3))
+    )
+    
+    print(summary_df)
+    
+    return(results)
+  }
+  
+  # Compare Beta vs Gamma function
+  compare_beta_gamma <- function(species_name, train_percent = 80, seed = 123, presence_threshold = 0.5) {
+    
+    cat("=== COMPARING BETA vs GAMMA ABUNDANCE MODELS ===\n")
+    cat("Species:", species_name, "\n")
+    cat("Seed:", seed, "\n\n")
+    
+    # Run gamma model
+    cat("Running GAMMA abundance model...\n")
+    gamma_result <- validate_hurdle_simple(species_name, train_percent = train_percent, 
+                                           seed = seed, presence_threshold = presence_threshold,
+                                           auto_plot = FALSE, use_beta = FALSE)
+    
+    # Run beta model  
+    cat("\nRunning BETA abundance model...\n")
+    beta_result <- validate_hurdle_simple(species_name, train_percent = train_percent,
+                                          seed = seed, presence_threshold = presence_threshold, 
+                                          auto_plot = FALSE, use_beta = TRUE)
+    
+    # Comparison summary
+    cat("\n=== COMPARISON SUMMARY ===\n")
+    comparison_df <- data.frame(
+      Model = c("Gamma", "Beta"),
+      Overall_R2 = c(round(gamma_result$overall_r2, 3), round(beta_result$overall_r2, 3)),
+      Method_A_R2 = c(round(gamma_result$method_A_r2, 3), round(beta_result$method_A_r2, 3)),
+      Method_B_R2 = c(round(gamma_result$method_B_r2, 3), round(beta_result$method_B_r2, 3)),
+      Method_C_R2 = c(round(gamma_result$method_C_r2, 3), round(beta_result$method_C_r2, 3)),
+      Overall_MAE = c(round(gamma_result$overall_mae, 3), round(beta_result$overall_mae, 3)),
+      Method_A_MAE = c(round(gamma_result$method_A_mae, 3), round(beta_result$method_A_mae, 3)),
+      Presence_AUC = c(round(gamma_result$presence_auc, 3), round(beta_result$presence_auc, 3))
+    )
+    
+    print(comparison_df)
+    
+    # Highlight better performing model for each metric
+    cat("\n=== PERFORMANCE WINNERS ===\n")
+    cat("Overall R²:", ifelse(gamma_result$overall_r2 > beta_result$overall_r2, "Gamma", "Beta"), 
+        "(", round(max(gamma_result$overall_r2, beta_result$overall_r2), 3), ")\n")
+    cat("Method A R²:", ifelse(gamma_result$method_A_r2 > beta_result$method_A_r2, "Gamma", "Beta"),
+        "(", round(max(gamma_result$method_A_r2, beta_result$method_A_r2, na.rm = TRUE), 3), ")\n")
+    cat("Overall MAE:", ifelse(gamma_result$overall_mae < beta_result$overall_mae, "Gamma", "Beta"),
+        "(", round(min(gamma_result$overall_mae, beta_result$overall_mae), 3), ")\n")
+    
+    return(list(gamma = gamma_result, beta = beta_result, comparison = comparison_df))
+  }
+  
+  # USAGE EXAMPLES:
+  
+  # Basic usage with default gamma
+  # result_gamma <- validate_hurdle_simple("orbicella")
+  
+  # Test beta model
+  # result_beta <- validate_hurdle_simple("orbicella", use_beta = TRUE)
+  
+  # Compare both models directly
+  # comparison <- compare_beta_gamma("orbicella")
+  
+  # Custom parameters with beta
+  result <- validate_hurdle_simple("orbicella", train_percent = 80, presence_threshold = 0.45, use_beta = TRUE)
+  
+  # Test thresholds with beta model
+  # threshold_results_beta <- test_thresholds("orbicella", use_beta = TRUE)
   
   ################################## setup ##################################
   
@@ -121,17 +563,18 @@
   # Apply the stored CRS
   terra::crs(bathy_final) <- spatial_metadata$bathy_final$crs
   
-  #load derived bathy rasters, and oceanographic rasters
-  load_spat_objects(directory = 'output/output_calculate_bathy_rasters/')
-  load_spat_objects(directory = 'output/output_calculate_ocean_rasters/')
+  # #load derived bathy rasters, and oceanographic rasters
+  # load_spat_objects(directory = 'output/output_calculate_bathy_rasters/')
+  # load_spat_objects(directory = 'output/output_calculate_ocean_rasters/')
   
   #pull habitat grid
   source(here("src/functions.R"))
   load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
   
-  
-  
-  
+  #load GAM output
+  load(here('output', 'output_GAMs/output_GAMs_workspace.RData'))
+  source(here("src/functions.R"))
+  load_spat_objects(directory = 'output/output_GAMs/')
   
   # FIGURING THIS OUT
   

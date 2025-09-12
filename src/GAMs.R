@@ -43,7 +43,7 @@
   existing_objects <- ls(envir = .GlobalEnv)
   
   
-  ################################## STATIC DEFINITIONS ##################################
+  ################################## functions ##################################
   
   # Define variables that are consistent across all species
   complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
@@ -100,7 +100,7 @@
   
   
   ################################## SITE DATA SETUP ##################################
-
+  
   # Convert tibble to data.frame first
   species_df <- as.data.frame(combined_benthic_data_averaged_psu)
 
@@ -560,13 +560,13 @@
   #                                    family = binomial())
   # toc()
   
-  agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + VRM + s(aspect, bs = 'cc') +
-                                         s(TPI, k = 25) +
-                                         s(mean_SST, k = 20) + s(dir_at_max_hsig, bs = 'cc') +
-                                         s(max_BOV),
-                                       data = agaricia_model_data,
-                                     select = TRUE,
-                                       family = binomial())
+  # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + VRM + s(aspect, bs = 'cc') +
+  #                                        s(TPI, k = 25) +
+  #                                        s(mean_SST, k = 20) + s(dir_at_max_hsig, bs = 'cc') +
+  #                                        s(max_BOV),
+  #                                      data = agaricia_model_data,
+  #                                    select = TRUE,
+  #                                      family = binomial())
   
   # agaricia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
@@ -577,8 +577,9 @@
   #                               s(range_SST) +
   #                               s(dist_to_land),
   #                               data = agaricia_model_data[agaricia_model_data$cover > 0, ],
+  #                               select = TRUE,
   #                              family = Gamma(link = "log"))
-  
+  # 
   
   #dist to deep, meanSST, meanchla
   agaricia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 3) +
@@ -611,12 +612,12 @@
   auc(agaricia_roc_curve)
   plot(agaricia_roc_curve)
   
-  # Save models
-  saveRDS(agaricia_gam_presence_binom, 
-          here("output", "output_GAMs", "agaricia_gam_presence_binom.rds"))
-  
-  saveRDS(agaricia_gam_abundance_gamma, 
-          here("output", "output_GAMs", "agaricia_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(agaricia_gam_presence_binom, 
+  #         here("output", "output_GAMs", "agaricia_gam_presence_binom.rds"))
+  # 
+  # saveRDS(agaricia_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "agaricia_gam_abundance_gamma.rds"))
   
   ################################## MADRACIS ##################################
   
@@ -689,12 +690,12 @@
   auc(madracis_roc_curve)
   plot(madracis_roc_curve)
   
-  # Save models
-  saveRDS(madracis_gam_presence_binom, 
-          here("output", "output_GAMs", "madracis_gam_presence_binom.rds"))
-  
-  saveRDS(madracis_gam_abundance_gamma, 
-          here("output", "output_GAMs", "madracis_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(madracis_gam_presence_binom, 
+  #         here("output", "output_GAMs", "madracis_gam_presence_binom.rds"))
+  # 
+  # saveRDS(madracis_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "madracis_gam_abundance_gamma.rds"))
   
   ################################## PORITES ##################################
   
@@ -745,21 +746,50 @@
                                      select = TRUE,
                                      family = Gamma(link = "log"))
   
+  porites_model_data$cover_prop <- porites_model_data$cover / 100
+  
+  # porites_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = porites_model_data[porites_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  porites_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                      s(TPI) + s(VRM) + s(planform_curv) +
+                                      s(max_Hsig) + s(mean_Hsig) +
+                                      s(mean_SST) +
+                                      s(dist_to_deep) + s(max_BOV) +
+                                      s(dist_to_land) +
+                                      s(lat),
+                                    data = porites_model_data[porites_model_data$cover_prop > 0, ],
+                                    # select = TRUE,
+                                    family = betar())
+  
   summary(porites_gam_presence_binom)
   summary(porites_gam_abundance_gamma)
+  summary(porites_gam_abundance_beta)
   AIC(porites_gam_presence_binom)
   AIC(porites_gam_abundance_gamma)
+  AIC(porites_gam_abundance_beta)
   
   draw(porites_gam_presence_binom)
   draw(porites_gam_abundance_gamma)
+  draw(porites_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(porites_gam_presence_binom)
   gam.check(porites_gam_abundance_gamma)
+  gam.check(porites_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(porites_gam_presence_binom, full = TRUE)
   concurvity(porites_gam_abundance_gamma, full = TRUE)
+  concurvity(porites_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   porites_roc_curve <- roc(porites_gam_presence_binom$model$present, 
@@ -767,12 +797,12 @@
   auc(porites_roc_curve)
   plot(porites_roc_curve)
   
-  # Save models
-  saveRDS(porites_gam_presence_binom, 
-          here("output", "output_GAMs", "porites_gam_presence_binom.rds"))
-  
-  saveRDS(porites_gam_abundance_gamma, 
-          here("output", "output_GAMs", "porites_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(porites_gam_presence_binom, 
+  #         here("output", "output_GAMs", "porites_gam_presence_binom.rds"))
+  # 
+  # saveRDS(porites_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "porites_gam_abundance_gamma.rds"))
   
   ################################## SIDERASTREA ##################################
   
@@ -846,12 +876,12 @@
   auc(siderastrea_roc_curve)
   plot(siderastrea_roc_curve)
   
-  # Save models
-  saveRDS(siderastrea_gam_presence_binom, 
-          here("output", "output_GAMs", "siderastrea_gam_presence_binom.rds"))
-  
-  saveRDS(siderastrea_gam_abundance_gamma, 
-          here("output", "output_GAMs", "siderastrea_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(siderastrea_gam_presence_binom, 
+  #         here("output", "output_GAMs", "siderastrea_gam_presence_binom.rds"))
+  # 
+  # saveRDS(siderastrea_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "siderastrea_gam_abundance_gamma.rds"))
   
   ################################## MONTASTRAEA ##################################
   
@@ -907,21 +937,50 @@
                                          select = TRUE,
                                          family = Gamma(link = "log"))
   
+  montastraea_model_data$cover_prop <- montastraea_model_data$cover / 100
+  
+  # montastraea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = montastraea_model_data[montastraea_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  montastraea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                          s(slope) +
+                                          s(TPI) +
+                                          s(max_Hsig) + s(mean_Hsig) +
+                                          s(mean_kd490) +
+                                          s(dist_to_deep) + s(max_BOV),
+                                        data = montastraea_model_data[montastraea_model_data$cover_prop > 0, ],
+                                        # select = TRUE,
+                                        family = betar())
+  
+  
   summary(montastraea_gam_presence_binom)
   summary(montastraea_gam_abundance_gamma)
+  summary(montastraea_gam_abundance_beta)
   AIC(montastraea_gam_presence_binom)
   AIC(montastraea_gam_abundance_gamma)
+  AIC(montastraea_gam_abundance_beta)
   
   draw(montastraea_gam_presence_binom)
   draw(montastraea_gam_abundance_gamma)
+  draw(montastraea_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(montastraea_gam_presence_binom)
   gam.check(montastraea_gam_abundance_gamma)
+  gam.check(montastraea_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(montastraea_gam_presence_binom, full = TRUE)
   concurvity(montastraea_gam_abundance_gamma, full = TRUE)
+  concurvity(montastraea_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   montastraea_roc_curve <- roc(montastraea_gam_presence_binom$model$present, 
@@ -929,12 +988,12 @@
   auc(montastraea_roc_curve)
   plot(montastraea_roc_curve, main = "ROC Curve for Madracis Presence Model")
   
-  # Save models
-  saveRDS(montastraea_gam_presence_binom, 
-          here("output", "output_GAMs", "montastraea_gam_presence_binom.rds"))
-  
-  saveRDS(montastraea_gam_abundance_gamma, 
-          here("output", "output_GAMs", "montastraea_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(montastraea_gam_presence_binom, 
+  #         here("output", "output_GAMs", "montastraea_gam_presence_binom.rds"))
+  # 
+  # saveRDS(montastraea_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "montastraea_gam_abundance_gamma.rds"))
   
   ################################## ORBICELLA ##################################
   
@@ -986,21 +1045,62 @@
                                        select = TRUE,
                                        family = Gamma(link = "log"))
   
+  
+  orbicella_model_data$cover_prop <- orbicella_model_data$cover / 100
+  
+  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                              data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                              select = TRUE,
+  #                              family = quasibinomial(link = "logit"))
+  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) +
+                                        s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+                                        s(max_Hsig) + s(mean_Hsig) +
+                                        s(mean_SST) +
+                                        s(dist_to_deep) + s(max_BOV) +
+                                        s(range_SST) +
+                                        s(dist_to_land),
+                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+                                      select = TRUE,
+                                      family = quasibinomial(link = "logit"))
+  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) +
+                                        s(mean_Hsig) +
+                                        s(mean_SST) + s(range_PAR) +
+                                        s(dist_to_deep) +
+                                        s(dist_to_land),
+                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+                                      select = TRUE,
+                                      family = quasibinomial(link = "logit"))
+                                      # family = betar())
+  
   summary(orbicella_gam_presence_binom)
   summary(orbicella_gam_abundance_gamma)
+  summary(orbicella_gam_abundance_beta)
   AIC(orbicella_gam_presence_binom)
   AIC(orbicella_gam_abundance_gamma)
+  AIC(orbicella_gam_abundance_beta)
   
   draw(orbicella_gam_presence_binom)
   draw(orbicella_gam_abundance_gamma)
+  draw(orbicella_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(orbicella_gam_presence_binom)
   gam.check(orbicella_gam_abundance_gamma)
+  gam.check(orbicella_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(orbicella_gam_presence_binom, full = TRUE)
   concurvity(orbicella_gam_abundance_gamma, full = TRUE)
+  concurvity(orbicella_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   orbicella_roc_curve <- roc(orbicella_gam_presence_binom$model$present, 
@@ -1008,12 +1108,12 @@
   auc(orbicella_roc_curve)
   plot(orbicella_roc_curve)
   
-  # Save models
-  saveRDS(orbicella_gam_presence_binom, 
-          here("output", "output_GAMs", "orbicella_gam_presence_binom.rds"))
-  
-  saveRDS(orbicella_gam_abundance_gamma, 
-          here("output", "output_GAMs", "orbicella_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(orbicella_gam_presence_binom, 
+  #         here("output", "output_GAMs", "orbicella_gam_presence_binom.rds"))
+  # 
+  # saveRDS(orbicella_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "orbicella_gam_abundance_gamma.rds"))
   
   # ############################## SOLENASTREA ##################################
   # 
@@ -1192,12 +1292,12 @@
   auc(colpophyllia_roc_curve)
   plot(colpophyllia_roc_curve)
   
-  # Save models
-  saveRDS(colpophyllia_gam_presence_binom, 
-          here("output", "output_GAMs", "colpophyllia_gam_presence_binom.rds"))
-  
-  saveRDS(colpophyllia_gam_abundance_gamma, 
-          here("output", "output_GAMs", "colpophyllia_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(colpophyllia_gam_presence_binom, 
+  #         here("output", "output_GAMs", "colpophyllia_gam_presence_binom.rds"))
+  # 
+  # saveRDS(colpophyllia_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "colpophyllia_gam_abundance_gamma.rds"))
   
   # ################################## DENDROGYRA ##################################
   # 
@@ -1381,12 +1481,12 @@
   auc(dichocoenia_roc_curve)
   plot(dichocoenia_roc_curve)
   
-  # Save models
-  saveRDS(dichocoenia_gam_presence_binom, 
-          here("output", "output_GAMs", "dichocoenia_gam_presence_binom.rds"))
-  
-  saveRDS(dichocoenia_gam_abundance_gamma, 
-          here("output", "output_GAMs", "dichocoenia_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(dichocoenia_gam_presence_binom, 
+  #         here("output", "output_GAMs", "dichocoenia_gam_presence_binom.rds"))
+  # 
+  # saveRDS(dichocoenia_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "dichocoenia_gam_abundance_gamma.rds"))
   
   ################################## DIPLORIA ##################################
   
@@ -1466,12 +1566,12 @@
   auc(diploria_roc_curve)
   plot(diploria_roc_curve)
   
-  # Save models
-  saveRDS(diploria_gam_presence_binom, 
-          here("output", "output_GAMs", "diploria_gam_presence_binom.rds"))
-  
-  saveRDS(diploria_gam_abundance_gamma, 
-          here("output", "output_GAMs", "diploria_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(diploria_gam_presence_binom, 
+  #         here("output", "output_GAMs", "diploria_gam_presence_binom.rds"))
+  # 
+  # saveRDS(diploria_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "diploria_gam_abundance_gamma.rds"))
   
   
   # ################################## EUSMILIA ##################################
@@ -1885,21 +1985,49 @@
                                             select = TRUE,
                                             family = Gamma(link = "log"))
   
+  pseudodiploria_model_data$cover_prop <- pseudodiploria_model_data$cover / 100
+  
+  # pseudodiploria_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = pseudodiploria_model_data[pseudodiploria_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  pseudodiploria_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                             s(slope) +
+                                             s(max_Hsig) + s(mean_Hsig) +
+                                             s(mean_SST) + s(range_PAR) +
+                                             s(dist_to_deep) + s(max_BOV) +
+                                             s(range_SST),
+                                           data = pseudodiploria_model_data[pseudodiploria_model_data$cover_prop > 0, ],
+                                           # select = TRUE,
+                                           family = betar())
+  
   summary(pseudodiploria_gam_presence_binom)
   summary(pseudodiploria_gam_abundance_gamma)
+  summary(pseudodiploria_gam_abundance_beta)
   AIC(pseudodiploria_gam_presence_binom)
   AIC(pseudodiploria_gam_abundance_gamma)
+  AIC(pseudodiploria_gam_abundance_beta)
   
   draw(pseudodiploria_gam_presence_binom)
   draw(pseudodiploria_gam_abundance_gamma)
+  draw(pseudodiploria_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(pseudodiploria_gam_presence_binom)
   gam.check(pseudodiploria_gam_abundance_gamma)
+  gam.check(pseudodiploria_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(pseudodiploria_gam_presence_binom, full = TRUE)
   concurvity(pseudodiploria_gam_abundance_gamma, full = TRUE)
+  concurvity(pseudodiploria_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   pseudodiploria_roc_curve <- roc(pseudodiploria_gam_presence_binom$model$present, 
@@ -1907,12 +2035,12 @@
   auc(pseudodiploria_roc_curve)
   plot(pseudodiploria_roc_curve)
   
-  # Save models
-  saveRDS(pseudodiploria_gam_presence_binom, 
-          here("output", "output_GAMs", "pseudodiploria_gam_presence_binom.rds"))
-  
-  saveRDS(pseudodiploria_gam_abundance_gamma, 
-          here("output", "output_GAMs", "pseudodiploria_gam_abundance_gamma.rds"))
+  # # Save models
+  # saveRDS(pseudodiploria_gam_presence_binom, 
+  #         here("output", "output_GAMs", "pseudodiploria_gam_presence_binom.rds"))
+  # 
+  # saveRDS(pseudodiploria_gam_abundance_gamma, 
+  #         here("output", "output_GAMs", "pseudodiploria_gam_abundance_gamma.rds"))
   
   
   
@@ -1937,253 +2065,277 @@
   #   - also will go back upstream to group the rare HS corals....but can wait on that for now
   
   
-  ################################## test prediction of Orbicella ##################################
-  
-  # Manually specify required variables (using raster layer names)
-  presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
-  abundance_vars <- c("depth", "range_SST", "mean_chla")
-  required_vars <- unique(c(presence_vars, abundance_vars))
-  
-  # Subset raster stack to only required variables
-  env_subset <- env_complex[[required_vars]]
-  
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-  
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)  # For reproducible sampling
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-  
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-  
-  # Test predictions on sample
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-  
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-  
-  # Create hurdle predictions
-  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
-  
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-  
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-  
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-  
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-  
-  # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.5, 1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle("Orbicella Presence Probability")
-  
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-  
-  ################################## test prediction of Agaricia ##################################
-  
-  # Manually specify required variables for agaricia models
-  presence_vars <- c("depth", "VRM", "aspect", "TPI", "mean_SST", "dir_at_max_hsig", "max_BOV")
-  abundance_vars <- c("depth", "complexity", "dir_at_max_hsig", "mean_chla")
-  required_vars <- unique(c(presence_vars, abundance_vars))
-  
-  # Subset raster stack to only required variables
-  env_subset <- env_complex[[required_vars]]
-  
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-  
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-  
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-  
-  # Test predictions on sample - using AGARICIA models
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(agaricia_gam_presence_binom, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-  
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(agaricia_gam_abundance_gamma, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-  
-  # Create hurdle predictions
-  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
-  
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-  
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-  
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-  
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-  
-  # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle("Agaricia Presence Probability")
-  
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for agaricia range
-    # scale_color_viridis_c(name = "Predicted\nCover") +  # Adjusted for agaricia range
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Agaricia Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-  
-  
-  
-  ################################## test prediction of Pseudodiploria ##################################
-  
-  # Manually specify required variables for pseudodiploria models
-  presence_vars <- c("depth", "slope", "VRM", "mean_Hsig", "mean_chla")
-  abundance_vars <- c("depth", "VRM", "mean_Hsig", "mean_SST")
-  required_vars <- unique(c(presence_vars, abundance_vars))
-  
-  # Subset raster stack to only required variables
-  env_subset <- env_complex[[required_vars]]
-  
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-  
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-  
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-  
-  # Test predictions on sample - using PSEUDODIPLORIA models
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(pseudodiploria_gam_presence_binom, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-  
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(pseudodiploria_gam_abundance_gamma, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-  
-  # Create hurdle predictions
-  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
-  
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-  
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-  
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-  
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-  
-  # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
-  # Plot presence probability only
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle("Pseudodiploria Presence Probability")
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for pseudodiploria range
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Pseudodiploria Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-  
-  
-  
+  # ################################## test prediction of Orbicella ##################################
+  # 
+  # # Manually specify required variables (using raster layer names)
+  # presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
+  # abundance_vars <- c("depth", "range_SST", "mean_chla")
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)  # For reproducible sampling
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions
+  # hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # library(ggplot2)
+  # library(viridis)
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle("Orbicella Presence Probability")
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # ################################## test prediction of Agaricia ##################################
+  # 
+  # # Manually specify required variables for agaricia models
+  # presence_vars <- c("depth", "VRM", "aspect", "TPI", "mean_SST", "dir_at_max_hsig", "max_BOV")
+  # abundance_vars <- c("depth", "complexity", "dir_at_max_hsig", "mean_chla")
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample - using AGARICIA models
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(agaricia_gam_presence_binom, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(agaricia_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions
+  # hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # library(ggplot2)
+  # library(viridis)
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle("Agaricia Presence Probability")
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for agaricia range
+  #   # scale_color_viridis_c(name = "Predicted\nCover") +  # Adjusted for agaricia range
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Agaricia Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # 
+  # 
+  # ################################## test prediction of Pseudodiploria ##################################
+  # 
+  # # Manually specify required variables for pseudodiploria models
+  # presence_vars <- c("depth", "slope", "VRM", "mean_Hsig", "mean_chla")
+  # abundance_vars <- c("depth", "VRM", "mean_Hsig", "mean_SST")
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample - using PSEUDODIPLORIA models
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(pseudodiploria_gam_presence_binom, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(pseudodiploria_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions
+  # hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # library(ggplot2)
+  # library(viridis)
+  # # Plot presence probability only
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.02, 1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle("Pseudodiploria Presence Probability")
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 5)) +  # Adjusted for pseudodiploria range
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Pseudodiploria Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 10)) +  # Adjusted for pseudodiploria range
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Pseudodiploria Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # 
+  # 
   ################################## Save objects/workspace ##################################
   
-  # #updated way to handle saving of new objects
-  # save_new_objects("output/output_GAMs", existing_objects)
+  # # Get all objects matching the patterns
+  # all_objects <- ls(envir = .GlobalEnv)
+  # patterns <- c("_gam_presence_binom$", "_gam_abundance_gamma$", "_model_data$")
+  # matching_objects <- grep(paste(patterns, collapse = "|"), all_objects, value = TRUE)
+  # 
+  # # Save each object
+  # for (obj_name in matching_objects) {
+  #   saveRDS(get(obj_name), here("output", "output_GAMs", paste0(obj_name, ".rds")))
+  # }
+  
+  
+  #updated way to handle saving of new objects
+  save_new_objects("output/output_GAMs", existing_objects)
   
