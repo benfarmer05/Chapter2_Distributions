@@ -325,6 +325,7 @@
     shared_min <- min(c(actual_values, predicted_values), na.rm = TRUE)
     shared_max <- max(c(actual_values, predicted_values), na.rm = TRUE)
     
+    
     # SPATIAL MAPS (Top two rows)
     # Plot 1: Actual cover values
     p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "cover")) +
@@ -528,6 +529,8 @@
         "(", round(max(gamma_result$method_A_r2, beta_result$method_A_r2, na.rm = TRUE), 3), ")\n")
     cat("Overall MAE:", ifelse(gamma_result$overall_mae < beta_result$overall_mae, "Gamma", "Beta"),
         "(", round(min(gamma_result$overall_mae, beta_result$overall_mae), 3), ")\n")
+    
+    
     
     return(list(gamma = gamma_result, beta = beta_result, comparison = comparison_df))
   }
