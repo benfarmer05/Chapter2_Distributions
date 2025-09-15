@@ -1043,7 +1043,7 @@
   #                             # select = TRUE,
   #                             family = binomial())
   # toc()
-  # weighted version; whittled down with observed/estimate concurvity (seems BEST)
+  # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(planform_curv) + s(SAPA) +
                                         s(dir_at_max_hsig, bs = 'cc') +
@@ -1054,6 +1054,16 @@
                                       weights = weights_vec,
                                       select = TRUE,
                                       family = binomial())
+  # # weighted version; WITH lon/lat, whittled down with observed/estimate concurvity
+  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(planform_curv) + s(SAPA) +
+  #                                       s(dir_at_max_hsig, bs = 'cc') +
+  #                                       s(range_PAR) + s(mean_kd490) +
+  #                                       s(range_SST) + s(lon, lat),
+  #                                     data = orbicella_model_data,
+  #                                     weights = weights_vec,
+  #                                     # select = TRUE,
+  #                                     family = binomial())
   # # non-weighted version; whittled down with worst concurvity
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy, k = 15) + s(complexity) +
   #                                       s(range_SST, k = 15) + s(dir_at_max_hsig, k = 12, bs = 'cc') +
@@ -1095,6 +1105,8 @@
   table(observed_fitted, gam_pred_binary)
   
   
+  orbicella_model_data$cover_prop <- orbicella_model_data$cover / 100
+  
   # orbicella_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
@@ -1105,26 +1117,28 @@
   #                               s(dist_to_land),
   #                              data = orbicella_model_data[orbicella_model_data$cover > 0, ],
   #                              family = Gamma(link = "log"))
-  orbicella_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) +
-                                         s(range_SST, k = 12) +
-                                         s(mean_chla),
-                                       data = orbicella_model_data[orbicella_model_data$cover > 0, ],
-                                       select = TRUE,
-                                       family = Gamma(link = "log"))
-  orbicella_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(slope) +
-                                        s(complexity) + s(planform_curv) +
-                                        s(mean_Hsig) +
-                                        s(mean_SST) + s(range_PAR) + s(mean_kd490) +
-                                        s(range_SST) +
-                                        s(dist_to_land) + s(lat) + s(lon), # + s(lat, lon)
-                                       data = orbicella_model_data[orbicella_model_data$cover > 0, ],
+  # # gamma with log link; whittled down with worst concurvity
+  # orbicella_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) +
+  #                                        s(range_SST, k = 12) +
+  #                                        s(mean_chla),
+  #                                      data = orbicella_model_data[orbicella_model_data$cover > 0, ],
+  #                                      select = TRUE,
+  #                                      family = Gamma(link = "log"))
+  # gamma with log link; whittled down with observed/estimate concurvity (not done)
+  orbicella_gam_abundance_gamma <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                         s(VRM) +
+                                         s(mean_Hsig) +
+                                         s(mean_SST) +
+                                         s(dist_to_deep) + s(max_BOV) +
+                                         s(range_SST) +
+                                         s(dist_to_land),
+                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
                                        # select = TRUE,
-                                      family = Gamma(link = "inverse"))
-  #lots of options for Gamma - inverse seems pretty good ??
-  # family = scat() ??
+                                       family = Gamma(link = "log"))
+  # #lots of options for Gamma - inverse seems pretty good ??
+  # # family = scat() ??
   
-
+  
 
   pred <- predict(orbicella_gam_abundance_gamma, type = "response")
   obs <- orbicella_gam_abundance_gamma$model$cover
@@ -1137,62 +1151,60 @@
   
   
   
-  orbicella_model_data$cover_prop <- orbicella_model_data$cover / 100
   
-  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                s(slope) +
-                                s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-                                s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-                                s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
-                                s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-                                s(range_SST) +
-                                s(dist_to_land),
-                               data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                               # select = TRUE,
-                               family = betar())
-  #version using only observed/estimate concurvity
+  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                              data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                              # select = TRUE,
+  #                              family = betar())
+  # beta with cloglog using observed/estimate concurvity
   orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(slope) +
                                         s(complexity) + s(planform_curv) +
                                         s(mean_Hsig) +
                                         s(mean_SST) + s(range_PAR) + s(mean_kd490) +
                                         s(range_SST) +
-                                        s(dist_to_land) + s(lon, lat),
+                                        s(dist_to_land), #s(lon, lat)
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                      # select = TRUE,
+                                      select = TRUE,
                                       family = betar(link = "cloglog"))
-  
-  #logit transform
-  orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 
-                                         s(depth_bathy) + s(aspect, bs = 'cc') +
-                                         s(slope) +
-                                         s(complexity) + s(planform_curv) +
-                                         s(mean_Hsig) +
-                                         s(mean_SST) + s(range_PAR) + s(mean_kd490) +
-                                         s(range_SST) +
-                                         s(dist_to_land),
-                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                       family = gaussian())
-  #one-inflated beta
-  library(gamlss)
-  orbicella_gam_abundance_beta <- gamlss(cover_prop ~ pb(depth_bathy) + pb(aspect) +
-                                           pb(slope) + pb(complexity) + pb(planform_curv) +
-                                           pb(mean_Hsig) + pb(mean_SST) + pb(range_PAR) + 
-                                           pb(mean_kd490) + pb(range_SST) + pb(dist_to_land),
-                                         data = na.omit(orbicella_model_data[orbicella_model_data$cover_prop > 0, 
-                                                                             c("cover_prop", "depth_bathy", "aspect", "slope", 
-                                                                               "complexity", "planform_curv", "mean_Hsig", "mean_SST", 
-                                                                               "range_PAR", "mean_kd490", "range_SST", "dist_to_land", 
-                                                                               "lon", "lat")]),
-                                         family = BEINF1())  
-  #zero-one-inflated beta
-  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(slope) + s(complexity) + s(planform_curv) +
-                                        s(mean_Hsig) + s(mean_SST) + s(range_PAR) + 
-                                        s(mean_kd490) + s(range_SST) + s(dist_to_land) + 
-                                        s(lon, lat),
-                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                      family = zoinb())
+  # #logit transform
+  # orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 
+  #                                        s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                        s(slope) +
+  #                                        s(complexity) + s(planform_curv) +
+  #                                        s(mean_Hsig) +
+  #                                        s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                                        s(range_SST) +
+  #                                        s(dist_to_land),
+  #                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                                      family = gaussian())
+  # #one-inflated beta
+  # library(gamlss)
+  # orbicella_gam_abundance_beta <- gamlss(cover_prop ~ pb(depth_bathy) + pb(aspect) +
+  #                                          pb(slope) + pb(complexity) + pb(planform_curv) +
+  #                                          pb(mean_Hsig) + pb(mean_SST) + pb(range_PAR) + 
+  #                                          pb(mean_kd490) + pb(range_SST) + pb(dist_to_land),
+  #                                        data = na.omit(orbicella_model_data[orbicella_model_data$cover_prop > 0, 
+  #                                                                            c("cover_prop", "depth_bathy", "aspect", "slope", 
+  #                                                                              "complexity", "planform_curv", "mean_Hsig", "mean_SST", 
+  #                                                                              "range_PAR", "mean_kd490", "range_SST", "dist_to_land", 
+  #                                                                              "lon", "lat")]),
+  #                                        family = BEINF1())  
+  # #zero-one-inflated beta
+  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(slope) + s(complexity) + s(planform_curv) +
+  #                                       s(mean_Hsig) + s(mean_SST) + s(range_PAR) + 
+  #                                       s(mean_kd490) + s(range_SST) + s(dist_to_land) + 
+  #                                       s(lon, lat),
+  #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                                     family = zoinb())
   
   # STOPPING POINT - 13 sep 2025
   #   - P/A models actually seem okay right now....now to figure out what's going on with the
@@ -1206,30 +1218,30 @@
   r <- cor(obs, pred)
   text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
   
-  #for logit version:
-  # Predictions (back-transform from logit scale)
-  pred_logit <- predict(orbicella_gam_abundance_beta, type = "response")
-  pred <- plogis(pred_logit) * (1 + 0.002) - 0.001
-  #
-  # Observed values (back-transform from logit scale)
-  obs_logit <- orbicella_gam_abundance_beta$model$`I(qlogis((cover_prop + 0.001)/(1 + 0.002)))`
-  obs <- plogis(obs_logit) * (1 + 0.002) - 0.001
-  #
-  lim <- c(0, max(c(obs, pred)))
-  plot(obs, pred, xlim = lim, ylim = lim)
-  abline(0, 1, col = "red")
-  r <- cor(obs, pred)
-  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
-  
-  
-  #for BEINF1 version:
-  pred <- predict(orbicella_gam_abundance_beta, type = "response")
-  obs <- orbicella_gam_abundance_beta$y
-  lim <- c(0, max(c(obs, pred)))
-  plot(obs, pred, xlim = lim, ylim = lim)
-  abline(0, 1, col = "red")
-  r <- cor(obs, pred)
-  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  # #for logit version:
+  # # Predictions (back-transform from logit scale)
+  # pred_logit <- predict(orbicella_gam_abundance_beta, type = "response")
+  # pred <- plogis(pred_logit) * (1 + 0.002) - 0.001
+  # #
+  # # Observed values (back-transform from logit scale)
+  # obs_logit <- orbicella_gam_abundance_beta$model$`I(qlogis((cover_prop + 0.001)/(1 + 0.002)))`
+  # obs <- plogis(obs_logit) * (1 + 0.002) - 0.001
+  # #
+  # lim <- c(0, max(c(obs, pred)))
+  # plot(obs, pred, xlim = lim, ylim = lim)
+  # abline(0, 1, col = "red")
+  # r <- cor(obs, pred)
+  # text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  # 
+  # 
+  # #for BEINF1 version:
+  # pred <- predict(orbicella_gam_abundance_beta, type = "response")
+  # obs <- orbicella_gam_abundance_beta$y
+  # lim <- c(0, max(c(obs, pred)))
+  # plot(obs, pred, xlim = lim, ylim = lim)
+  # abline(0, 1, col = "red")
+  # r <- cor(obs, pred)
+  # text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
   
   
   
@@ -1246,8 +1258,8 @@
   draw(orbicella_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
-  gam.check(orbicella_gam_presence_binom)
-  gam.check(orbicella_gam_abundance_gamma)
+  par(mfrow=c(2,2)); gam.check(orbicella_gam_presence_binom); par(mfrow=c(1,1))
+  par(mfrow=c(2,2)); gam.check(orbicella_gam_abundance_gamma); par(mfrow=c(1,1))
   gam.check(orbicella_gam_abundance_beta)
   
   # Look at concurvity
@@ -2372,93 +2384,93 @@
   #   - also will go back upstream to group the rare HS corals....but can wait on that for now
   
   
-  ################################## test prediction of Orbicella ##################################
-
-  # Manually specify required variables (using raster layer names)
-  presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
-  abundance_vars <- c("depth", "range_SST", "mean_chla")
-  required_vars <- unique(c(presence_vars, abundance_vars))
-
-  # Subset raster stack to only required variables
-  env_subset <- env_complex[[required_vars]]
-
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)  # For reproducible sampling
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-
-  # Test predictions on sample
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-
-  # Create hurdle predictions
-  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
-
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-
-  # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle("Orbicella Presence Probability")
-
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-
-  ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-
+  # ################################## test prediction of Orbicella ##################################
+  # 
+  # # Manually specify required variables (using raster layer names)
+  # presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
+  # abundance_vars <- c("depth", "range_SST", "mean_chla")
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)  # For reproducible sampling
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions
+  # hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # library(ggplot2)
+  # library(viridis)
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle("Orbicella Presence Probability")
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
   # ################################## test prediction of Agaricia ##################################
   # 
   # # Manually specify required variables for agaricia models
@@ -2631,28 +2643,31 @@
   # 
   # 
   
-  ################################## test orbicellaHARD hurdle ##################################
-  ################################## test prediction of Orbicella ##################################
+  ################################## hard hurdle test & map ##################################
+  
+  # Species toggle - change this to switch between species
+  species <- "orbicella"
+  
+  # Dynamically construct model variable names based on species
+  presence_model_name <- paste0(species, "_gam_presence_binom")
+  abundance_model_name <- paste0(species, "_gam_abundance_beta")
+  # abundance_model_name <- paste0(species, "_gam_abundance_gamma")
+  
+  # Get the actual model objects (assuming they exist in your environment)
+  presence_model <- get(presence_model_name)
+  abundance_model <- get(abundance_model_name)
   
   # Manually specify required variables (using raster layer names)
-  presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
-  abundance_vars <- c("depth", "range_SST", "mean_chla") #for gamma
-  # abundance_vars <- c("depth", "slope", "mean_SST", "range_PAR",
-  #                     "dist_to_deep", "dist_to_land") #for beta
+  presence_vars <- all.vars(formula(presence_model))[-1]
+  abundance_vars <- all.vars(formula(abundance_model))[-1]
   required_vars <- unique(c(presence_vars, abundance_vars))
   
   # Subset raster stack to only required variables
+  required_vars <- gsub("^depth_bathy$", "depth", required_vars)
   env_subset <- env_complex[[required_vars]]
   
   # Convert subset raster to dataframe
   env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  
-  
-  
-  
-  
-  
-  
   
   # Rename depth column to match model expectation
   names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
@@ -2663,23 +2678,24 @@
   sample_indices <- sample(nrow(env_df), sample_size)
   env_df_sample <- env_df[sample_indices, ]
   
+  cat("Species:", species, "\n")
   cat("Full dataset size:", nrow(env_df), "cells\n")
   cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
   
   # Test predictions on sample
   cat("Testing presence prediction...\n")
   start_time <- Sys.time()
-  presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
+  presence_prob_sample <- predict(presence_model, newdata = env_df_sample, type = "response")
   presence_time <- difftime(Sys.time(), start_time, units = "secs")
   cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
   
   # Convert presence probability to binary (hard hurdle)
-  presence_threshold <- 0.45
+  presence_threshold <- 0.5 # 0.45
   presence_binary_sample <- ifelse(presence_prob_sample > presence_threshold, 1, 0)
   
   cat("Testing abundance prediction...\n")
   start_time <- Sys.time()
-  abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  abundance_pred_sample <- predict(abundance_model, newdata = env_df_sample, type = "response")
   abundance_time <- difftime(Sys.time(), start_time, units = "secs")
   cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
   
@@ -2710,29 +2726,106 @@
   cat("\n")
   
   # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
   ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
     geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+    scale_color_viridis_c(name = "Presence\nProbability") +
     coord_equal() +
     theme_minimal() +
-    ggtitle("Orbicella Presence Probability")
+    ggtitle(paste(stringr::str_to_title(species), "Presence Probability"))
   
   ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
     geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
     coord_equal() +
     theme_minimal() +
-    ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+    ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
+  
+  hist(env_df_sample$hurdle_pred[env_df_sample$hurdle_pred > 0 & env_df_sample$hurdle_pred < 1])
   
   ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
     geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.25)) +
     coord_equal() +
     theme_minimal() +
-    ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+    ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))  
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # Run full model predictions - THIS TAKES A LOT OF TIME / COMPUTING RESOURCES. 15-20+ MINUTES
+  cat("\nRunning full model predictions...\n")
+  start_time <- Sys.time()
+  
+  # Full presence prediction
+  presence_threshold = 0.5
+  presence_prob_full <- predict(presence_model, newdata = env_df, type = "response")
+  presence_binary_full <- ifelse(presence_prob_full > presence_threshold, 1, 0)
+  
+  # Full abundance prediction
+  abundance_pred_full <- predict(abundance_model, newdata = env_df, type = "response")
+  
+  # Full hurdle prediction
+  hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full, 0)
+  
+  full_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Full prediction time:", round(full_time, 1), "seconds\n")
+  
+  # Add predictions to full dataframe
+  env_df$hurdle_pred <- hurdle_pred_full
+  
+  # # Plot full results
+  # ggplot(env_df, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.1) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Full Hurdle Model Prediction -", stringr::str_to_title(species)))
+  
+  
+  
+  # Convert predictions back to raster using the original env_df coordinates
+  hurdle_raster <- rast(env_df[, c("x", "y", "hurdle_pred")], type="xyz")
+  shallow_mask <- bathy_final > -60
+  hurdle_raster <- resample(hurdle_raster, bathy_final)
+  hurdle_raster <- mask(hurdle_raster, shallow_mask, maskvalues = FALSE)
+  
+  # Plot with terra
+  hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 0.1, values = TRUE)
+  # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 1.0, values = TRUE)
+  plot(hurdle_raster_clamped, main = paste("Full Hurdle Model -", stringr::str_to_title(species)), 
+       colNA = "gray90")  
+  
+  
+  
+  
+  # Create leaflet map with hurdle predictions
+  pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
+  
+  leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
+    addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
+              title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
+    addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
+                     options = layersControlOptions(collapsed = FALSE))
+  
+  
+  
+  
+  
+
   ################################## Save objects/workspace ##################################
   
   # # Get all objects matching the patterns
