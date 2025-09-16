@@ -311,7 +311,7 @@
   # plot(TPI_terra,
   plot(TPI_terra_clamp,
        col = cmocean("balance")(100),
-       ext = plot_extents,
+       # ext = plot_extents,
        main = "TPI terra - Terra Raster with cmocean balance")
 
   # # BPI multiscale
@@ -341,7 +341,7 @@
   # plot(planformcurv_multiscale,
   plot(planformcurv_multiscale_clamp,
        col = cmocean("balance")(100),
-       ext = plot_extents,
+       # ext = plot_extents,
        main = "Planform Curvature multiscale - Terra Raster with cmocean balance")
 
   # Profile curvature multiscale

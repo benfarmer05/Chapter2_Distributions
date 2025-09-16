@@ -547,7 +547,7 @@
   # comparison <- compare_beta_gamma("orbicella")
   
   # Custom parameters with beta
-  result <- validate_hurdle_simple("orbicella", train_percent = 80, presence_threshold = 0.4, use_beta = TRUE)
+  result <- validate_hurdle_simple("agaricia", train_percent = 80, presence_threshold = 0.5, use_beta = TRUE) # 0.38
   
   # Test thresholds with beta model
   # threshold_results_beta <- test_thresholds("orbicella", use_beta = TRUE)
