@@ -22,7 +22,7 @@
   
   # COMPLETE BETA vs GAMMA HURDLE VALIDATION FUNCTION - Copy and paste this entire block
   
-  validate_hurdle_simple <- function(species_name, train_percent = 80, seed = 123, presence_threshold = 0.5, 
+  validate_hurdle_simple <- function(species_name, train_percent = 80, seed = 300, presence_threshold = 0.5, 
                                      auto_plot = TRUE, use_beta = FALSE) {
     
     library(mgcv)
@@ -456,7 +456,7 @@
   }
   
   # Test function to compare thresholds (updated to include beta parameter)
-  test_thresholds <- function(species_name, thresholds = c(0.3, 0.4, 0.5, 0.6, 0.7), seed = 123, use_beta = FALSE) {
+  test_thresholds <- function(species_name, thresholds = c(0.3, 0.4, 0.5, 0.6, 0.7), seed = 300, use_beta = FALSE) {
     results <- list()
     
     cat("Testing presence thresholds for", species_name, "with", ifelse(use_beta, "Beta", "Gamma"), "abundance model:\n")
@@ -488,7 +488,7 @@
   }
   
   # Compare Beta vs Gamma function
-  compare_beta_gamma <- function(species_name, train_percent = 80, seed = 123, presence_threshold = 0.5) {
+  compare_beta_gamma <- function(species_name, train_percent = 80, seed = 300, presence_threshold = 0.5) {
     
     cat("=== COMPARING BETA vs GAMMA ABUNDANCE MODELS ===\n")
     cat("Species:", species_name, "\n")
@@ -547,7 +547,7 @@
   # comparison <- compare_beta_gamma("orbicella")
   
   # Custom parameters with beta
-  result <- validate_hurdle_simple("agaricia", train_percent = 80, presence_threshold = 0.5, use_beta = TRUE) # 0.38
+  result <- validate_hurdle_simple("orbicella", train_percent = 80, presence_threshold = 0.5, use_beta = TRUE) # 0.38
   
   # Test thresholds with beta model
   # threshold_results_beta <- test_thresholds("orbicella", use_beta = TRUE)

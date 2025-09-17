@@ -636,7 +636,7 @@
                                        s(slope) +
                                        s(TPI) + s(VRM) + s(planform_curv) +
                                        s(dir_at_max_hsig, bs = 'cc') +
-                                       s(mean_SST) + s(range_PAR) + s(mean_chla),
+                                       s(mean_SST) + s(range_PAR) + s(mean_chla, bs = 'ps'),
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
@@ -1304,7 +1304,7 @@
   #                              data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                              # select = TRUE,
   #                              family = betar())
-  # beta with cloglog using observed/estimate concurvity
+  # beta with cloglog using observed/estimate concurvity, no spatial smooth
   orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(slope) +
                                         s(complexity) + s(planform_curv) +
@@ -1313,8 +1313,17 @@
                                         s(range_SST) +
                                         s(dist_to_land), #s(lon, lat)
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                      select = TRUE,
+                                      # select = TRUE,
                                       family = betar(link = "cloglog"))
+  # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables
+  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) +
+                                        s(complexity) + s(planform_curv) +
+                                        s(lon, lat, k = 75), #s(lon, lat)
+                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+                                      # select = TRUE,
+                                      family = betar(link = "cloglog"))
+  
   # #logit transform
   # orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 
   #                                        s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -1352,12 +1361,16 @@
   #       abundance models. there is a systematic underprediction; may need to transform the response
   #       data, try cloglog link, look at lat/lon as predictors
   pred <- predict(orbicella_gam_abundance_beta, type = "response")
-  obs <- orbicella_gam_abundance_beta$model$cover
+  obs <- orbicella_gam_abundance_beta$model$cover_prop  # Changed from 'cover' to 'cover_prop'
   lim <- c(0, max(c(obs, pred)))
   plot(obs, pred, xlim = lim, ylim = lim)
   abline(0, 1, col = "red")
+  bestfitline_model = lm(pred ~ obs)
+  lines(obs, predict(bestfitline_model))  # Also fixed 'bestfitline' to 'bestfitline_model'
   r <- cor(obs, pred)
-  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), 
+                                           ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))  
+  
   
   # #for logit version:
   # # Predictions (back-transform from logit scale)
@@ -1401,7 +1414,7 @@
   # Check if any smooths are hitting k limits
   par(mfrow=c(2,2)); gam.check(orbicella_gam_presence_binom); par(mfrow=c(1,1))
   par(mfrow=c(2,2)); gam.check(orbicella_gam_abundance_gamma); par(mfrow=c(1,1))
-  gam.check(orbicella_gam_abundance_beta)
+  par(mfrow=c(2,2)); gam.check(orbicella_gam_abundance_beta); par(mfrow=c(1,1))
   
   # Look at concurvity
   concurvity(orbicella_gam_presence_binom, full = TRUE)
@@ -1414,12 +1427,163 @@
   auc(orbicella_roc_curve)
   plot(orbicella_roc_curve)
   
+  
+  #plot residual map
+  pred <- predict(orbicella_gam_abundance_beta, type = "response")
+  obs <- orbicella_gam_abundance_beta$model$cover_prop
+  residuals <- obs - pred
+  plot(orbicella_gam_abundance_beta$model$lon, orbicella_gam_abundance_beta$model$lat, 
+       cex = abs(residuals)*5, 
+       col = ifelse(residuals > 0, "red", "blue"),
+       xlab = "Longitude", ylab = "Latitude")
+  legend("topright", legend = c("Underprediction", "Overprediction"), 
+         col = c("red", "blue"), pch = 1)  
+  
   # # Save models
   # saveRDS(orbicella_gam_presence_binom, 
   #         here("output", "output_GAMs", "orbicella_gam_presence_binom.rds"))
   # 
   # saveRDS(orbicella_gam_abundance_gamma, 
   #         here("output", "output_GAMs", "orbicella_gam_abundance_gamma.rds"))
+  
+  
+  
+  
+  
+  # # draft to test out ad-hoc adjustment of predictions
+  # # Your current code
+  # pred <- predict(orbicella_gam_abundance_beta, type = "response")
+  # obs <- orbicella_gam_abundance_beta$model$cover
+  # bestfitline_model <- lm(pred ~ obs)
+  # 
+  # # Find flexion point (where best-fit line crosses 1:1 line)
+  # a <- coef(bestfitline_model)[1]  # intercept
+  # b <- coef(bestfitline_model)[2]  # slope
+  # x0 <- a / (1 - b)  # flexion point
+  # 
+  # # User-chosen parameters
+  # L <- 2   # asymptote (2%)
+  # k <- 1000      # steepness
+  # 
+  # # Apply logistic transformation
+  # correction_factor <- L / (1 + exp(-k * (obs - x0)))
+  # pred_corrected <- pred * correction_factor
+  # 
+  # # Calculate R-squared
+  # r_squared_original <- cor(obs, pred)^2
+  # r_squared_corrected <- cor(obs, pred_corrected)^2
+  # 
+  # # Plot both together
+  # lim <- c(0, max(c(obs, pred, pred_corrected)))
+  # plot(obs, pred, xlim = lim, ylim = lim, col = "lightgray", pch = 16, 
+  #      main = "Original vs Corrected Predictions")
+  # points(obs, pred_corrected, col = "darkblue", pch = 16, cex = 0.8)
+  # abline(0, 1, col = "red", lwd = 2)
+  # 
+  # # Add legend
+  # legend("bottomright", legend = c("Original", "Corrected"), 
+  #        col = c("lightgray", "darkblue"), pch = 16)
+  # 
+  # # Add R-squared to plot
+  # text(x = lim[2] * 0.05, y = lim[2] * 0.95, 
+  #      labels = paste("R² (original) =", round(r_squared_original, 3)), 
+  #      adj = 0, cex = 0.9, col = "gray")
+  # text(x = lim[2] * 0.05, y = lim[2] * 0.88, 
+  #      labels = paste("R² (corrected) =", round(r_squared_corrected, 3)), 
+  #      adj = 0, cex = 0.9, col = "darkblue")
+  # 
+  # cat("Flexion point (x0):", x0, "\n")
+  # cat("Original slope:", b, "\n")
+  # cat("Final slope:", coef(lm(pred_corrected ~ obs))[2], "\n")
+  
+  
+  
+  
+  
+  
+  # #possible other models to zero in on better tails in the predictions
+  # # 1. Negative Binomial (convert proportions to counts first)
+  # orbicella_model_data$cover_count <- round(orbicella_model_data$cover_prop * 100)
+  # orbicella_gam_negbin <- gam(cover_count ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) + s(complexity) + s(planform_curv) +
+  #                               s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                               s(range_SST) + s(dist_to_land),
+  #                             data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                             select = TRUE, family = nb())
+  # pred <- predict(orbicella_gam_negbin, type = "response") / 100
+  # obs <- orbicella_gam_negbin$model$cover_count / 100
+  # summary(orbicella_gam_negbin)
+  # 
+  # # 2. Quantile Regression
+  # library(qgam)
+  # orbicella_qgam_50 <- qgam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                             s(slope) + s(complexity) + s(planform_curv) +
+  #                             s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                             s(range_SST) + s(dist_to_land) + s(lon, lat, k = 75),
+  #                           qu = 0.6, data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ])
+  # pred <- predict(orbicella_qgam_50, type = "response")
+  # obs <- orbicella_qgam_50$model$cover_prop
+  # summary(orbicella_qgam_50)
+  # concurvity(orbicella_qgam_50)
+  # 
+  # # 3. Yeo-Johnson Transformation
+  # library(car)
+  # lambda <- powerTransform(cover_prop ~ 1, data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ])
+  # orbicella_model_data$cover_yj <- yjPower(orbicella_model_data$cover_prop, lambda$lambda)
+  # orbicella_gam_yj <- gam(cover_yj ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                           s(slope) + s(complexity) + s(planform_curv) +
+  #                           s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                           s(range_SST) + s(dist_to_land),
+  #                         data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                         select = TRUE, family = gaussian())
+  # pred_yj <- predict(orbicella_gam_yj, type = "response")
+  # pred <- yjPower(pred_yj, 1/lambda$lambda)
+  # obs <- orbicella_gam_yj$model$cover_yj
+  # obs <- yjPower(obs, 1/lambda$lambda)
+  # summary(orbicella_gam_yj)
+  # 
+  # # 4. Truncated (fit to middle 80% of data)
+  # middle_data <- orbicella_model_data[orbicella_model_data$cover_prop > 0.02 & orbicella_model_data$cover_prop < 0.8, ]
+  # orbicella_gam_trunc <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                              s(slope) + s(complexity) + s(planform_curv) +
+  #                              s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                              s(range_SST) + s(dist_to_land),
+  #                            data = middle_data, select = TRUE, family = betar(link = "cloglog"))
+  # pred <- predict(orbicella_gam_trunc, type = "response")
+  # obs <- orbicella_gam_trunc$model$cover_prop
+  # summary(orbicella_gam_trunc)
+  # 
+  # # 5. Random Forest
+  # library(randomForest)
+  # complete_data <- orbicella_model_data[orbicella_model_data$cover_prop > 0, ]
+  # complete_data <- complete_data[complete.cases(complete_data[c("cover_prop", "depth_bathy", "aspect", "slope", "complexity", 
+  #                                                               "planform_curv", "mean_Hsig", "mean_SST", "range_PAR", 
+  #                                                               "mean_kd490", "range_SST", "dist_to_land")]), ]
+  # 
+  # orbicella_rf <- randomForest(cover_prop ~ depth_bathy + aspect + slope + complexity + 
+  #                                planform_curv + mean_Hsig + mean_SST + range_PAR + 
+  #                                mean_kd490 + range_SST + dist_to_land + lon + lat,
+  #                              data = complete_data,
+  #                              na.action = na.omit)
+  # 
+  # pred <- predict(orbicella_rf)
+  # obs <- complete_data$cover_prop
+  # 
+  # 
+  # # Plot (same for all)
+  # lim <- c(0, max(c(obs, pred)))
+  # plot(obs, pred, xlim = lim, ylim = lim)
+  # abline(0, 1, col = "red")
+  # bestfitline_model = lm(pred ~ obs)
+  # lines(obs, predict(bestfitline_model))
+  # r <- cor(obs, pred)
+  # text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  
+  
+  
+  
+  
+  
   
   # ############################## SOLENASTREA ##################################
   # 
@@ -2863,10 +3027,14 @@
   
   ################################## hard hurdle test & map ##################################
   
+  # STOPPING POINT - 17 sep 2025
+  #   - need to add lon and lat as spatrasters to env_complex to be able to make any
+  #       predictions using them. still not convinced they'll work anyways...
+  
   # Species toggle - change this to switch between species
   # species <- "orbicella" #0.5
   # species <- "pseudodiploria" #0.45
-  species <- "agaricia" #0.38
+  species <- "orbicella" #0.38
   # species <- "montastraea" #0.25
   # species <- "colpophyllia" #0.1
   # species <- "porites" #0.54
@@ -2958,7 +3126,7 @@
   
   ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
     geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.03)) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
     coord_equal() +
     theme_minimal() +
     ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
@@ -2967,7 +3135,7 @@
   
   ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
     geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.03)) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
     coord_equal() +
     theme_minimal() +
     ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))  
@@ -3052,7 +3220,7 @@
   
   
   #draft code to pull up another leaflet with spp-specific cover
-  species <- "agaricia" #0.1
+  species <- "orbicella" #0.1
   
   # Get unique PSU locations with coral cover data for the selected species
   spp_leaflet_cover_data <- combined_benthic_data_averaged %>%
