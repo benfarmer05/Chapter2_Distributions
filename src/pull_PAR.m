@@ -3,6 +3,8 @@
 % Downloads NASA MODIS Aqua Photosynthetically Available Radiation data
 % Monthly composite global data via NOAA CoastWatch ERDDAP
 %   Based on MUR SST script structure
+%
+% https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMH1par0mday.graph?par%5B(2010-12-16T00:00:00Z)%5D%5B(18.8125):(18.1875)%5D%5B(-66.02083):(-64.02083)%5D&.draw=surface&.vars=longitude%7Clatitude%7Cpar&.colorBar=%7C%7C%7C%7C%7C&.bgColor=0xffccccff
 
 clear;clc
 
