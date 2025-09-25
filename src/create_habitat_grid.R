@@ -34,12 +34,12 @@
   
   # NOTE - 4 JULY 2025
   #   - return to this if we want to limit depth range for computational reasons (at least for CMS version)
-  seamask <- app(bathy_final, fun = function(x) {
-    ifelse(x < 0, 0, 1)
-  })
   # seamask <- app(bathy_final, fun = function(x) {
-  #   ifelse(x < 0 & x > -50, 0, 1)
+  #   ifelse(x < 0, 0, 1)
   # })
+  seamask <- app(bathy_final, fun = function(x) {
+    ifelse(x < 0 & x > -60, 0, 1)
+  })
   
   seamask <- crop(seamask, hydro_extent)
   seamask <- mask(seamask, hydro_extent)
@@ -59,7 +59,6 @@
   # plot_extents = ext(120000, 220000, 2020000, 2060000) #for investigating northern PR
   
   plot(seamask, 
-       main="Merge #2",
        # ext = plot_extents, #e_crm,
        legend=TRUE)
   
@@ -76,10 +75,11 @@
   # plot_extents = ext(240000, 280000, 2000000, 2040000) #for investigating Mona Island
   
   # Plot the bathymetry first
-  plot(bathy_final,  #bathy_merged3_crm_reefdepth
+  bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = 0)
+  plot(bathy_final_clamp,  #bathy_merged3_crm_reefdepth
        main="Bathymetry with Sea Mask and Hydrological Extent", 
        col=bathy_colors,
-       ext = plot_extents, #e_crm,
+       # ext = plot_extents, #e_crm,
        legend=TRUE)
   
   ################################## Create habitat grid ##################################
@@ -130,9 +130,9 @@
   
   # Now clip the grid to only include the reefy depths present in seamask
   # First, identify reefy depths in the seamask (assuming these are specific values)
-  # For example, if reefy depths are between -50 and 0 meters:
+  # For example, if reefy depths are between -60 and 0 meters:
   reefy_mask <- seamask
-  reefy_mask[!(seamask >= -50 & seamask <= 0)] <- NA  # Adjust these values as needed
+  reefy_mask[!(seamask >= -60 & seamask <= 0)] <- NA  # Adjust these values as needed
   
   #eliminate artifacts introduced in the far north (if needed)
   y_threshold <- 2090000  # Adjust this value as needed
@@ -216,10 +216,10 @@
   
   # plot_extents <- list(xmin = 280000, xmax = 310000, ymin = 2000000, ymax = 2040000)  # south of STT
   # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
-  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
+  plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
   # plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
   # plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
-  plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
   # plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
   # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
   
@@ -256,6 +256,7 @@
   grid_reefy_no_land_sf <- st_as_sf(grid_reefy_no_land)
   
   ggplot() +
+    geom_sf(data = reefy_poly_sf, fill = "purple", color = NA, alpha = 0.8) +
     geom_sf(data = landmask_sf, fill = "lightblue", color = NA, alpha = 0.8) +
     geom_sf(data = grid_reefy_no_land_sf, fill = "lightgreen", color = "red", size = 0.1, alpha = 0.1) +
     # geom_sf(data = polys_apr2025_operational_sf, alpha = 0.2, fill = rgb(1, 0.5, 0, 0.5), color = "darkred", size = 0.4) +
@@ -267,6 +268,8 @@
     ) +
     # coord_sf(xlim = x_limits, ylim = y_limits, expand = FALSE) +   # zoom in here!
     theme_minimal() +
+    coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax),
+             ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     theme(
       legend.position = "none",
       panel.grid = element_blank()
@@ -377,8 +380,7 @@
     farthest_from_land(grid_touching[i], landmask)
   }) |> do.call(what = rbind)
   
-  # # Add IDs back
-  # centroids_touching$grid_reefy_no_land <- grid_touching$grid_reefy_no_land
+  # # Add IDs back ?
   
   # Step 5: For non-touching polygons, use regular centroid
   centroids_nontouching <- centroids(grid_notouching)
@@ -393,9 +395,9 @@
   # plot_extents <- list(xmin = 280000, xmax = 310000, ymin = 2000000, ymax = 2040000)  # south of STT
   # plot_extents <- list(xmin = 270000, xmax = 290000, ymin = 2000000, ymax = 2040000)  # MCD
   # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 2000000, ymax = 2050000)  # STJ
-  plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
+  # plot_extents <- list(xmin = 220000, xmax = 260000, ymin = 2000000, ymax = 2010000)  # Vieques
   # plot_extents <- list(xmin = 341000, xmax = 379000, ymin = 2057000, ymax = 2078000)  # Anegada
-  # plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
+  plot_extents <- list(xmin = 300000, xmax = 340000, ymin = 1940000, ymax = 1980000)  # St Croix
   # plot_extents <- list(xmin = 280000, xmax = 320000, ymin = 2000000, ymax = 2040000)  # St Thomas
   # plot_extents <- list(xmin = 240000, xmax = 280000, ymin = 2000000, ymax = 2040000)  # Mona Island
   
@@ -407,7 +409,7 @@
     theme_minimal() +
     coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
              ylim = c(plot_extents$ymin, plot_extents$ymax)) +
-    labs(title = "Repositioned Centroids Away from Land")
+    labs(title = "Repositioned points")
   
   ggplot() +
     geom_sf(data = landmask_sf, fill = "tan", color = NA, alpha = 0.5) +
@@ -417,7 +419,7 @@
     theme_minimal() +
     coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), 
              ylim = c(plot_extents$ymin, plot_extents$ymax)) +
-    labs(title = "Repositioned Centroids Away from Land")
+    labs(title = "Original point locations")
   
   #visualize repositioning with arrows if desired
   # First, create a dataframe with both original and new positions
@@ -462,6 +464,57 @@
              ylim = c(plot_extents$ymin, plot_extents$ymax)) +
     theme_minimal()
   
+  
+  ################################## output new 650_m csv for MATLAB / CMS ##################################
+  
+  # Transform centroids to geographic coordinates
+  centroids_all_geographic <- project(centroids_all, geographic_crs)
+  centroids_ordered <- centroids_all_geographic[match(grid_reefy_no_land$unique_ID, centroids_all_geographic$unique_ID), ]
+  
+  # Visual check setup
+  use_random_seed <- TRUE
+  if (use_random_seed) set.seed(as.numeric(Sys.time())) else set.seed(123)
+  
+  test_ids <- sample(grid_reefy_no_land$unique_ID, 100)
+  test_grid <- project(grid_reefy_no_land[grid_reefy_no_land$unique_ID %in% test_ids, ], geographic_crs)
+  test_centroids <- centroids_ordered[match(test_ids, centroids_ordered$unique_ID), ]
+  
+  # Plot extents toggle
+  plot_extents <- list(xmin = -65.3, xmax = -64.9, ymin = 18.3, ymax = 18.4)  # south of STT
+  # plot_extents <- list(xmin = -65.1, xmax = -64.8, ymin = 18.3, ymax = 18.4)  # MCD
+  # plot_extents <- list(xmin = -64.8, xmax = -64.3, ymin = 18.3, ymax = 18.5)  # STJ
+  # plot_extents <- list(xmin = -65.4, xmax = -65.0, ymin = 18.1, ymax = 18.2)  # Vieques
+  # plot_extents <- list(xmin = -64.5, xmax = -64.2, ymin = 18.7, ymax = 18.8)  # Anegada
+  # plot_extents <- list(xmin = -64.9, xmax = -64.5, ymin = 17.7, ymax = 17.9)  # St Croix
+  # plot_extents <- list(xmin = -65.1, xmax = -64.8, ymin = 18.3, ymax = 18.4)  # St Thomas
+  # plot_extents <- list(xmin = -65.3, xmax = -65.0, ymin = 18.3, ymax = 18.4)  # Mona Island
+  # plot_extents <- NULL  # Use full extent
+  
+  # Create plot
+  p <- ggplot() +
+    geom_sf(data = st_as_sf(project(grid_reefy_no_land, geographic_crs)), fill = NA, color = "lightgray", size = 0.1, alpha = 0.8) +
+    geom_sf(data = st_as_sf(centroids_ordered), color = "pink", size = 0.1, alpha = 0.8) +
+    geom_sf(data = st_as_sf(test_grid), fill = NA, color = "blue", size = 1) +
+    geom_sf(data = st_as_sf(test_centroids), color = "red", size = 2) +
+    geom_sf_text(data = st_as_sf(test_grid), aes(label = unique_ID), size = 3, color = "blue", fontface = "bold") +
+    geom_sf_text(data = st_as_sf(test_centroids), aes(label = unique_ID), size = 3, color = "red", fontface = "bold", nudge_y = 0.01) +
+    theme_minimal() +
+    labs(title = "Visual check: Do red points (with IDs) fall within their blue polygons (with IDs)?")
+  
+  # if (!is.null(plot_extents)) p <- p + coord_sf(xlim = c(plot_extents$xmin, plot_extents$xmax), ylim = c(plot_extents$ymin, plot_extents$ymax))
+  print(p)
+  
+  # Create CSV
+  coords_matrix <- geom(centroids_ordered)[, c("x", "y")]
+  repositioned_data <- data.frame(
+    unique_ID = grid_reefy_no_land$unique_ID,
+    x = coords_matrix[, 1],
+    y = coords_matrix[, 2]
+  )
+  
+  write.csv(repositioned_data, here("output", "points_650_none-on-land.csv"), row.names = FALSE)
+  cat("Created CSV with", nrow(repositioned_data), "points\n")
+  head(repositioned_data)
   
   ################################## Save objects/workspace ##################################
   

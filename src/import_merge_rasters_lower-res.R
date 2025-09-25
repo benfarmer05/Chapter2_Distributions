@@ -10,8 +10,8 @@
   #         could cause issues with macports installation of other things for QGIS but we'll see
   
   # #must run this after updating spatial packages in homebrew, for spatial packages to link properly
-  # install.packages("terra", type = "source") 
-  # install.packages("sf", type = "source") 
+  # install.packages("terra", type = "source")
+  # install.packages("sf", type = "source")
   
   # # this was temporarily needed after updating M1 Macbook to Sequoia OS. not currently needed
   # Sys.setenv(PROJ_LIB = "/opt/homebrew/share/proj")
