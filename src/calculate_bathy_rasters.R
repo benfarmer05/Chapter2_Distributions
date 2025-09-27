@@ -265,6 +265,13 @@
   # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
   # plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
   
+  # bathy
+  bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = 60)
+  plot(bathy_final_clamp,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "bathy - Terra Raster with cmocean deep")
+  
   # Slope
   plot(slope_terra,
        col = cmocean("deep")(100),
@@ -277,6 +284,14 @@
        ext = plot_extents,
        main = "Slope of Slope - Terra Raster with cmocean deep")
 
+  # SAPA
+  SAPA_clamp <- clamp(SAPA, lower = 1, upper = 1.01)
+  plot(SAPA_clamp,
+  # plot(SAPA,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "SAPA - Terra Raster with cmocean deep")
+  
   # Roughness
   plot(roughness,
        col = cmocean("deep")(100),
@@ -311,7 +326,7 @@
   # plot(TPI_terra,
   plot(TPI_terra_clamp,
        col = cmocean("balance")(100),
-       # ext = plot_extents,
+       ext = plot_extents,
        main = "TPI terra - Terra Raster with cmocean balance")
 
   # # BPI multiscale
@@ -341,7 +356,7 @@
   # plot(planformcurv_multiscale,
   plot(planformcurv_multiscale_clamp,
        col = cmocean("balance")(100),
-       # ext = plot_extents,
+       ext = plot_extents,
        main = "Planform Curvature multiscale - Terra Raster with cmocean balance")
 
   # Profile curvature multiscale

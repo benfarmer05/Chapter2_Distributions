@@ -49,7 +49,7 @@
   # Define variables that are consistent across all species
   complexity_vars <- c("depth", "aspect", "slope", "TPI", "planform_curv", 
                        "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
-                       "range_SST", "year", "date", "lat", "lon", "cover", "range_PAR",
+                       "range_SST", "year", "date", "lat", "lon", "cover", "mean_PAR",
                        "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
                        "dist_to_deep", "max_BOV")
   
@@ -76,7 +76,7 @@
     species_data$mean_Hsig <- env_data$mean_Hsig
     species_data$mean_SST <- env_data$mean_SST
     species_data$range_SST <- env_data$range_SST
-    species_data$range_PAR <- env_data$range_PAR
+    species_data$mean_PAR <- env_data$mean_PAR
     species_data$mean_chla <- env_data$mean_chla
     species_data$mean_kd490 <- env_data$mean_kd490
     species_data$mean_spm <- env_data$mean_spm
@@ -92,7 +92,7 @@
   create_correlation_matrix <- function(model_data_complex) {
     complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "planform_curv",
                                                 "range_SST", "mean_SST", "dir_at_max_hsig", "max_Hsig",
-                                                "mean_Hsig", "year", "range_PAR", "mean_chla", "mean_kd490",
+                                                "mean_Hsig", "year", "mean_PAR", "mean_chla", "mean_kd490",
                                                 "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV")]
     
     cor_matrix <- cor(complexity_matrix, use = "complete.obs")
@@ -126,13 +126,13 @@
   
   env_complex <- c(bathy_final, aspect_terra, slope_terra, slopeofslope_terra, TPI_terra, VRM,
                    planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
-                   mean_hsig_raster, mean_sst_raster, range_sst_raster, range_par_raster,
+                   mean_hsig_raster, mean_sst_raster, range_sst_raster, mean_par_raster,
                    mean_chlor_a_raster, mean_kd490_raster, mean_spm_raster, dist_to_land_raster,
                    distance_to_deep_raster, bov_full)
   
   names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                           "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
-                          "range_SST", "range_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
+                          "range_SST", "mean_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
                           "dist_to_deep", "max_BOV")
 
   # Extract environmental values for simple variables
@@ -393,7 +393,7 @@
   # site_model_data_filtered$mean_Hsig <- site_species_env_complex$mean_Hsig
   # site_model_data_filtered$mean_SST <- site_species_env_complex$mean_SST
   # site_model_data_filtered$range_SST <- site_species_env_complex$range_SST
-  # site_model_data_filtered$range_PAR <- site_species_env_complex$range_PAR
+  # site_model_data_filtered$mean_PAR <- site_species_env_complex$mean_PAR
   # site_model_data_filtered$mean_chla <- site_species_env_complex$mean_chla
   # site_model_data_filtered$mean_kd490 <- site_species_env_complex$mean_kd490
   # site_model_data_filtered$mean_spm <- site_species_env_complex$mean_spm
@@ -411,7 +411,7 @@
   # # Fit expanded GAM models
   # site_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   #                           s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  #                           mean_Hsig + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  #                           mean_Hsig + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   #                           s(dist_to_deep) + s(max_BOV),
   #                         data = site_model_data_complex,
   #                         family = tw())
@@ -447,7 +447,7 @@
   # site_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                     s(TPI) +
   #                                     s(mean_SST, k = 12) + s(dir_at_max_hsig, bs = 'cc') +
-  #                                     s(range_PAR, k = 12) + s(dist_to_land) +
+  #                                     s(mean_PAR, k = 12) + s(dist_to_land) +
   #                                     s(dist_to_deep) + s(max_BOV),
   #                                   data = site_model_data_complex[site_model_data_complex$cover > 0, ],
   #                                   family = Gamma(link = "log"))
@@ -521,7 +521,7 @@
   # # Fit expanded GAM models
   # agaricia_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   #                               s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  #                               s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  #                               s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   #                               s(dist_to_deep) + s(max_BOV),
   #                             data = agaricia_model_data_complex, family = tw())
   # 
@@ -547,7 +547,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -572,16 +572,26 @@
   #                                      data = agaricia_model_data,
   #                                    select = TRUE,
   #                                      family = binomial())
-  # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
-  # NOTE - dropped SAPA, TPI, spm, and kd490 b/c of extremes in partial effect curves
-  #           - also dropped distance to land and deep, because of weird predictions
+  # # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
+  # # NOTE - dropped SAPA, TPI, spm, and kd490 b/c of extremes in partial effect curves
+  # #           - also dropped distance to land and deep, because of weird predictions
+  # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                      s(complexity) + s(planform_curv) + s(slope) +
+  #                                      s(dir_at_max_hsig, bs = 'cc') + s(max_BOV) +
+  #                                      s(mean_SST) + s(mean_PAR) + s(mean_chla) +
+  #                                      s(range_SST),
+  #                                    data = agaricia_model_data,
+  #                                    weights = weights_vec,
+  #                                    # select = TRUE,
+  #                                    family = binomial())
+  # non-weighted version; whittled down with worst observed/estimate concurvity (not done yet)
   agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                       s(complexity) + s(planform_curv) + s(slope) +
-                                       s(dir_at_max_hsig, bs = 'cc') + s(max_BOV) +
-                                       s(mean_SST) + s(range_PAR) + s(mean_chla) +
-                                       s(range_SST),
+                                       s(complexity) + s(planform_curv) +
+                                       s(dir_at_max_hsig, bs = 'cc') +
+                                       s(mean_SST) + s(mean_PAR) +
+                                       s(max_BOV) +
+                                       s(lon, lat),
                                      data = agaricia_model_data,
-                                     weights = weights_vec,
                                      # select = TRUE,
                                      family = binomial())
   
@@ -602,7 +612,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -624,7 +634,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -636,7 +646,7 @@
                                        s(slope) +
                                        s(TPI) + s(VRM) + s(planform_curv) +
                                        s(dir_at_max_hsig, bs = 'cc') +
-                                       s(mean_SST) + s(range_PAR) + s(mean_chla, bs = 'ps'),
+                                       s(mean_SST) + s(mean_PAR) + s(mean_chla, bs = 'ps'),
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
@@ -698,7 +708,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -718,7 +728,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -782,7 +792,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -823,7 +833,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -842,7 +852,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -917,7 +927,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -938,7 +948,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1005,7 +1015,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1016,7 +1026,7 @@
   # # non-weighted version; whittled down with worst concurvity
   # montastraea_gam_presence_binom <- gam(present ~ s(depth_bathy) +
   #                               s(mean_SST) +
-  #                               s(range_PAR) + s(mean_kd490, k = 12) +
+  #                               s(mean_PAR) + s(mean_kd490, k = 12) +
   #                                 s(dist_to_deep, k = 20),
   #                             data = montastraea_model_data,
   #                             select = TRUE,
@@ -1027,7 +1037,7 @@
                                           s(slope) +
                                           s(complexity) + s(planform_curv) +
                                           s(dir_at_max_hsig, bs = 'cc') +
-                                          s(mean_SST) + s(range_PAR) + s(mean_chla) +
+                                          s(mean_SST) + s(mean_PAR) + s(mean_chla) +
                                           s(max_BOV) +
                                           s(range_SST) +
                                           s(dist_to_land),
@@ -1052,7 +1062,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1074,7 +1084,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1175,7 +1185,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1188,7 +1198,7 @@
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(planform_curv) + s(SAPA) +
                                         s(dir_at_max_hsig, bs = 'cc') +
-                                        s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+                                        s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
                                         s(range_SST) +
                                         s(dist_to_land),
                                       data = orbicella_model_data,
@@ -1199,7 +1209,7 @@
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
   #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(range_PAR) + s(mean_kd490) +
+  #                                       s(mean_PAR) + s(mean_kd490) +
   #                                       s(range_SST) + s(lon, lat),
   #                                     data = orbicella_model_data,
   #                                     weights = weights_vec,
@@ -1217,7 +1227,7 @@
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
   #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                       s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                                       s(dist_to_deep) +
   #                                       s(range_SST) +
   #                                       s(dist_to_land),
@@ -1229,7 +1239,7 @@
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
   #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(mean_SST) + s(range_PAR) +
+  #                                       s(mean_SST) + s(mean_PAR) +
   #                                       s(range_SST) +
   #                                       s(dist_to_land),
   #                                     data = orbicella_model_data,
@@ -1252,7 +1262,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1297,7 +1307,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1309,7 +1319,7 @@
                                         s(slope) +
                                         s(complexity) + s(planform_curv) +
                                         s(mean_Hsig) +
-                                        s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+                                        s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
                                         s(range_SST) +
                                         s(dist_to_land), #s(lon, lat)
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
@@ -1330,7 +1340,7 @@
   #                                        s(slope) +
   #                                        s(complexity) + s(planform_curv) +
   #                                        s(mean_Hsig) +
-  #                                        s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                                        s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                                        s(range_SST) +
   #                                        s(dist_to_land),
   #                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
@@ -1339,18 +1349,18 @@
   # library(gamlss)
   # orbicella_gam_abundance_beta <- gamlss(cover_prop ~ pb(depth_bathy) + pb(aspect) +
   #                                          pb(slope) + pb(complexity) + pb(planform_curv) +
-  #                                          pb(mean_Hsig) + pb(mean_SST) + pb(range_PAR) + 
+  #                                          pb(mean_Hsig) + pb(mean_SST) + pb(mean_PAR) + 
   #                                          pb(mean_kd490) + pb(range_SST) + pb(dist_to_land),
   #                                        data = na.omit(orbicella_model_data[orbicella_model_data$cover_prop > 0, 
   #                                                                            c("cover_prop", "depth_bathy", "aspect", "slope", 
   #                                                                              "complexity", "planform_curv", "mean_Hsig", "mean_SST", 
-  #                                                                              "range_PAR", "mean_kd490", "range_SST", "dist_to_land", 
+  #                                                                              "mean_PAR", "mean_kd490", "range_SST", "dist_to_land", 
   #                                                                              "lon", "lat")]),
   #                                        family = BEINF1())  
   # #zero-one-inflated beta
   # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(slope) + s(complexity) + s(planform_curv) +
-  #                                       s(mean_Hsig) + s(mean_SST) + s(range_PAR) + 
+  #                                       s(mean_Hsig) + s(mean_SST) + s(mean_PAR) + 
   #                                       s(mean_kd490) + s(range_SST) + s(dist_to_land) + 
   #                                       s(lon, lat),
   #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
@@ -1506,7 +1516,7 @@
   # orbicella_model_data$cover_count <- round(orbicella_model_data$cover_prop * 100)
   # orbicella_gam_negbin <- gam(cover_count ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) + s(complexity) + s(planform_curv) +
-  #                               s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                               s(mean_Hsig) + s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                               s(range_SST) + s(dist_to_land),
   #                             data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                             select = TRUE, family = nb())
@@ -1518,7 +1528,7 @@
   # library(qgam)
   # orbicella_qgam_50 <- qgam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                             s(slope) + s(complexity) + s(planform_curv) +
-  #                             s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                             s(mean_Hsig) + s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                             s(range_SST) + s(dist_to_land) + s(lon, lat, k = 75),
   #                           qu = 0.6, data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ])
   # pred <- predict(orbicella_qgam_50, type = "response")
@@ -1532,7 +1542,7 @@
   # orbicella_model_data$cover_yj <- yjPower(orbicella_model_data$cover_prop, lambda$lambda)
   # orbicella_gam_yj <- gam(cover_yj ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                           s(slope) + s(complexity) + s(planform_curv) +
-  #                           s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                           s(mean_Hsig) + s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                           s(range_SST) + s(dist_to_land),
   #                         data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                         select = TRUE, family = gaussian())
@@ -1546,7 +1556,7 @@
   # middle_data <- orbicella_model_data[orbicella_model_data$cover_prop > 0.02 & orbicella_model_data$cover_prop < 0.8, ]
   # orbicella_gam_trunc <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                              s(slope) + s(complexity) + s(planform_curv) +
-  #                              s(mean_Hsig) + s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                              s(mean_Hsig) + s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                              s(range_SST) + s(dist_to_land),
   #                            data = middle_data, select = TRUE, family = betar(link = "cloglog"))
   # pred <- predict(orbicella_gam_trunc, type = "response")
@@ -1557,11 +1567,11 @@
   # library(randomForest)
   # complete_data <- orbicella_model_data[orbicella_model_data$cover_prop > 0, ]
   # complete_data <- complete_data[complete.cases(complete_data[c("cover_prop", "depth_bathy", "aspect", "slope", "complexity", 
-  #                                                               "planform_curv", "mean_Hsig", "mean_SST", "range_PAR", 
+  #                                                               "planform_curv", "mean_Hsig", "mean_SST", "mean_PAR", 
   #                                                               "mean_kd490", "range_SST", "dist_to_land")]), ]
   # 
   # orbicella_rf <- randomForest(cover_prop ~ depth_bathy + aspect + slope + complexity + 
-  #                                planform_curv + mean_Hsig + mean_SST + range_PAR + 
+  #                                planform_curv + mean_Hsig + mean_SST + mean_PAR + 
   #                                mean_kd490 + range_SST + dist_to_land + lon + lat,
   #                              data = complete_data,
   #                              na.action = na.omit)
@@ -1609,7 +1619,7 @@
   # # # Fit expanded GAM models
   # # solenastrea_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   # #                                   s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                   s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  # #                                   s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   # #                                   s(dist_to_deep) + s(max_BOV),
   # #                                 data = solenastrea_model_data, family = tw())
   # # 
@@ -1632,7 +1642,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -1653,7 +1663,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -1711,7 +1721,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1753,7 +1763,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1773,7 +1783,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1784,7 +1794,7 @@
   colpophyllia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                            s(TPI) +
                                            s(max_BOV) +
-                                           s(mean_SST) + s(range_SST) + s(range_PAR) +
+                                           s(mean_SST) + s(range_SST) + s(mean_PAR) +
                                            s(dist_to_land),
                                          data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
                                          # select = TRUE,
@@ -1859,7 +1869,7 @@
   # # # Fit expanded GAM models
   # # dendrogyra_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   # #                                 s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                 s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  # #                                 s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   # #                                 s(dist_to_deep) + s(max_BOV),
   # #                               data = dendrogyra_model_data, family = tw())
   # # 
@@ -1882,7 +1892,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -1902,7 +1912,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -1913,7 +1923,7 @@
   #                                         s(slope) +
   #                                         s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                                         s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                                         s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                         s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                                         s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                                         s(range_SST) +
   #                                         s(dist_to_land),
@@ -1956,7 +1966,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1975,7 +1985,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -1983,14 +1993,14 @@
   #                               select = TRUE,
   #                              family = Gamma(link = "log"))
   dichocoenia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 12) +
-                                           s(range_PAR) +
+                                           s(mean_PAR) +
                                            s(dist_to_deep),
                                          data = dichocoenia_model_data[dichocoenia_model_data$cover > 0, ],
                                          # select = TRUE,
                                          family = Gamma(link = "log"))
   # dichocoenia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) +
   #                                          s(planform_curv) +
-  #                                          s(range_PAR) + s(dist_to_land),
+  #                                          s(mean_PAR) + s(dist_to_land),
   #                                        data = dichocoenia_model_data[dichocoenia_model_data$cover > 0, ],
   #                                        select = TRUE,
   #                                        family = Gamma(link = "log"))
@@ -2035,7 +2045,7 @@
   # Two-part model with complexity
   #
   #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, range_PAR, mean_chla, mean_kd490, mean_spm,
+  #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
   #   dist_to_land, dist_to_deep, max_BOV, year
   diploria_model_data$present <- ifelse(diploria_model_data$cover > 0, 1, 0)
   
@@ -2044,7 +2054,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -2065,7 +2075,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -2134,7 +2144,7 @@
   # # # Fit expanded GAM models
   # # eusmilia_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   # #                                    s(dist_to_deep) + s(max_BOV),
   # #                                  data = eusmilia_model_data, family = tw())
   # # 
@@ -2152,7 +2162,7 @@
   # # Two-part model with complexity
   # #
   # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, range_PAR, mean_chla, mean_kd490, mean_spm,
+  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
   # #   dist_to_land, dist_to_deep, max_BOV, year
   # eusmilia_model_data$present <- ifelse(eusmilia_model_data$cover > 0, 1, 0)
   # 
@@ -2161,7 +2171,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2182,7 +2192,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2250,7 +2260,7 @@
   # # # Fit expanded GAM models
   # # meandrina_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   # #                                    s(dist_to_deep) + s(max_BOV),
   # #                                  data = meandrina_model_data, family = tw())
   # # 
@@ -2268,7 +2278,7 @@
   # # Two-part model with complexity
   # #
   # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, range_PAR, mean_chla, mean_kd490, mean_spm,
+  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
   # #   dist_to_land, dist_to_deep, max_BOV, year
   # meandrina_model_data$present <- ifelse(meandrina_model_data$cover > 0, 1, 0)
   # 
@@ -2277,7 +2287,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2290,7 +2300,7 @@
   # meandrina_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(VRM) +
   #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+  #                                       s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
   #                                       s(range_SST),
   #                                     data = meandrina_model_data,
   #                                     select = TRUE,
@@ -2300,7 +2310,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2310,7 +2320,7 @@
   # 
   # #meanSST, rangePAR, meanchla, diratmax, maxBOV, disttodeep?
   # meandrina_gam_abundance_gamma <- gam(cover ~ s(TPI) + s(dir_at_max_hsig, bs = 'cc') +
-  #                                        mean_chla + s(range_PAR),
+  #                                        mean_chla + s(mean_PAR),
   #                                      data = meandrina_model_data[meandrina_model_data$cover > 0, ],
   #                                      select = TRUE,
   #                                      family = Gamma(link = "log"))
@@ -2373,7 +2383,7 @@
   # # # Fit expanded GAM models
   # # mycetophyllia_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
   # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(range_PAR) + s(mean_chla) + s(dist_to_land) +
+  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
   # #                                    s(dist_to_deep) + s(max_BOV),
   # #                                  data = mycetophyllia_model_data, family = tw())
   # # 
@@ -2391,7 +2401,7 @@
   # # Two-part model with complexity
   # #
   # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, range_PAR, mean_chla, mean_kd490, mean_spm,
+  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
   # #   dist_to_land, dist_to_deep, max_BOV, year
   # mycetophyllia_model_data$present <- ifelse(mycetophyllia_model_data$cover > 0, 1, 0)
   # 
@@ -2400,7 +2410,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2419,7 +2429,7 @@
   # #                               s(slope) +
   # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   # #                               s(range_SST) +
   # #                               s(dist_to_land),
@@ -2475,7 +2485,7 @@
   # pseudodiploria_rf_presence <- randomForest(as.factor(present) ~ depth_bathy + aspect +
   #                                              slope + complexity + TPI + VRM + planform_curv + SAPA +
   #                                              max_Hsig + dir_at_max_hsig + mean_Hsig +
-  #                                              mean_SST + range_PAR + mean_chla + mean_kd490 +
+  #                                              mean_SST + mean_PAR + mean_chla + mean_kd490 +
   #                                              mean_spm + dist_to_deep + max_BOV +
   #                                              range_SST + dist_to_land,
   #                                            data = pseudodiploria_model_data,
@@ -2542,7 +2552,7 @@
   
   # NOTE - should consider removing SST for presence because of k issue
   #         - dropped max_Hsig, though seemingly important, because of high concurvity in abundance model
-  #         - and dropped range_PAR from abundance model, because of k issue
+  #         - and dropped mean_PAR from abundance model, because of k issue
   
   pseudodiploria_model_data = spp_data %>%
     filter(grepl("Pseudodiploria", spp))
@@ -2564,7 +2574,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -2587,7 +2597,7 @@
   # pseudodiploria_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                            s(complexity) + s(planform_curv) +
   #                                            s(dir_at_max_hsig, bs = 'cc') +
-  #                                            s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                            s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                                            s(max_BOV) +
   #                                            s(range_SST) +
   #                                            s(dist_to_land),
@@ -2603,7 +2613,7 @@
   # pseudodiploria_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                            s(planform_curv) + s(SAPA) +
   #                                            s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') +
-  #                                            s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                            s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                                            s(range_SST) +
   #                                            s(dist_to_land),
   #                                          data = pseudodiploria_model_data,
@@ -2617,7 +2627,7 @@
   pseudodiploria_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                              s(planform_curv) +
                                              s(dir_at_max_hsig, bs = 'cc') +
-                                             s(mean_SST) + s(range_PAR) + s(mean_chla) +
+                                             s(mean_SST) + s(mean_PAR) + s(mean_chla) +
                                              s(dist_to_deep) + s(max_BOV) +
                                              s(dist_to_land),
                                            data = pseudodiploria_model_data,
@@ -2640,7 +2650,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -2659,7 +2669,7 @@
   pseudodiploria_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                               s(VRM) + s(planform_curv) +
                                               s(mean_Hsig) +
-                                              s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+                                              s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
                                               s(dist_to_deep) +
                                               s(dist_to_land),
                                             data = pseudodiploria_model_data[pseudodiploria_model_data$cover > 0, ],
@@ -2680,7 +2690,7 @@
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
   #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                               s(mean_SST) + s(range_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
   #                               s(dist_to_land),
@@ -2692,7 +2702,7 @@
   pseudodiploria_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                              s(slope) +
                                              s(mean_Hsig) +
-                                             s(mean_SST) + s(range_PAR) + s(mean_kd490) +
+                                             s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
                                              s(dist_to_deep) +
                                              s(range_SST),
                                            data = pseudodiploria_model_data[pseudodiploria_model_data$cover_prop > 0, ],
