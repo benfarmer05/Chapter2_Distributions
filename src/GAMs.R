@@ -1148,19 +1148,6 @@
   
   ################################## ORBICELLA ##################################
   
-  # STOPPING POINT - 13 sep 2025
-  #   - can absolute try random forest models...they allow for balancing sample size across 1's and
-  #       0's, which can maybe help with confusion and AUC. that said, is that any better than
-  #       weighting with a GAM framework?
-  #   - also, including s(lon, lat) seemed to make a better model...consider this further
-  #       especially since it appears to tighten up the R-squared at least for abundance
-  #   - lots of options for Gamma - inverse or identity link, to start.
-  #   - can look at interactions between depth and other variables ??? might help with the bad "tail"
-  #   - could try weighting for not just binomial P/A, but for the abundance gamma model too ?
-  #       to perhaps better handle both low-cover and high-cover sites...not sure if this makes sense
-
-  
-  
   # NOTE - dropped mean_SST from presence model b/c of severe k issues
   #         - also, dropped quite a bit from the abundance model...could maybe get higher deviance
   #             than current, but stripped it down to prevent concurvity and k issues
@@ -1174,11 +1161,11 @@
   
   
   
-  n_absent <- sum(orbicella_model_data$present == 0)
-  n_present <- sum(orbicella_model_data$present == 1)
-  balance_ratio <- n_absent / n_present
-  
-  weights_vec <- ifelse(orbicella_model_data$present == 1, balance_ratio, 1)
+  # n_absent <- sum(orbicella_model_data$present == 0)
+  # n_present <- sum(orbicella_model_data$present == 1)
+  # balance_ratio <- n_absent / n_present
+  # 
+  # weights_vec <- ifelse(orbicella_model_data$present == 1, balance_ratio, 1)
   
   # tic()
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -1194,17 +1181,17 @@
   #                             # select = TRUE,
   #                             family = binomial())
   # toc()
-  # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
-  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(planform_curv) + s(SAPA) +
-                                        s(dir_at_max_hsig, bs = 'cc') +
-                                        s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-                                        s(range_SST) +
-                                        s(dist_to_land),
-                                      data = orbicella_model_data,
-                                      weights = weights_vec,
-                                      select = TRUE,
-                                      family = binomial())
+  # # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
+  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(planform_curv) + s(SAPA) +
+  #                                       s(dir_at_max_hsig, bs = 'cc') +
+  #                                       s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                       s(range_SST) +
+  #                                       s(dist_to_land),
+  #                                     data = orbicella_model_data,
+  #                                     weights = weights_vec,
+  #                                     select = TRUE,
+  #                                     family = binomial())
   # # weighted version; WITH lon/lat, whittled down with observed/estimate concurvity
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
@@ -1235,6 +1222,14 @@
   #                                     # weights = weights_vec,
   #                                     # select = TRUE,
   #                                     family = binomial())
+  # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) + s(complexity) +
+                                        s(dir_at_max_hsig, bs = 'cc') +
+                                        s(range_SST) + s(lon, lat),
+                                      data = orbicella_model_data,
+                                      # select = TRUE,
+                                      family = binomial())
   # # weighted version; whittled down with worst concurvity
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
@@ -1317,22 +1312,20 @@
   # beta with cloglog using observed/estimate concurvity, no spatial smooth
   orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(slope) +
-                                        s(complexity) + s(planform_curv) +
                                         s(mean_Hsig) +
-                                        s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
-                                        s(range_SST) +
-                                        s(dist_to_land), #s(lon, lat)
+                                        s(mean_SST) + s(mean_PAR) +
+                                        s(range_SST), #s(lon, lat)
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
                                       # select = TRUE,
                                       family = betar(link = "cloglog"))
-  # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables
-  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(slope) +
-                                        s(complexity) + s(planform_curv) +
-                                        s(lon, lat, k = 75), #s(lon, lat)
-                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                      # select = TRUE,
-                                      family = betar(link = "cloglog"))
+  # # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
+  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(planform_curv) +
+  #                                       s(max_BOV) +
+  #                                       s(lon, lat, k = 120),
+  #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = betar(link = "cloglog"))
   
   # #logit transform
   # orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 
@@ -1366,10 +1359,8 @@
   #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                                     family = zoinb())
   
-  # STOPPING POINT - 13 sep 2025
-  #   - P/A models actually seem okay right now....now to figure out what's going on with the
-  #       abundance models. there is a systematic underprediction; may need to transform the response
-  #       data, try cloglog link, look at lat/lon as predictors
+
+  
   pred <- predict(orbicella_gam_abundance_beta, type = "response")
   obs <- orbicella_gam_abundance_beta$model$cover_prop  # Changed from 'cover' to 'cover_prop'
   lim <- c(0, max(c(obs, pred)))
@@ -1473,7 +1464,7 @@
   # 
   # # User-chosen parameters
   # L <- 2   # asymptote (2%)
-  # k <- 1000      # steepness
+  # k <- 500      # steepness
   # 
   # # Apply logistic transformation
   # correction_factor <- L / (1 + exp(-k * (obs - x0)))
@@ -1485,21 +1476,21 @@
   # 
   # # Plot both together
   # lim <- c(0, max(c(obs, pred, pred_corrected)))
-  # plot(obs, pred, xlim = lim, ylim = lim, col = "lightgray", pch = 16, 
+  # plot(obs, pred, xlim = lim, ylim = lim, col = "lightgray", pch = 16,
   #      main = "Original vs Corrected Predictions")
   # points(obs, pred_corrected, col = "darkblue", pch = 16, cex = 0.8)
   # abline(0, 1, col = "red", lwd = 2)
   # 
   # # Add legend
-  # legend("bottomright", legend = c("Original", "Corrected"), 
+  # legend("bottomright", legend = c("Original", "Corrected"),
   #        col = c("lightgray", "darkblue"), pch = 16)
   # 
   # # Add R-squared to plot
-  # text(x = lim[2] * 0.05, y = lim[2] * 0.95, 
-  #      labels = paste("R² (original) =", round(r_squared_original, 3)), 
+  # text(x = lim[2] * 0.05, y = lim[2] * 0.95,
+  #      labels = paste("R² (original) =", round(r_squared_original, 3)),
   #      adj = 0, cex = 0.9, col = "gray")
-  # text(x = lim[2] * 0.05, y = lim[2] * 0.88, 
-  #      labels = paste("R² (corrected) =", round(r_squared_corrected, 3)), 
+  # text(x = lim[2] * 0.05, y = lim[2] * 0.88,
+  #      labels = paste("R² (corrected) =", round(r_squared_corrected, 3)),
   #      adj = 0, cex = 0.9, col = "darkblue")
   # 
   # cat("Flexion point (x0):", x0, "\n")
@@ -1507,6 +1498,74 @@
   # cat("Final slope:", coef(lm(pred_corrected ~ obs))[2], "\n")
   
   
+  
+  
+  #possibly better ad hoc correction which properly works with predictions, not
+  #   observations
+  # Calibration with obs ~ pred regression
+  # Get predictions and observations
+  pred <- predict(orbicella_gam_abundance_beta, type = "response")
+  obs <- orbicella_gam_abundance_beta$model$cover_prop
+  
+  # Regress observations on predictions (correct for calibration)
+  bestfitline_model <- lm(obs ~ pred)
+  
+  # Get calibration parameters
+  a <- coef(bestfitline_model)[1]  # intercept
+  b <- coef(bestfitline_model)[2]  # slope
+  
+  # Find flexion point (where calibration line crosses 1:1 line)
+  x0 <- a / (1 - b)
+  
+  # What the calibration line says predictions should be
+  pred_target <- a + b * pred
+  
+  # User-chosen parameters
+  shrinkage <- 0    # how much to pull toward calibration line (0-1)
+  L_low <- 0.1        # additional multiplicative correction below x0
+  L_high <- 2       # additional multiplicative correction above x0
+  k <- 50             # steepness of transition
+  
+  # Step 1: Shrink toward calibration line (reduces variance)
+  pred_shrunk <- pred + shrinkage * (pred_target - pred)
+  
+  # Step 2: Apply multiplicative correction (adjusts bias at extremes)
+  sigmoid <- 1 / (1 + exp(-k * (pred_shrunk - x0)))
+  correction_factor <- L_low + (L_high - L_low) * sigmoid
+  
+  pred_corrected <- pred_shrunk * correction_factor
+  
+  # Constrain to valid range
+  pred_corrected <- pmax(0.001, pmin(0.999, pred_corrected))
+  
+  # Calculate R-squared
+  r_squared_original <- cor(obs, pred)^2
+  r_squared_corrected <- cor(obs, pred_corrected)^2
+  
+  # Plot both together
+  lim <- c(0, max(c(obs, pred, pred_corrected)))
+  plot(pred, obs, xlim = lim, ylim = lim, col = "lightgray", pch = 16,
+       xlab = "Predicted", ylab = "Observed",
+       main = "Original vs Corrected Predictions")
+  points(pred_corrected, obs, col = "darkblue", pch = 16, cex = 0.8)
+  abline(0, 1, col = "red", lwd = 2)
+  
+  # Add legend
+  legend("bottomright", legend = c("Original", "Corrected"),
+         col = c("lightgray", "darkblue"), pch = 16)
+  
+  # Add R-squared to plot
+  text(x = lim[2] * 0.05, y = lim[2] * 0.95,
+       labels = paste("R² (original) =", round(r_squared_original, 3)),
+       adj = 0, cex = 0.9, col = "gray")
+  text(x = lim[2] * 0.05, y = lim[2] * 0.88,
+       labels = paste("R² (corrected) =", round(r_squared_corrected, 3)),
+       adj = 0, cex = 0.9, col = "darkblue")
+  
+  cat("Flexion point (x0):", x0, "\n")
+  cat("Shrinkage toward calibration line:", shrinkage, "\n")
+  cat("L_low:", L_low, "| L_high:", L_high, "\n")
+  cat("Final slope:", coef(lm(obs ~ pred_corrected))[2], "\n")
   
   
   
