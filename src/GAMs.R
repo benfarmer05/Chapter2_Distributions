@@ -1210,18 +1210,17 @@
   #                                     # weights = weights_vec,
   #                                     select = TRUE,
   #                                     family = binomial())
-  # # non-weighted version; whittled down with observed/estimate concurvity
-  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(planform_curv) + s(SAPA) +
-  #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  #                                       s(dist_to_deep) +
-  #                                       s(range_SST) +
-  #                                       s(dist_to_land),
-  #                                     data = orbicella_model_data,
-  #                                     # weights = weights_vec,
-  #                                     # select = TRUE,
-  #                                     family = binomial())
+  # non-weighted version; whittled down with observed/estimate concurvity
+  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(planform_curv) + s(SAPA) +
+                                        s(dir_at_max_hsig, bs = 'cc') +
+                                        s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+                                        s(range_SST) +
+                                        s(dist_to_land),
+                                      data = orbicella_model_data,
+                                      # weights = weights_vec,
+                                      # select = TRUE,
+                                      family = binomial())
   # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(slope) + s(complexity) +
@@ -1270,30 +1269,30 @@
   #                                      data = orbicella_model_data[orbicella_model_data$cover > 0, ],
   #                                      select = TRUE,
   #                                      family = Gamma(link = "log"))
-  # gamma with log link; whittled down with observed/estimate concurvity (not done)
-  orbicella_gam_abundance_gamma <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                         s(VRM) +
-                                         s(mean_Hsig) +
-                                         s(mean_SST) +
-                                         s(dist_to_deep) + s(max_BOV) +
-                                         s(range_SST) +
-                                         s(dist_to_land),
-                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                       # select = TRUE,
-                                       family = Gamma(link = "log"))
+  # # gamma with log link; whittled down with observed/estimate concurvity (not done)
+  # orbicella_gam_abundance_gamma <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                        s(VRM) +
+  #                                        s(mean_Hsig) +
+  #                                        s(mean_SST) +
+  #                                        s(dist_to_deep) + s(max_BOV) +
+  #                                        s(range_SST) +
+  #                                        s(dist_to_land),
+  #                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                                      # select = TRUE,
+  #                                      family = Gamma(link = "log"))
   # #lots of options for Gamma - inverse seems pretty good ??
   # # family = scat() ??
   
   
 
-  pred <- predict(orbicella_gam_abundance_gamma, type = "response")
-  obs <- orbicella_gam_abundance_gamma$model$cover
-  lim <- c(0, max(c(obs, pred)))
-  plot(obs, pred, xlim = lim, ylim = lim)
-  # plot(obs, pred, xlim = 40, ylim = 40)
-  abline(0, 1, col = "red")
-  r <- cor(obs, pred)
-  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  # pred <- predict(orbicella_gam_abundance_gamma, type = "response")
+  # obs <- orbicella_gam_abundance_gamma$model$cover
+  # lim <- c(0, max(c(obs, pred)))
+  # plot(obs, pred, xlim = lim, ylim = lim)
+  # # plot(obs, pred, xlim = 40, ylim = 40)
+  # abline(0, 1, col = "red")
+  # r <- cor(obs, pred)
+  # text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
   
   
   
@@ -1549,6 +1548,7 @@
        main = "Original vs Corrected Predictions")
   points(pred_corrected, obs, col = "darkblue", pch = 16, cex = 0.8)
   abline(0, 1, col = "red", lwd = 2)
+  abline(a, b, col = "green", lwd = 2)  # Calibration line (best-fit line)
   
   # Add legend
   legend("bottomright", legend = c("Original", "Corrected"),
@@ -1568,6 +1568,319 @@
   cat("Final slope:", coef(lm(obs ~ pred_corrected))[2], "\n")
   
   
+  
+  
+  
+  
+  #possible way to optimize the above
+  # ===== AGGRESSIVE BIAS-FOCUSED OPTIMIZATION =====
+  library(mgcv)
+  
+  optimize_sigmoid_correction <- function(
+    fitted_model,
+    L_low_range = c(0.05, 1.5),
+    L_high_range = c(0.8, 4.0),     # Allow even more aggressive high-end correction
+    k_range = c(10, 300),
+    shrinkage_range = c(0, 1),
+    focus = c("extremes", "high_only", "balanced"),  # NEW: Where to focus correction
+    plot = TRUE
+  ) {
+    
+    pred <- predict(fitted_model, type = "response")
+    obs <- fitted_model$model[[1]]
+    
+    bestfitline_model <- lm(obs ~ pred)
+    a <- coef(bestfitline_model)[1]
+    b <- coef(bestfitline_model)[2]
+    x0 <- a / (1 - b)
+    
+    focus <- match.arg(focus)
+    
+    # ===== AGGRESSIVE OBJECTIVE - FOCUS ON EXTREMES =====
+    sigmoid_objective <- function(params) {
+      L_low <- params[1]
+      L_high <- params[2]
+      k <- params[3]
+      shrinkage <- params[4]
+      
+      # Apply correction
+      pred_target <- a + b * pred
+      pred_shrunk <- pred + shrinkage * (pred_target - pred)
+      sigmoid_val <- 1 / (1 + exp(-k * (pred_shrunk - x0)))
+      correction_factor <- L_low + (L_high - L_low) * sigmoid_val
+      pred_test <- pred_shrunk * correction_factor
+      pred_test <- pmax(0.001, pmin(0.999, pred_test))
+      
+      # Calculate residuals
+      residuals <- obs - pred_test
+      
+      # Bin predictions
+      n_bins <- 20  # More bins for finer resolution
+      pred_bins <- cut(pred_test, 
+                       breaks = quantile(pred_test, probs = seq(0, 1, length.out = n_bins + 1)),
+                       include.lowest = TRUE, labels = FALSE)
+      
+      bin_bias <- numeric(n_bins)
+      bin_counts <- numeric(n_bins)
+      
+      for (i in 1:n_bins) {
+        mask <- pred_bins == i & !is.na(pred_bins)
+        if (sum(mask) > 3) {
+          bin_bias[i] <- mean(residuals[mask])
+          bin_counts[i] <- sum(mask)
+        }
+      }
+      
+      if (focus == "extremes") {
+        # Heavily weight lowest 3 and highest 3 bins
+        weights <- c(rep(10, 3), rep(1, n_bins - 6), rep(10, 3))
+        loss <- sum(abs(bin_bias) * weights * sqrt(bin_counts + 1)) / sum(weights)
+        
+      } else if (focus == "high_only") {
+        # Focus almost exclusively on high predictions (where you have underprediction)
+        # Exponentially increasing weights toward high end
+        weights <- exp(seq(0, 3, length.out = n_bins))  # Exponential increase
+        loss <- sum(abs(bin_bias) * weights * sqrt(bin_counts + 1)) / sum(weights)
+        
+      } else {  # balanced
+        # Standard weighted approach
+        weights <- sqrt(bin_counts + 1)
+        loss <- sum(abs(bin_bias) * weights) / sum(weights)
+      }
+      
+      # Small penalty only if slope gets too extreme (outside 0.8-1.2)
+      slope <- coef(lm(obs ~ pred_test))[2]
+      if (slope < 0.8 || slope > 1.2) {
+        loss <- loss + 10 * abs(slope - 1)
+      }
+      
+      return(loss)
+    }
+    
+    cat("Optimizing with focus on:", focus, "\n\n")
+    
+    # ===== AGGRESSIVE STARTING POINTS =====
+    starting_points <- list(
+      c(0.1, 2.0, 50, 0.0),      # Your manual values
+      c(0.05, 2.5, 80, 0.1),     # More aggressive
+      c(0.15, 1.8, 100, 0.2),    # Steeper transition
+      c(0.08, 3.0, 60, 0.0),     # Very aggressive high
+      c(0.2, 2.2, 40, 0.3),      # Moderate
+      c(0.05, 3.5, 120, 0.0),    # Extremely aggressive
+      c(0.1, 2.5, 150, 0.1)      # High k, aggressive
+    )
+    
+    best_result <- NULL
+    best_loss <- Inf
+    
+    for (i in 1:length(starting_points)) {
+      result <- optim(
+        par = starting_points[[i]],
+        fn = sigmoid_objective,
+        method = "L-BFGS-B",
+        lower = c(L_low_range[1], L_high_range[1], k_range[1], shrinkage_range[1]),
+        upper = c(L_low_range[2], L_high_range[2], k_range[2], shrinkage_range[2]),
+        control = list(maxit = 1000, factr = 1e7)  # Allow more iterations, looser convergence
+      )
+      
+      if (result$value < best_loss) {
+        best_loss <- result$value
+        best_result <- result
+      }
+    }
+    
+    L_low <- best_result$par[1]
+    L_high <- best_result$par[2]
+    k <- best_result$par[3]
+    shrinkage <- best_result$par[4]
+    
+    cat("Optimized parameters:\n")
+    cat("  L_low:     ", round(L_low, 4), "\n")
+    cat("  L_high:    ", round(L_high, 4), "\n")
+    cat("  k:         ", round(k, 2), "\n")
+    cat("  Shrinkage: ", round(shrinkage, 4), "\n")
+    cat("  x0:        ", round(x0, 4), "\n\n")
+    
+    # Create correction function
+    correction_fn <- function(new_pred) {
+      pred_target <- a + b * new_pred
+      pred_shrunk <- new_pred + shrinkage * (pred_target - new_pred)
+      sigmoid_val <- 1 / (1 + exp(-k * (pred_shrunk - x0)))
+      correction_factor <- L_low + (L_high - L_low) * sigmoid_val
+      corrected <- pred_shrunk * correction_factor
+      pmax(0.001, pmin(0.999, corrected))
+    }
+    
+    pred_corrected <- correction_fn(pred)
+    
+    # Metrics
+    r2_original <- cor(obs, pred)^2
+    r2_corrected <- cor(obs, pred_corrected)^2
+    slope_original <- coef(lm(obs ~ pred))[2]
+    slope_corrected <- coef(lm(obs ~ pred_corrected))[2]
+    intercept_corrected <- coef(lm(obs ~ pred_corrected))[1]
+    
+    # Bias by range
+    high_pred_mask <- pred_corrected > quantile(pred_corrected, 0.8)
+    low_pred_mask <- pred_corrected < quantile(pred_corrected, 0.2)
+    
+    high_bias <- mean(obs[high_pred_mask] - pred_corrected[high_pred_mask])
+    low_bias <- mean(obs[low_pred_mask] - pred_corrected[low_pred_mask])
+    
+    if (plot) {
+      par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+      lim <- c(0, max(c(obs, pred, pred_corrected)))
+      
+      # Plot 1: Original
+      plot(pred, obs, xlim = lim, ylim = lim, pch = 16, col = rgb(0, 0, 0, 0.3),
+           xlab = "Predicted", ylab = "Observed", main = "Original")
+      abline(0, 1, col = "red", lwd = 2)
+      abline(lm(obs ~ pred), col = "black", lwd = 1, lty = 2)
+      text(lim[1], lim[2] * 0.95, 
+           paste0("R² = ", round(r2_original, 3), 
+                  "\nSlope = ", round(slope_original, 3)),
+           adj = 0, cex = 0.9)
+      
+      # Plot 2: Corrected
+      plot(pred_corrected, obs, xlim = lim, ylim = lim, pch = 16, 
+           col = rgb(0, 0.4, 0.8, 0.3),
+           xlab = "Predicted (Corrected)", ylab = "Observed",
+           main = paste0("Optimized (", focus, ")"))
+      abline(0, 1, col = "red", lwd = 2)
+      abline(lm(obs ~ pred_corrected), col = "darkblue", lwd = 1, lty = 2)
+      text(lim[1], lim[2] * 0.95,
+           paste0("R² = ", round(r2_corrected, 3), 
+                  "\nSlope = ", round(slope_corrected, 3),
+                  "\nIntercept = ", round(intercept_corrected, 3)),
+           adj = 0, cex = 0.8)
+      
+      # Plot 3: Overlay
+      plot(pred, obs, xlim = lim, ylim = lim, col = rgb(0.7, 0.7, 0.7, 0.4), pch = 16,
+           xlab = "Predicted", ylab = "Observed", main = "Original vs Corrected")
+      points(pred_corrected, obs, col = rgb(0, 0.3, 0.8, 0.4), pch = 16, cex = 0.8)
+      abline(0, 1, col = "red", lwd = 2)
+      legend("bottomright", 
+             legend = c("Original", "Corrected"),
+             col = c(rgb(0.7, 0.7, 0.7, 0.8), rgb(0, 0.3, 0.8, 0.8)), 
+             pch = 16, cex = 0.9)
+      
+      # Plot 4: Correction curve - EXTENDED RANGE
+      pred_seq <- seq(0, max(pred) * 1.2, length.out = 300)  # Extend beyond data
+      corrected_seq <- correction_fn(pred_seq)
+      
+      plot(pred_seq, corrected_seq, type = "l", lwd = 3, col = "darkblue",
+           xlab = "Original Prediction", ylab = "Corrected Prediction",
+           main = "Correction Curve",
+           xlim = c(0, max(pred_seq)), ylim = c(0, max(corrected_seq)))
+      abline(0, 1, col = "red", lwd = 2, lty = 2)
+      abline(v = x0, col = "gray", lty = 3, lwd = 1.5)
+      
+      # Add reference lines
+      abline(h = seq(0, max(corrected_seq), by = 0.1), col = "gray90", lty = 1)
+      abline(v = seq(0, max(pred_seq), by = 0.05), col = "gray90", lty = 1)
+      
+      # Show actual data range
+      rect(0, 0, max(pred), max(pred_corrected), 
+           border = "orange", lwd = 2, lty = 2)
+      
+      text(x0, max(corrected_seq) * 0.9, 
+           paste0("x0 = ", round(x0, 3)), pos = 4, cex = 0.8)
+      text(max(pred_seq) * 0.7, max(corrected_seq) * 0.1,
+           paste0("L_low = ", round(L_low, 2), "\nL_high = ", round(L_high, 2)),
+           cex = 0.8, col = "darkblue")
+      
+      grid()
+      
+      par(mfrow = c(1, 1))
+    }
+    
+    cat("=== CALIBRATION SUMMARY ===\n")
+    cat("Original  - R²:", round(r2_original, 3), 
+        "| Slope:", round(slope_original, 3), "\n")
+    cat("Corrected - R²:", round(r2_corrected, 3), 
+        "| Slope:", round(slope_corrected, 3),
+        "| Intercept:", round(intercept_corrected, 3), "\n")
+    cat("\nBias in top 20%: ", round(high_bias, 4), "\n")
+    cat("Bias in bottom 20%: ", round(low_bias, 4), "\n\n")
+    
+    list(
+      correction_function = correction_fn,
+      parameters = list(L_low = L_low, L_high = L_high, k = k, 
+                        shrinkage = shrinkage, x0 = x0),
+      r2_original = r2_original,
+      r2_corrected = r2_corrected,
+      slope_original = slope_original,
+      slope_corrected = slope_corrected,
+      high_bias = high_bias,
+      low_bias = low_bias,
+      pred_corrected = pred_corrected,
+      observations = obs,
+      predictions_original = pred
+    )
+  }
+  
+  # ===== USAGE - TRY THESE IN ORDER =====
+  
+  # 1. Focus on high-value areas (your main concern)
+  # result_high <- optimize_sigmoid_correction(
+  #   orbicella_gam_abundance_beta,
+  #   L_low_range = c(0.05, 0.5),   # Don't overcorrect low end
+  #   L_high_range = c(1.5, 4.0),   # Allow very aggressive high-end correction
+  #   k_range = c(30, 200),
+  #   focus = "high_only",
+  #   plot = TRUE
+  # )
+  result_high <- optimize_sigmoid_correction(
+    orbicella_gam_abundance_beta,
+    L_low_range = c(0.05, 0.1),   # Don't overcorrect low end
+    L_high_range = c(2, 2.5),   # Allow very aggressive high-end correction
+    k_range = c(50, 200),
+    focus = "high_only",
+    plot = TRUE
+  )
+  
+  # 2. Balance both extremes aggressively
+  # result_extremes <- optimize_sigmoid_correction(
+  #   orbicella_gam_abundance_beta,
+  #   L_low_range = c(0.05, 0.8),
+  #   L_high_range = c(1.5, 4.0),
+  #   k_range = c(30, 200),
+  #   focus = "extremes",
+  #   plot = TRUE
+  # )
+  # result_extremes <- optimize_sigmoid_correction(
+  #   orbicella_gam_abundance_beta,
+  #   L_low_range = c(0.05, 0.1),
+  #   L_high_range = c(2, 2.5),
+  #   k_range = c(50, 200),
+  #   focus = "extremes",
+  #   plot = TRUE
+  # )
+  
+  # 3. If those are too aggressive, try balanced
+  result_balanced <- optimize_sigmoid_correction(
+    orbicella_gam_abundance_beta,
+    L_low_range = c(0.1, 1.0),
+    L_high_range = c(1.2, 3.0),
+    focus = "balanced",
+    plot = TRUE
+  )
+  
+  
+  
+  # or just run it basically deterministic
+  result_high <- optimize_sigmoid_correction(
+    orbicella_gam_abundance_beta,
+    L_low_range = c(0.1, 0.101),   # Don't overcorrect low end
+    L_high_range = c(2, 2.01),   # Allow very aggressive high-end correction
+    k_range = c(50, 50.1),
+    focus = "high_only",
+    plot = TRUE
+  )
+  
+  
+  # Apply to new data
+  # new_pred_corrected <- result_high$correction_function(new_pred)
   
   
   # #possible other models to zero in on better tails in the predictions

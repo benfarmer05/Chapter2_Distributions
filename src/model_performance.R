@@ -17,6 +17,285 @@
   
   source(here("src/functions.R"))
   
+  ################################## TEST optimization ##################################
+  
+  calculate_threshold_metrics <- function(observed_binary, predicted_prob, threshold) {
+    predicted_binary <- ifelse(predicted_prob > threshold, 1, 0)
+    
+    TP <- sum(observed_binary == 1 & predicted_binary == 1)
+    TN <- sum(observed_binary == 0 & predicted_binary == 0)
+    FP <- sum(observed_binary == 0 & predicted_binary == 1)
+    FN <- sum(observed_binary == 1 & predicted_binary == 0)
+    
+    sensitivity <- TP / (TP + FN)
+    specificity <- TN / (TN + FP)
+    precision <- TP / (TP + FP)
+    
+    TSS <- sensitivity + specificity - 1
+    
+    total <- length(observed_binary)
+    observed_agreement <- (TP + TN) / total
+    expected_agreement <- ((TP + FN) * (TP + FP) + (TN + FP) * (TN + FN)) / (total^2)
+    kappa <- (observed_agreement - expected_agreement) / (1 - expected_agreement)
+    F1 <- 2 * (precision * sensitivity) / (precision + sensitivity)
+    
+    # Prevalence-based metric
+    prevalence_obs <- mean(observed_binary)
+    prevalence_pred <- mean(predicted_binary)
+    prevalence_diff <- abs(prevalence_pred - prevalence_obs)
+    
+    return(list(TSS = TSS, kappa = kappa, F1 = F1, prevalence_diff = prevalence_diff))
+  }
+  
+  validate_hurdle_simple <- function(species_name, train_percent = 80, seed = 300, 
+                                     presence_threshold = 0.5, optimize_threshold = NULL,
+                                     calibrate_presence = FALSE, auto_plot = TRUE, use_beta = FALSE) {
+    
+    library(mgcv); library(pROC); library(scam)
+    set.seed(seed)
+    
+    # Get models
+    all_objects <- ls(envir = .GlobalEnv)
+    presence_model_name <- grep(paste0("^", species_name, "_gam_presence_binom$"), all_objects, value = TRUE)
+    abundance_model_name <- grep(paste0("^", species_name, "_gam_abundance_", ifelse(use_beta, "beta", "gamma"), "$"), all_objects, value = TRUE)
+    
+    if(length(presence_model_name) == 0 || length(abundance_model_name) == 0) {
+      stop("Could not find required models")
+    }
+    
+    presence_model <- get(presence_model_name, envir = .GlobalEnv)
+    abundance_model <- get(abundance_model_name, envir = .GlobalEnv)
+    
+    # Get data
+    data_name <- paste0(species_name, "_model_data")
+    model_data <- if(data_name %in% all_objects) get(data_name, envir = .GlobalEnv) else presence_model$model
+    
+    # Prepare complete data
+    all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
+    complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+    
+    # Train-test split
+    n <- nrow(complete_data)
+    train_idx <- sample(1:n, size = floor((train_percent / 100) * n))
+    train_data <- complete_data[train_idx, ]
+    test_data <- complete_data[-train_idx, ]
+    
+    # Fit models
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+    abundance_train <- train_data[train_data$cover > 0, ]
+    
+    if(use_beta) {
+      abundance_train$cover_prop <- abundance_train$cover / 100
+      abundance_fit <- gam(update(formula(abundance_model), cover_prop ~ .), data = abundance_train, family = betar())
+    } else {
+      abundance_fit <- gam(formula(abundance_model), data = abundance_train, family = Gamma(link = "log"))
+    }
+    
+    # Predict
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    abundance_pred <- if(use_beta) predict(abundance_fit, newdata = test_data, type = "response") * 100 else predict(abundance_fit, newdata = test_data, type = "response")
+    
+    actual <- test_data$cover
+    actual_binary <- ifelse(actual > 0, 1, 0)
+    
+    # Calibrate if requested
+    if(calibrate_presence) {
+      train_prob <- predict(presence_fit, newdata = train_data, type = "response")
+      train_binary <- ifelse(train_data$cover > 0, 1, 0)
+      cal.scam <- scam(train_binary ~ s(train_prob, bs = "mpi"), family = binomial)
+      presence_prob <- predict(cal.scam, newdata = data.frame(train_prob = presence_prob), type = "response")
+      cat("Calibration applied\n")
+    }
+    
+    # Optimize threshold if requested
+    if(!is.null(optimize_threshold)) {
+      test_thresholds <- seq(0.05, 0.95, by = 0.05)
+      
+      if(optimize_threshold == "prevalence") {
+        criterion_values <- sapply(test_thresholds, function(t) {
+          -calculate_threshold_metrics(actual_binary, presence_prob, t)$prevalence_diff
+        })
+      } else {
+        criterion_values <- sapply(test_thresholds, function(t) {
+          calculate_threshold_metrics(actual_binary, presence_prob, t)[[optimize_threshold]]
+        })
+      }
+      
+      presence_threshold <- test_thresholds[which.max(criterion_values)]
+      cat("Optimized threshold (", optimize_threshold, "):", presence_threshold, "\n")
+    }
+    
+    # Apply threshold
+    presence_binary <- ifelse(presence_prob > presence_threshold, 1, 0)
+    hurdle_predictions <- presence_binary * abundance_pred
+    
+    # Calculate metrics
+    n_actual_present <- sum(actual > 0)
+    n_predicted_present <- sum(presence_binary == 1)
+    n_both_present <- sum(actual > 0 & presence_binary == 1)
+    
+    TP <- sum(actual_binary == 1 & presence_binary == 1)
+    TN <- sum(actual_binary == 0 & presence_binary == 0)
+    
+    sensitivity <- TP / n_actual_present
+    specificity <- TN / sum(actual == 0)
+    TSS <- sensitivity + specificity - 1
+    
+    overall_r2 <- cor(actual, hurdle_predictions)^2
+    
+    method_A_r2 <- if(n_actual_present > 5) cor(actual[actual > 0], abundance_pred[actual > 0])^2 else NA
+    method_B_r2 <- if(n_both_present > 5) cor(actual[actual > 0 & presence_binary == 1], abundance_pred[actual > 0 & presence_binary == 1])^2 else NA
+    
+    presence_auc <- as.numeric(auc(actual > 0, presence_prob))
+    
+    # Print results
+    cat("\n=== RESULTS ===\n")
+    cat("Threshold:", presence_threshold, "| TSS:", round(TSS, 3), "| AUC:", round(presence_auc, 3), "\n")
+    cat("Overall R²:", round(overall_r2, 3), "\n")
+    cat("Predicted present:", n_predicted_present, "/ Actual present:", n_actual_present, "\n")
+    cat("Sensitivity:", round(sensitivity, 3), "| Specificity:", round(specificity, 3), "\n")
+    cat("Method A R²:", round(method_A_r2, 3), "| Method B R²:", round(method_B_r2, 3), "\n\n")
+    
+    # Store results
+    test_results <- test_data
+    test_results$predicted <- hurdle_predictions
+    test_results$presence_prob <- presence_prob
+    test_results$presence_binary <- presence_binary
+    test_results$abundance_pred <- abundance_pred
+    test_results$actual_binary <- actual_binary
+    
+    result <- list(
+      test_results = test_results,
+      species = species_name,
+      presence_threshold = presence_threshold,
+      use_beta = use_beta,
+      calibrated = calibrate_presence,
+      n_actual_present = n_actual_present,
+      n_predicted_present = n_predicted_present,
+      n_both_present = n_both_present,
+      overall_r2 = overall_r2,
+      presence_TSS = TSS,
+      presence_sensitivity = sensitivity,
+      presence_specificity = specificity,
+      presence_auc = presence_auc,
+      method_A_r2 = method_A_r2,
+      method_B_r2 = method_B_r2
+    )
+    
+    if(auto_plot) plot_hurdle_complete(result)
+    
+    return(result)
+  }
+  
+  plot_hurdle_complete <- function(result) {
+    library(ggplot2); library(viridis); library(gridExtra)
+    
+    plot_data <- result$test_results
+    coord_cols <- c("lon", "longitude", "lat", "latitude")
+    available_coords <- coord_cols[coord_cols %in% colnames(plot_data)]
+    x_col <- available_coords[grepl("lon", available_coords)][1]
+    y_col <- available_coords[grepl("lat", available_coords)][1]
+    
+    map_theme <- theme_minimal() + theme(axis.text = element_text(size = 8), plot.title = element_text(size = 9, hjust = 0.5))
+    
+    shared_lim <- range(c(plot_data$cover, plot_data$predicted))
+    
+    p1 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "cover")) +
+      geom_point(size = 1.5, alpha = 0.7) + scale_color_viridis_c(name = "Actual", option = "plasma", limits = shared_lim) +
+      labs(title = "Actual Cover") + map_theme
+    
+    p2 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "predicted")) +
+      geom_point(size = 1.5, alpha = 0.7) + scale_color_viridis_c(name = "Predicted", option = "plasma", limits = shared_lim) +
+      labs(title = "Predicted Cover") + map_theme
+    
+    p3 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "factor(actual_binary)")) +
+      geom_point(size = 1.5, alpha = 0.7) + scale_color_manual(values = c("0" = "red", "1" = "blue")) +
+      labs(title = "Observed P/A") + map_theme
+    
+    p4 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "presence_prob")) +
+      geom_point(size = 1.5, alpha = 0.7) + scale_color_viridis_c(name = "Prob") +
+      labs(title = "Presence Probability") + map_theme
+    
+    p5 <- ggplot(plot_data, aes_string(x = x_col, y = y_col, color = "factor(presence_binary)")) +
+      geom_point(size = 1.5, alpha = 0.7) + scale_color_manual(values = c("0" = "red", "1" = "blue")) +
+      labs(title = paste("Predicted P/A (", result$presence_threshold, ")")) + map_theme
+    
+    method_A <- plot_data[plot_data$cover > 0, ]
+    method_B <- plot_data[plot_data$cover > 0 & plot_data$presence_binary == 1, ]
+    
+    scatter_lim <- range(c(method_A$cover, method_A$abundance_pred, method_B$cover, method_B$abundance_pred))
+    
+    p6 <- ggplot(method_A, aes(x = abundance_pred, y = cover)) +
+      geom_point(alpha = 0.6, color = "darkgreen") + geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      xlim(scatter_lim) + ylim(scatter_lim) + labs(title = paste("Method A (R² =", round(result$method_A_r2, 3), ")")) + theme_minimal()
+    
+    p7 <- ggplot(method_B, aes(x = abundance_pred, y = cover)) +
+      geom_point(alpha = 0.6, color = "darkblue") + geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      xlim(scatter_lim) + ylim(scatter_lim) + labs(title = paste("Method B (R² =", round(result$method_B_r2, 3), ")")) + theme_minimal()
+    
+    p8 <- ggplot(plot_data, aes(x = predicted, y = cover)) +
+      geom_point(alpha = 0.6, color = "purple") + geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+      labs(title = paste("Overall (R² =", round(result$overall_r2, 3), ")")) + theme_minimal()
+    
+    grid.arrange(p1, p2, p3, p4, p5, p6, p7, p8, ncol = 3, nrow = 3,
+                 top = paste(result$species, "-", ifelse(result$use_beta, "Beta", "Gamma")))
+    
+    return(invisible(list(p1, p2, p3, p4, p5, p6, p7, p8)))
+  }
+  
+  test_thresholds <- function(species_name, thresholds = c(0.3, 0.4, 0.5, 0.6, 0.7), 
+                              seed = 300, use_beta = FALSE, include_optimized = TRUE, 
+                              optimization_criterion = "TSS", calibrate_presence = FALSE) {
+    results <- list()
+    
+    for(thresh in thresholds) {
+      cat("\n--- Threshold:", thresh, "---\n")
+      results[[as.character(thresh)]] <- validate_hurdle_simple(species_name, seed = seed, presence_threshold = thresh, 
+                                                                auto_plot = FALSE, use_beta = use_beta, calibrate_presence = calibrate_presence)
+    }
+    
+    if(include_optimized) {
+      cat("\n--- OPTIMIZED (", optimization_criterion, ") ---\n")
+      results[["optimized"]] <- validate_hurdle_simple(species_name, seed = seed, optimize_threshold = optimization_criterion,
+                                                       auto_plot = FALSE, use_beta = use_beta, calibrate_presence = calibrate_presence)
+    }
+    
+    summary_df <- data.frame(
+      Threshold = sapply(results, function(x) round(x$presence_threshold, 3)),
+      TSS = sapply(results, function(x) round(x$presence_TSS, 3)),
+      Predicted = sapply(results, function(x) x$n_predicted_present),
+      Overall_R2 = sapply(results, function(x) round(x$overall_r2, 3))
+    )
+    
+    cat("\n=== SUMMARY ===\n")
+    print(summary_df)
+    
+    return(results)
+  }
+  
+  compare_beta_gamma <- function(species_name, train_percent = 80, seed = 300, presence_threshold = 0.5) {
+    gamma_result <- validate_hurdle_simple(species_name, train_percent, seed, presence_threshold, auto_plot = FALSE, use_beta = FALSE)
+    beta_result <- validate_hurdle_simple(species_name, train_percent, seed, presence_threshold, auto_plot = FALSE, use_beta = TRUE)
+    
+    comparison_df <- data.frame(
+      Model = c("Gamma", "Beta"),
+      Overall_R2 = c(round(gamma_result$overall_r2, 3), round(beta_result$overall_r2, 3)),
+      Method_A_R2 = c(round(gamma_result$method_A_r2, 3), round(beta_result$method_A_r2, 3)),
+      AUC = c(round(gamma_result$presence_auc, 3), round(beta_result$presence_auc, 3))
+    )
+    
+    print(comparison_df)
+    return(list(gamma = gamma_result, beta = beta_result, comparison = comparison_df))
+  }
+  
+  # USAGE:
+  result <- validate_hurdle_simple("orbicella", optimize_threshold = "TSS", use_beta = TRUE)
+  result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence", use_beta = TRUE)
+  result <- validate_hurdle_simple("orbicella", optimize_threshold = "TSS", calibrate_presence = TRUE,
+                                   use_beta = TRUE)
+  result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence",
+                                   calibrate_presence = TRUE, use_beta = TRUE)
+  comparison <- test_thresholds("orbicella", include_optimized = TRUE, optimization_criterion = "prevalence")
   
   ################################## TESTING, AND SHOWING PROMISE ##################################
   
