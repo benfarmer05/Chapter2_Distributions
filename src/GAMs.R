@@ -1822,14 +1822,14 @@
   # ===== USAGE - TRY THESE IN ORDER =====
   
   # 1. Focus on high-value areas (your main concern)
-  # result_high <- optimize_sigmoid_correction(
-  #   orbicella_gam_abundance_beta,
-  #   L_low_range = c(0.05, 0.5),   # Don't overcorrect low end
-  #   L_high_range = c(1.5, 4.0),   # Allow very aggressive high-end correction
-  #   k_range = c(30, 200),
-  #   focus = "high_only",
-  #   plot = TRUE
-  # )
+  result_high <- optimize_sigmoid_correction(
+    orbicella_gam_abundance_beta,
+    L_low_range = c(0.05, 0.5),   # Don't overcorrect low end
+    L_high_range = c(1.5, 4.0),   # Allow very aggressive high-end correction
+    k_range = c(30, 200),
+    focus = "high_only",
+    plot = TRUE
+  )
   result_high <- optimize_sigmoid_correction(
     orbicella_gam_abundance_beta,
     L_low_range = c(0.05, 0.1),   # Don't overcorrect low end

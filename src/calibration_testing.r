@@ -1,6 +1,9 @@
 library(scam)
 
-# ===== STEP 1: Bin data to 100m grid =====
+
+################################## try curves for P/A ##################################
+
+#STEP 1: Bin data to 100m grid
 
 # Convert your data to a SpatVector with appropriate CRS
 orbicella_vect <- vect(orbicella_model_data, 
@@ -49,9 +52,9 @@ orbicella_binned <- orbicella_df %>%
 cat("Original data rows:", nrow(orbicella_model_data), "\n")
 cat("Binned data rows:", nrow(orbicella_binned), "\n")
 
-# ========================================
+# 
 # PRESENCE/ABSENCE MODEL WITH CALIBRATION
-# ========================================
+#
 
 cat("\n\n===== PRESENCE/ABSENCE MODEL =====\n\n")
 
@@ -166,7 +169,7 @@ calibrate_gam_predictions <- function(
   # Initialize corrected predictions
   pred_corrected <- pred
   
-  # ===== METHOD SELECTION =====
+  #METHOD SELECTION
   method <- match.arg(method)
   
   if (method == "isotonic") {
@@ -317,7 +320,7 @@ calibrate_gam_predictions <- function(
 
 
 ################################## optimize curve types ##################################
-# ===== OPTIMIZED CALIBRATION WITH BIAS CORRECTION =====
+#OPTIMIZED CALIBRATION WITH BIAS CORRECTION
 library(mgcv)
 library(scam)
 library(quantreg)
@@ -345,7 +348,7 @@ calibrate_gam_predictions <- function(
   pred_corrected <- pred
   method <- match.arg(method)
   
-  # ===== OBJECTIVE FUNCTION FOR OPTIMIZATION =====
+  #OBJECTIVE FUNCTION FOR OPTIMIZATION
   calc_calibration_metrics <- function(pred_cal, obs_cal) {
     # Multiple metrics to assess calibration quality
     
@@ -389,7 +392,7 @@ calibrate_gam_predictions <- function(
     ))
   }
   
-  # ===== SIGMOID WITH OPTIMIZATION =====
+  #SIGMOID WITH OPTIMIZATION
   if (method == "sigmoid_optimized" || (method == "sigmoid" && optimize_params)) {
     
     cat("Optimizing sigmoid parameters...\n")
@@ -530,7 +533,7 @@ calibrate_gam_predictions <- function(
   # Binned bias analysis
   metrics_corrected <- calc_calibration_metrics(pred_corrected, obs)
   
-  # ===== ENHANCED PLOTTING WITH BIAS DIAGNOSTICS =====
+  #ENHANCED PLOTTING WITH BIAS DIAGNOSTICS
   if (plot) {
     par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
     lim <- c(0, max(c(obs, pred, pred_corrected)))
@@ -590,7 +593,7 @@ calibrate_gam_predictions <- function(
     par(mfrow = c(1, 1))
   }
   
-  # ===== RESULTS =====
+  #RESULTS
   cat("\n=== CALIBRATION SUMMARY ===\n")
   cat("Method:", method, "\n")
   cat("Original  - R²:", round(r2_original, 3), "| Slope:", round(slope_original, 3), "\n")
@@ -614,7 +617,7 @@ calibrate_gam_predictions <- function(
   )
 }
 
-# ===== USAGE =====
+#USAGE
 
 # Automatically optimize sigmoid parameters
 result_optimized <- calibrate_gam_predictions(
@@ -668,3 +671,374 @@ result_sig <- calibrate_gam_predictions(
 
 
 
+
+################################## Waldock 2022 rescaling ##################################
+
+# Simple linear rescaling calibration (from the 2021 abundance SDM review)
+calibrate_rescale <- function(fitted_model, plot = TRUE) {
+  
+  pred <- predict(fitted_model, type = "response")
+  obs <- fitted_model$model[[1]]
+  
+  # Linear rescaling formula from the paper
+  min_obs <- min(obs)
+  max_obs <- max(obs)
+  min_pred <- min(pred)
+  max_pred <- max(pred)
+  
+  pred_corrected <- (pred - min_pred) / (max_pred - min_pred) * (max_obs - min_obs) + min_obs
+  
+  # Metrics
+  r2_orig <- cor(obs, pred)^2
+  r2_corr <- cor(obs, pred_corrected)^2
+  slope_orig <- coef(lm(obs ~ pred))[2]
+  slope_corr <- coef(lm(obs ~ pred_corrected))[2]
+  mae_orig <- mean(abs(obs - pred))
+  mae_corr <- mean(abs(obs - pred_corrected))
+  
+  if (plot) {
+    # Set common axis limits
+    lim <- c(0, max(c(obs, pred, pred_corrected)))
+    
+    par(mfrow = c(1, 2))
+    
+    # Original
+    plot(pred, obs, pch = 16, col = rgb(0.3, 0.3, 0.3, 0.3),
+         xlim = lim, ylim = lim,
+         main = "Original", xlab = "Predicted", ylab = "Observed")
+    abline(0, 1, col = "red", lwd = 2)
+    abline(lm(obs ~ pred), col = "black", lwd = 2, lty = 2)
+    text(lim[1] + 0.01, lim[2] * 0.98, 
+         sprintf("R²=%.3f\nSlope=%.3f", r2_orig, slope_orig),
+         adj = c(0, 1))
+    
+    # Rescaled
+    plot(pred_corrected, obs, pch = 16, col = rgb(0, 0.4, 0.7, 0.3),
+         xlim = lim, ylim = lim,
+         main = "Rescaled", xlab = "Predicted (Rescaled)", ylab = "Observed")
+    abline(0, 1, col = "red", lwd = 2)
+    abline(lm(obs ~ pred_corrected), col = "darkblue", lwd = 2, lty = 2)
+    text(lim[1] + 0.01, lim[2] * 0.98,
+         sprintf("R²=%.3f\nSlope=%.3f", r2_corr, slope_corr),
+         adj = c(0, 1), col = "darkblue")
+    
+    par(mfrow = c(1, 1))
+  }
+  
+  cat(sprintf("\nORIGINAL: R²=%.3f  Slope=%.3f  MAE=%.4f\n", 
+              r2_orig, slope_orig, mae_orig))
+  cat(sprintf("RESCALED: R²=%.3f  Slope=%.3f  MAE=%.4f\n\n", 
+              r2_corr, slope_corr, mae_corr))
+  
+  list(
+    pred_corrected = pred_corrected,
+    min_obs = min_obs,
+    max_obs = max_obs,
+    min_pred = min_pred,
+    max_pred = max_pred
+  )
+}
+
+# Usage
+result_rescale <- calibrate_rescale(orbicella_gam_abundance_beta, plot = TRUE)
+
+# Apply to new data
+calibrate_new <- function(new_pred, calib_result) {
+  (new_pred - calib_result$min_pred) / 
+    (calib_result$max_pred - calib_result$min_pred) * 
+    (calib_result$max_obs - calib_result$min_obs) + 
+    calib_result$min_obs
+}
+################################## Dan / gam/lm method ##################################
+
+library(mgcv)
+library(ggplot2)
+library(gridExtra)
+
+#SIMPLE REGRESSION CALIBRATION
+calibrate_regression <- function(fitted_model, 
+                                 method = c("lm", "gam", "loess"),
+                                 intercept = FALSE,
+                                 plot = TRUE) {
+  
+  method <- match.arg(method)
+  
+  pred <- predict(fitted_model, type = "response")
+  obs <- fitted_model$model[[1]]
+  
+  # Fit calibration model: obs ~ f(pred)
+  if (method == "lm") {
+    if (intercept) {
+      calib_model <- lm(obs ~ pred)
+    } else {
+      calib_model <- lm(obs ~ pred + 0)
+    }
+  } else if (method == "gam") {
+    if (intercept) {
+      calib_model <- gam(obs ~ s(pred, k = 10))
+    } else {
+      calib_model <- gam(obs ~ s(pred, k = 10) + 0)
+    }
+  } else if (method == "loess") {
+    calib_model <- loess(obs ~ pred, span = 0.3)
+  }
+  
+  # Create correction function
+  correction_fn <- function(new_pred) {
+    predict(calib_model, newdata = data.frame(pred = new_pred))
+  }
+  
+  pred_corrected <- correction_fn(pred)
+  
+  # Metrics
+  r2_orig <- cor(obs, pred)^2
+  r2_corr <- cor(obs, pred_corrected)^2
+  slope_orig <- coef(lm(obs ~ pred))[2]
+  slope_corr <- coef(lm(obs ~ pred_corrected))[2]
+  
+  # Plot
+  if (plot) {
+    df_orig <- data.frame(pred = pred, obs = obs)
+    df_corr <- data.frame(pred = pred_corrected, obs = obs)
+    df_resid <- data.frame(pred = rep(pred, 2),
+                           residual = c(obs - pred, obs - pred_corrected),
+                           type = rep(c("Original", "Calibrated"), each = length(pred)))
+    
+    lim <- c(0, max(c(obs, pred_corrected)))
+    
+    # Plot 1: Original
+    p1 <- ggplot(df_orig, aes(x = pred, y = obs)) +
+      geom_point(alpha = 0.3, size = 2) +
+      geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 1) +
+      geom_smooth(method = "lm", se = FALSE, color = "black", 
+                  linetype = "dashed", linewidth = 1) +
+      coord_fixed(xlim = lim, ylim = lim) +
+      labs(title = "Original", x = "Predicted", y = "Observed") +
+      annotate("text", x = lim[1], y = lim[2] * 0.98, 
+               label = sprintf("R²=%.3f\nSlope=%.3f", r2_orig, slope_orig),
+               hjust = 0, vjust = 1, size = 3.5) +
+      theme_bw(base_size = 11) +
+      theme(aspect.ratio = 1)
+    
+    # Plot 2: Corrected
+    p2 <- ggplot(df_corr, aes(x = pred, y = obs)) +
+      geom_point(alpha = 0.3, size = 2, color = "#0066B3") +
+      geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 1) +
+      geom_smooth(method = "lm", se = FALSE, color = "darkblue", 
+                  linetype = "dashed", linewidth = 1) +
+      coord_fixed(xlim = lim, ylim = lim) +
+      labs(title = paste0("Calibrated (", method, ")"), 
+           x = "Predicted (Corrected)", y = "Observed") +
+      annotate("text", x = lim[1], y = lim[2] * 0.98,
+               label = sprintf("R²=%.3f\nSlope=%.3f", r2_corr, slope_corr),
+               hjust = 0, vjust = 1, size = 3.5, color = "darkblue") +
+      theme_bw(base_size = 11) +
+      theme(aspect.ratio = 1)
+    
+    # Plot 3: Correction curve
+    pred_seq <- seq(min(pred), max(pred), length.out = 200)
+    df_curve <- data.frame(x = pred_seq, y = correction_fn(pred_seq))
+    
+    p3 <- ggplot(df_curve, aes(x = x, y = y)) +
+      geom_line(color = "darkblue", linewidth = 1.5) +
+      geom_abline(slope = 1, intercept = 0, color = "red", 
+                  linetype = "dashed", linewidth = 1) +
+      labs(title = "Correction Function", 
+           x = "Original Prediction", y = "Corrected Prediction") +
+      theme_bw(base_size = 11)
+    
+    # Plot 4: Residuals
+    p4 <- ggplot(df_resid, aes(x = pred, y = residual, color = type)) +
+      geom_point(alpha = 0.3, size = 1.5) +
+      geom_hline(yintercept = 0, color = "red", linetype = "dashed", linewidth = 1) +
+      scale_color_manual(values = c("Original" = "gray40", "Calibrated" = "#0066B3")) +
+      labs(title = "Residuals", x = "Prediction", y = "Residual", color = NULL) +
+      theme_bw(base_size = 11) +
+      theme(legend.position = c(0.85, 0.9),
+            legend.background = element_rect(fill = "white", color = NA))
+    
+    grid.arrange(p1, p2, p3, p4, ncol = 2)
+  }
+  
+  cat(sprintf("\nORIGINAL:   R²=%.3f  Slope=%.3f\n", r2_orig, slope_orig))
+  cat(sprintf("CALIBRATED: R²=%.3f  Slope=%.3f\n\n", r2_corr, slope_corr))
+  
+  list(
+    correction_function = correction_fn,
+    calibration_model = calib_model,
+    pred_corrected = pred_corrected
+  )
+}
+
+#USAGE
+
+# GAM calibration - NO intercept (forced through origin)
+result_gam <- calibrate_regression(orbicella_gam_abundance_beta, 
+                                   method = "gam", 
+                                   intercept = FALSE,
+                                   plot = TRUE)
+
+# GAM calibration - WITH intercept
+result_gam_int <- calibrate_regression(orbicella_gam_abundance_beta, 
+                                       method = "gam", 
+                                       intercept = TRUE,
+                                       plot = TRUE)
+
+# Linear calibration - NO intercept
+result_lm <- calibrate_regression(orbicella_gam_abundance_beta, 
+                                  method = "lm",
+                                  intercept = FALSE,
+                                  plot = TRUE)
+
+# Linear calibration - WITH intercept
+result_lm <- calibrate_regression(orbicella_gam_abundance_beta, 
+                                  method = "lm",
+                                  intercept = TRUE,
+                                  plot = TRUE)
+
+# Linear calibration - NO intercept
+result_loess <- calibrate_regression(orbicella_gam_abundance_beta, 
+                                     method = "loess",
+                                     plot = TRUE)
+
+# Apply to new data
+# new_calibrated <- result_gam$correction_function(new_predictions)
+
+################################## quantile method ##################################
+library(mgcv)
+
+#SIMPLE QUANTILE MAPPING CALIBRATION
+calibrate_quantiles <- function(fitted_model, n_quantiles = 100, plot = TRUE) {
+  
+  pred <- predict(fitted_model, type = "response")
+  obs <- fitted_model$model[[1]]
+  
+  # Map prediction quantiles to observation quantiles
+  probs <- seq(0, 1, length.out = n_quantiles)
+  pred_q <- quantile(pred, probs)
+  obs_q <- quantile(obs, probs)
+  
+  # Create correction function
+  correction_fn <- approxfun(pred_q, obs_q, method = "linear", rule = 2)
+  pred_corrected <- correction_fn(pred)
+  
+  # Metrics
+  r2_orig <- cor(obs, pred)^2
+  r2_corr <- cor(obs, pred_corrected)^2
+  slope_orig <- coef(lm(obs ~ pred))[2]
+  slope_corr <- coef(lm(obs ~ pred_corrected))[2]
+  mae_orig <- mean(abs(obs - pred))
+  mae_corr <- mean(abs(obs - pred_corrected))
+  
+  # Plot
+  if (plot) {
+    par(mfrow = c(2, 2), mar = c(4.5, 4.5, 3, 1))
+    lim <- c(0, max(c(obs, pred_corrected)))
+    
+    # Original
+    plot(pred, obs, xlim = lim, ylim = lim, pch = 16, 
+         col = rgb(0.3, 0.3, 0.3, 0.3), main = "Original",
+         xlab = "Predicted", ylab = "Observed")
+    abline(0, 1, col = "red", lwd = 2)
+    abline(lm(obs ~ pred), col = "black", lwd = 2, lty = 2)
+    text(0.01, lim[2] * 0.98, 
+         sprintf("R²=%.3f\nSlope=%.3f\nMAE=%.4f", r2_orig, slope_orig, mae_orig),
+         adj = c(0, 1), cex = 0.8)
+    
+    # Corrected
+    plot(pred_corrected, obs, xlim = lim, ylim = lim, pch = 16,
+         col = rgb(0, 0.4, 0.7, 0.3), main = "Calibrated",
+         xlab = "Predicted (Calibrated)", ylab = "Observed")
+    abline(0, 1, col = "red", lwd = 2)
+    abline(lm(obs ~ pred_corrected), col = "darkblue", lwd = 2, lty = 2)
+    text(0.01, lim[2] * 0.98,
+         sprintf("R²=%.3f\nSlope=%.3f\nMAE=%.4f", r2_corr, slope_corr, mae_corr),
+         adj = c(0, 1), cex = 0.8, col = "darkblue")
+    
+    # Correction curve
+    pred_seq <- seq(0, max(pred) * 1.1, length.out = 500)
+    plot(pred_seq, correction_fn(pred_seq), type = "l", lwd = 3, 
+         col = "darkblue", main = "Correction Function",
+         xlab = "Original Prediction", ylab = "Corrected Prediction")
+    abline(0, 1, col = "red", lwd = 2, lty = 2)
+    points(pred_q, obs_q, pch = 19, cex = 0.5, col = rgb(1, 0.5, 0, 0.6))
+    grid(col = "gray85")
+    
+    # Residuals
+    plot(pred, obs - pred, pch = 16, col = rgb(0.3, 0.3, 0.3, 0.3),
+         main = "Residuals", xlab = "Prediction", ylab = "Obs - Pred",
+         ylim = range(c(obs - pred, obs - pred_corrected)))
+    points(pred, obs - pred_corrected, pch = 16, col = rgb(0, 0.4, 0.7, 0.3))
+    abline(h = 0, col = "red", lwd = 2, lty = 2)
+    legend("topright", c("Original", "Calibrated"),
+           col = c(rgb(0.3, 0.3, 0.3, 0.6), rgb(0, 0.4, 0.7, 0.6)),
+           pch = 16, bty = "n")
+    
+    par(mfrow = c(1, 1))
+  }
+  
+  # Summary
+  cat(sprintf("\nORIGINAL:   R²=%.3f  Slope=%.3f  MAE=%.4f\n", 
+              r2_orig, slope_orig, mae_orig))
+  cat(sprintf("CALIBRATED: R²=%.3f  Slope=%.3f  MAE=%.4f\n\n", 
+              r2_corr, slope_corr, mae_corr))
+  
+  # Create comparison dataframe
+  comparison_df <- data.frame(
+    observed = obs,
+    predicted_original = pred,
+    predicted_corrected = pred_corrected,
+    residual_original = obs - pred,
+    residual_corrected = obs - pred_corrected
+  )
+  
+  list(
+    correction_function = correction_fn,
+    pred_corrected = pred_corrected,
+    observations = obs,
+    predictions_original = pred,
+    comparison_df = comparison_df
+  )
+}
+
+#USAGE
+# result <- calibrate_quantiles(orbicella_gam_abundance_beta, plot = TRUE)
+result <- calibrate_quantiles(orbicella_gam_abundance_beta, 
+                              n_quantiles = 100, 
+                              plot = TRUE)
+
+# View the comparison dataframe
+test = result$comparison_df
+
+
+# Create quantile comparison plot
+pred <- result$predictions_original
+obs <- result$observations
+n_quantiles = 100
+
+probs <- seq(0, 1, length.out = 100)
+pred_q <- quantile(pred, probs)
+obs_q <- quantile(obs, probs)
+
+# Plot the quantiles
+par(mfrow = c(1, 2), mar = c(5, 4.5, 3, 1))
+
+# Plot 1: Quantile values
+plot(probs * n_quantiles, pred_q, type = "l", lwd = 2.5, col = "gray40",
+     xlab = "Percentile", ylab = "Value",
+     main = "Quantile Distributions", ylim = c(0, max(obs_q)))
+lines(probs * n_quantiles, obs_q, lwd = 2.5, col = "red")
+legend("topleft", legend = c("Predicted", "Observed"),
+       col = c("gray40", "red"), lwd = 2.5, bty = "n")
+grid()
+
+# Plot 2: Direct comparison (the mapping pairs)
+plot(pred_q, obs_q, type = "p", pch = 19, cex = 0.8, col = "darkblue",
+     xlab = "Predicted Quantiles", ylab = "Observed Quantiles",
+     main = "Quantile Pairs (What Gets Mapped)")
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+grid()
+
+par(mfrow = c(1, 1))
+# Apply to new data:
+# new_calibrated <- result$correction_function(new_predictions)
