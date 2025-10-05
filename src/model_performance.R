@@ -20,7 +20,7 @@
   
   ################################## test with abundance correct ##################################
   
-  # ===== HELPER FUNCTIONS =====
+  #HELPER FUNCTIONS
   
   calculate_threshold_metrics <- function(observed_binary, predicted_prob, threshold) {
     predicted_binary <- as.numeric(predicted_prob > threshold)
@@ -58,7 +58,7 @@
     list(correction_function = correction_fn, predictions_corrected = pred_corrected)
   }
   
-  # ===== MAIN VALIDATION FUNCTION =====
+  #MAIN VALIDATION FUNCTION
   
   validate_hurdle_simple <- function(species_name, train_percent = 80, seed = 300, 
                                      presence_threshold = 0.5, optimize_threshold = NULL,
@@ -211,7 +211,7 @@
     return(result)
   }
   
-  # ===== PLOTTING FUNCTION =====
+  #PLOTTING FUNCTION
   
   plot_hurdle_complete <- function(result) {
     library(ggplot2); library(viridis); library(gridExtra)
@@ -276,17 +276,16 @@
     return(invisible(list(p1, p2, p3, p4, p5, p6, p7, p8)))
   }
   
-  # ===== USAGE EXAMPLES =====
+  #USAGE EXAMPLES
   
-  #default seed (300)
-  # With abundance calibration
-  result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence",
-                                   calibrate_abundance = TRUE, use_beta = TRUE)
-  
-  # Without abundance calibration
-  result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence",
-                                   calibrate_abundance = FALSE, use_beta = TRUE)
-  
+  # #default seed (300)
+  # # With abundance calibration
+  # result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence",
+  #                                  calibrate_abundance = TRUE, use_beta = TRUE)
+  # 
+  # # Without abundance calibration
+  # result <- validate_hurdle_simple("orbicella", optimize_threshold = "prevalence",
+  #                                  calibrate_abundance = FALSE, use_beta = TRUE)
   
   # With random seed (uses current time/state)
   result <- validate_hurdle_simple("orbicella", seed = NULL, optimize_threshold = "prevalence",
