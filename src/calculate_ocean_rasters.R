@@ -852,7 +852,34 @@
   
   plot(distance_to_deep_raster)
   
-
+  ################################## lon & lat ##################################
+  
+  # Get coordinates from bathy_final
+  coords <- xyFromCell(bathy_final, 1:ncell(bathy_final))
+  
+  # Create longitude raster
+  lon_raster <- bathy_final
+  values(lon_raster) <- coords[, 1]
+  names(lon_raster) <- "longitude"
+  
+  # Create latitude raster
+  lat_raster <- bathy_final
+  values(lat_raster) <- coords[, 2]
+  names(lat_raster) <- "latitude"
+  
+  # Mask to match bathy_final (only keep values where bathy exists)
+  lon_raster <- mask(lon_raster, bathy_final)
+  lat_raster <- mask(lat_raster, bathy_final)
+  
+  cat("Longitude and latitude rasters created\n")
+  cat("Longitude range:", range(values(lon_raster), na.rm = TRUE), "\n")
+  cat("Latitude range:", range(values(lat_raster), na.rm = TRUE), "\n")
+  
+  # Plot to verify
+  par(mfrow = c(1, 2))
+  plot(lon_raster, main = "Longitude")
+  plot(lat_raster, main = "Latitude")
+  par(mfrow = c(1, 1))
   
   ################################## Import SST ##################################
   

@@ -3231,6 +3231,72 @@
   
   # Display the map
   coral_cover_map
+  
+  ################################## spp cover map ##################################
+  
+  # Get unique PSU locations with coral cover data for a specific species
+  psu_cover_data <- combined_benthic_data_averaged %>%
+    filter(grepl("agaricia", spp, ignore.case = TRUE)) %>%
+    group_by(PSU) %>%
+    summarise(
+      lat = first(lat),
+      lon = first(lon),
+      dataset = first(dataset),
+      avg_cover = mean(cover, na.rm = TRUE),
+      .groups = 'drop'
+    )
+  
+  # Create color palette for coral cover (yellow to red)
+  color_pal <- colorNumeric(
+    palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
+    domain = psu_cover_data$avg_cover,
+    na.color = "gray"
+  )
+  
+  # Create the interactive leaflet map
+  coral_cover_map <- leaflet(psu_cover_data) %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addCircleMarkers(
+      lng = ~lon, 
+      lat = ~lat,
+      popup = ~paste0(
+        "<b>PSU:</b> ", PSU, "<br>",
+        "<b>Dataset:</b> ", dataset, "<br>",
+        "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
+        "<b>Latitude:</b> ", round(lat, 5), "<br>",
+        "<b>Longitude:</b> ", round(lon, 5)
+      ),
+      label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
+      radius = 8,
+      color = "white",
+      fillColor = ~color_pal(avg_cover),
+      fillOpacity = 0.8,
+      weight = 2,
+      stroke = TRUE
+    ) %>%
+    addLegend(
+      "bottomright",
+      pal = color_pal,
+      values = ~avg_cover,
+      title = "Coral Cover (%)",
+      opacity = 1,
+      labFormat = labelFormat(suffix = "%")
+    ) %>%
+    addLayersControl(
+      baseGroups = c("OpenStreetMap", "Satellite"),
+      options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    fitBounds(
+      lng1 = min(psu_cover_data$lon, na.rm = TRUE) - 0.1,
+      lat1 = min(psu_cover_data$lat, na.rm = TRUE) - 0.1,
+      lng2 = max(psu_cover_data$lon, na.rm = TRUE) + 0.1,
+      lat2 = max(psu_cover_data$lat, na.rm = TRUE) + 0.1
+    )
+  
+  # Display the map
+  coral_cover_map
+  
   ################################## Save output ##################################
   
   # # Save specific combined datasets in an .rda file for stats downstream

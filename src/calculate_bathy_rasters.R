@@ -255,18 +255,18 @@
   ################################## plots ##################################
   
   # Define plot extent options
-  plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
+  # plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
   # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
   # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
-  # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating St Thomas
+  plot_extents = ext(270000, 320000, 2000000, 2040000) #for investigating St Thomas
   # plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
   
   # bathy
-  bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = 60)
+  bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = -30)
   plot(bathy_final_clamp,
        col = cmocean("deep")(100),
        ext = plot_extents,
@@ -278,6 +278,13 @@
        ext = plot_extents,
        main = "Slope - Terra Raster with cmocean deep")
 
+  # Slope
+  slope_terra_clamp <- clamp(slope_terra, lower = 0, upper = 20)
+  plot(slope_terra_clamp,
+       col = cmocean("deep")(100),
+       ext = plot_extents,
+       main = "Slope - Terra Raster with cmocean deep")
+  
   # Slope of Slope
   plot(slopeofslope_terra,
        col = cmocean("deep")(100),

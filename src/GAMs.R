@@ -51,7 +51,7 @@
                        "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
                        "range_SST", "year", "date", "lat", "lon", "cover", "mean_PAR",
                        "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
-                       "dist_to_deep", "max_BOV")
+                       "dist_to_deep", "max_BOV", "longitude", "latitude")
   
   # Function to extract environmental data (reusable)
   extract_env_data <- function(species_data) {
@@ -84,6 +84,8 @@
     species_data$dist_to_deep <- env_data$dist_to_deep
     species_data$max_BOV <- env_data$max_BOV
     species_data$year <- year(species_data$date)
+    species_data$longitude = env_data$longitude
+    species_data$latitude = env_data$latitude
     
     return(species_data)
   }
@@ -93,7 +95,8 @@
     complexity_matrix <- model_data_complex[, c("depth_bathy", "TPI", "slope", "planform_curv",
                                                 "range_SST", "mean_SST", "dir_at_max_hsig", "max_Hsig",
                                                 "mean_Hsig", "year", "mean_PAR", "mean_chla", "mean_kd490",
-                                                "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV")]
+                                                "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV",
+                                                "longitude", "latitude")]
     
     cor_matrix <- cor(complexity_matrix, use = "complete.obs")
     return(cor_matrix)
@@ -111,10 +114,10 @@
   species_coords <- vect(species_df,
                          geom = c("lon", "lat"),
                          crs = "EPSG:4326")  # WGS84 geographic
-
+  
   # Transform to match your raster CRS
   species_coords_utm <- project(species_coords, crs(bathy_final))
-
+  
   # Extract transformed coordinates
   utm_coords <- as.data.frame(geom(species_coords_utm)[, c("x", "y")])
   site_data$x_utm <- utm_coords$x
@@ -128,12 +131,12 @@
                    planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
                    mean_hsig_raster, mean_sst_raster, range_sst_raster, mean_par_raster,
                    mean_chlor_a_raster, mean_kd490_raster, mean_spm_raster, dist_to_land_raster,
-                   distance_to_deep_raster, bov_full)
+                   distance_to_deep_raster, bov_full, lon_raster, lat_raster)
   
   names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                           "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
                           "range_SST", "mean_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
-                          "dist_to_deep", "max_BOV")
+                          "dist_to_deep", "max_BOV", "longitude", "latitude")
 
   # Extract environmental values for simple variables
   site_env_values <- terra::extract(env_simple,
@@ -535,12 +538,11 @@
   # Two-part model with complexity
   agaricia_model_data$present <- ifelse(agaricia_model_data$cover > 0, 1, 0)
   
-  
-  n_absent <- sum(agaricia_model_data$present == 0)
-  n_present <- sum(agaricia_model_data$present == 1)
-  balance_ratio <- n_absent / n_present
-  
-  weights_vec <- ifelse(agaricia_model_data$present == 1, balance_ratio, 1)
+  # n_absent <- sum(agaricia_model_data$present == 0)
+  # n_present <- sum(agaricia_model_data$present == 1)
+  # balance_ratio <- n_absent / n_present
+  # 
+  # weights_vec <- ifelse(agaricia_model_data$present == 1, balance_ratio, 1)
   
   # tic()
   # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -594,13 +596,22 @@
   #                                    data = agaricia_model_data,
   #                                    # select = TRUE,
   #                                    family = binomial())
-  # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  # # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                      s(slope) +
+  #                                      s(complexity) + s(planform_curv) +
+  #                                      s(dir_at_max_hsig, bs = 'cc') +
+  #                                      s(mean_SST) +
+  #                                      s(mean_spm) + s(max_BOV) + s(lon, lat, k = 75),
+  #                                    data = agaricia_model_data,
+  #                                    # select = TRUE,
+  #                                    family = binomial())
+  # non-weighted version WITH spatial smooth (TEST); whittled down with worst observed/estimate concurvity
   agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                        s(slope) +
                                        s(complexity) + s(planform_curv) +
                                        s(dir_at_max_hsig, bs = 'cc') +
-                                       s(mean_SST) +
-                                       s(mean_spm) + s(max_BOV),
+                                       s(mean_spm) + s(max_BOV) + s(longitude, latitude, k = 75),
                                      data = agaricia_model_data,
                                      # select = TRUE,
                                      family = binomial())
@@ -630,14 +641,14 @@
   #                               select = TRUE,
   #                              family = Gamma(link = "log"))
   # 
-  #dist to deep, meanSST, meanchla
-  agaricia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 3) +
-                                          s(complexity) +
-                                          s(dir_at_max_hsig, bs = 'cc') +
-                                          s(mean_chla, k = 12),
-                                        data = agaricia_model_data[agaricia_model_data$cover > 0, ],
-                                        select = TRUE,
-                                        family = Gamma(link = "log"))
+  # #dist to deep, meanSST, meanchla
+  # agaricia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 3) +
+  #                                         s(complexity) +
+  #                                         s(dir_at_max_hsig, bs = 'cc') +
+  #                                         s(mean_chla, k = 12),
+  #                                       data = agaricia_model_data[agaricia_model_data$cover > 0, ],
+  #                                       select = TRUE,
+  #                                       family = Gamma(link = "log"))
   
   
   # agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -651,15 +662,25 @@
   #                              data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
   #                              # select = TRUE,
   #                              family = betar())
-  # beta with cloglog using observed/estimate concurvity
+  # beta with cloglog using observed/estimate concurvity, no spatial smooth
   agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                        s(slope) +
                                        s(VRM) +
                                        s(dir_at_max_hsig, bs = 'cc') +
+                                       s(dist_to_land) +
                                        s(mean_SST) + s(mean_PAR) + s(mean_chla, k = 15),
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
+  # # beta with cloglog using observed/estimate concurvity, WITH spatial smooth (test)
+  # agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+  #                                      s(slope) +
+  #                                      s(VRM) +
+  #                                      s(dir_at_max_hsig, bs = 'cc') + s(lon, lat) +
+  #                                      s(mean_SST) + s(mean_PAR) + s(mean_chla, k = 15),
+  #                                    data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
+  #                                    # select = TRUE,
+  #                                    family = betar())
   
   pred <- predict(agaricia_gam_abundance_beta, type = "response")
   obs <- agaricia_gam_abundance_beta$model$cover_prop
@@ -671,24 +692,24 @@
   
   
   summary(agaricia_gam_presence_binom)
-  summary(agaricia_gam_abundance_gamma)
+  # summary(agaricia_gam_abundance_gamma)
   summary(agaricia_gam_abundance_beta)
   AIC(agaricia_gam_presence_binom)
-  AIC(agaricia_gam_abundance_gamma)
+  # AIC(agaricia_gam_abundance_gamma)
   AIC(agaricia_gam_abundance_beta)
   
   draw(agaricia_gam_presence_binom)
-  draw(agaricia_gam_abundance_gamma)
+  # draw(agaricia_gam_abundance_gamma)
   draw(agaricia_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(agaricia_gam_presence_binom)
-  gam.check(agaricia_gam_abundance_gamma)
+  # gam.check(agaricia_gam_abundance_gamma)
   gam.check(agaricia_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(agaricia_gam_presence_binom, full = TRUE)
-  concurvity(agaricia_gam_abundance_gamma, full = TRUE)
+  # concurvity(agaricia_gam_abundance_gamma, full = TRUE)
   concurvity(agaricia_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
@@ -705,6 +726,8 @@
   #         here("output", "output_GAMs", "agaricia_gam_abundance_gamma.rds"))
   
   ################################## MADRACIS ##################################
+  
+  # NOTE - this model looks bad.
   
   madracis_model_data = spp_data %>%
     filter(grepl("Madracis", spp))
@@ -726,14 +749,31 @@
   #                             # select = TRUE,
   #                             family = binomial())
   # toc()
-  madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-                                       s(TPI) +
-                                       s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-                                       s(mean_SST) + s(mean_kd490),
+  # # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  # madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                      s(slope) +
+  #                                      s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                                      s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                                      s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                                      s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                                      s(range_SST) +
+  #                                      s(dist_to_land),
+  #                                    data = madracis_model_data,
+  #                                    # select = TRUE,
+  #                                    family = binomial())
+  # non-weighted version WITH spatial smooth; whittled down with worst observed/estimate concurvity
+  madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                       s(slope) +
+                                       s(complexity) + s(TPI) +
+                                       s(dir_at_max_hsig, bs = 'cc') +
+                                       s(mean_kd490) +
+                                       s(max_BOV) +
+                                       s(longitude, latitude),
                                      data = madracis_model_data,
-                                     select = TRUE,
+                                     # select = TRUE,
                                      family = binomial())
   
+
   # madracis_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
@@ -745,29 +785,60 @@
   #                               data = madracis_model_data[madracis_model_data$cover > 0, ],
   #                               # select = TRUE,
   #                              family = Gamma(link = "log"))
-  madracis_gam_abundance_gamma <- gam(cover ~ s(depth) + s(complexity) +
-                                        s(mean_Hsig) +
-                                        s(mean_chla) +
-                                        s(dist_to_land),
-                                      data = madracis_model_data[madracis_model_data$cover > 0, ],
-                                      select = TRUE,
-                                      family = Gamma(link = "log"))
+  # madracis_gam_abundance_gamma <- gam(cover ~ s(depth) + s(complexity) +
+  #                                       s(mean_Hsig) +
+  #                                       s(mean_chla) +
+  #                                       s(dist_to_land),
+  #                                     data = madracis_model_data[madracis_model_data$cover > 0, ],
+  #                                     select = TRUE,
+  #                                     family = Gamma(link = "log"))
+  
+  
+  madracis_model_data$cover_prop <- madracis_model_data$cover / 100
+  
+  # madracis_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                              data = madracis_model_data[madracis_model_data$cover_prop > 0, ],
+  #                              # select = TRUE,
+  #                              family = betar())
+  # beta with cloglog using observed/estimate concurvity, WITHOUT spatial smooth (with is not helpful)
+  madracis_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                       s(slope) +
+                                       s(mean_SST) + s(max_BOV) + s(mean_kd490) +
+                                       s(range_SST) + s(mean_PAR),
+                                     data = madracis_model_data[madracis_model_data$cover_prop > 0, ],
+                                     # select = TRUE,
+                                     family = betar())
+  
+
   
   summary(madracis_gam_presence_binom)
-  summary(madracis_gam_abundance_gamma)
+  # summary(madracis_gam_abundance_gamma)
+  summary(madracis_gam_abundance_beta)
+  
   AIC(madracis_gam_presence_binom)
-  AIC(madracis_gam_abundance_gamma)
+  # AIC(madracis_gam_abundance_gamma)
+  AIC(madracis_gam_abundance_beta)
   
   draw(madracis_gam_presence_binom)
-  draw(madracis_gam_abundance_gamma)
+  # draw(madracis_gam_abundance_gamma)
+  draw(madracis_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(madracis_gam_presence_binom)
-  gam.check(madracis_gam_abundance_gamma)
+  # gam.check(madracis_gam_abundance_gamma)
+  gam.check(madracis_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(madracis_gam_presence_binom, full = TRUE)
-  concurvity(madracis_gam_abundance_gamma, full = TRUE)
+  # concurvity(madracis_gam_abundance_gamma, full = TRUE)
+  concurvity(madracis_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   madracis_roc_curve <- roc(madracis_gam_presence_binom$model$present, 
@@ -819,13 +890,23 @@
   #                                   data = porites_model_data,
   #                                   select = TRUE,
   #                                   family = binomial())
-  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
-  #   NOTE - dropped TPI, planform_curv and kd490 because of extreme partial effects
+  # # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  # #   NOTE - dropped TPI, planform_curv and kd490 because of extreme partial effects
+  # porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+  #                                     s(complexity) + s(slope) +
+  #                                     s(max_BOV) + s(dir_at_max_hsig, bs = 'cc') +
+  #                                     s(mean_SST, k = 15) + s(mean_spm) +
+  #                                     s(range_SST),
+  #                                   data = porites_model_data,
+  #                                   # weights = weights_vec,
+  #                                   # select = TRUE,
+  #                                   family = binomial())
+  # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
   porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
                                       s(complexity) + s(slope) +
                                       s(max_BOV) + s(dir_at_max_hsig, bs = 'cc') +
-                                      s(mean_SST, k = 15) + s(mean_spm) +
-                                      s(range_SST),
+                                      s(mean_spm) +
+                                      s(longitude, latitude, k = 50),
                                     data = porites_model_data,
                                     # weights = weights_vec,
                                     # select = TRUE,
@@ -869,7 +950,7 @@
   #                               data = porites_model_data[porites_model_data$cover_prop > 0, ],
   #                               select = TRUE,
   #                               family = betar())
-  # beta with cloglog using observed/estimate concurvity
+  # beta with cloglog using observed/estimate concurvity (spatial smooth does not help)
   porites_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                       s(TPI) + s(VRM) + s(planform_curv) +
                                       s(mean_Hsig) +
@@ -1219,24 +1300,6 @@
   #                                     # weights = weights_vec,
   #                                     select = TRUE,
   #                                     family = binomial())
-  # non-weighted version; whittled down with observed/estimate concurvity
-  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(planform_curv) + s(SAPA) +
-                                        s(dir_at_max_hsig, bs = 'cc') +
-                                        s(mean_SST) + s(mean_chla) + s(mean_kd490) +
-                                        s(range_SST),
-                                      data = orbicella_model_data,
-                                      # weights = weights_vec,
-                                      # select = TRUE,
-                                      family = binomial())
-  # # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
-  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(slope) + s(complexity) +
-  #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(range_SST) + s(lon, lat),
-  #                                     data = orbicella_model_data,
-  #                                     # select = TRUE,
-  #                                     family = binomial())
   # # weighted version; whittled down with worst concurvity
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
@@ -1248,6 +1311,24 @@
   #                                     weights = weights_vec,
   #                                     select = TRUE,
   #                                     family = binomial())
+  # # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(planform_curv) + s(SAPA) +
+  #                                       s(dir_at_max_hsig, bs = 'cc') +
+  #                                       s(mean_SST) + s(mean_chla) + s(mean_kd490) +
+  #                                       s(range_SST),
+  #                                     data = orbicella_model_data,
+  #                                     # weights = weights_vec,
+  #                                     # select = TRUE,
+  #                                     family = binomial())
+  # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) + s(complexity) +
+                                        s(dir_at_max_hsig, bs = 'cc') +
+                                        s(longitude, latitude, k = 200),
+                                      data = orbicella_model_data,
+                                      # select = TRUE,
+                                      family = binomial())
   
   # Use the model's data directly (avoids length mismatch)
   gam_pred_prob <- predict(orbicella_gam_presence_binom, type = "response")
@@ -1315,23 +1396,23 @@
   #                              data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                              # select = TRUE,
   #                              family = betar())
-  # beta with cloglog using observed/estimate concurvity, no spatial smooth
-  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(slope) +
-                                        s(mean_Hsig) +
-                                        s(mean_SST) + s(mean_PAR) +
-                                        s(range_SST), #s(lon, lat)
-                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-                                      # select = TRUE,
-                                      family = betar(link = "cloglog"))
-  # # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
+  # # beta with cloglog using observed/estimate concurvity, no spatial smooth
   # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(planform_curv) +
-  #                                       s(max_BOV) +
-  #                                       s(lon, lat, k = 120),
+  #                                       s(slope) +
+  #                                       s(mean_Hsig) +
+  #                                       s(mean_SST) + s(mean_PAR) +
+  #                                       s(range_SST),
   #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                                     # select = TRUE,
   #                                     family = betar(link = "cloglog"))
+  # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
+  orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(planform_curv) +
+                                        s(max_BOV) +
+                                        s(longitude, latitude, k = 100),
+                                      data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+                                      # select = TRUE,
+                                      family = betar(link = "cloglog"))
   
   # #logit transform
   # orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 

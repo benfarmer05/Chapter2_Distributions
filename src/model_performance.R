@@ -137,7 +137,7 @@
     
     # Optimize threshold if requested
     if(!is.null(optimize_threshold)) {
-      test_thresholds <- seq(0.05, 0.95, by = 0.05)
+      test_thresholds <- seq(0.05, 0.95, by = 0.001)
       
       criterion_values <- if(optimize_threshold == "prevalence") {
         sapply(test_thresholds, function(t) -calculate_threshold_metrics(actual_binary, presence_prob, t)$prevalence_diff)
@@ -288,7 +288,7 @@
   #                                  calibrate_abundance = FALSE, use_beta = TRUE)
   
   # With random seed (uses current time/state)
-  result <- validate_hurdle_simple("orbicella", seed = NULL, optimize_threshold = "prevalence",
+  result <- validate_hurdle_simple("orbicella", seed = 300, optimize_threshold = "TSS",
                                    calibrate_abundance = TRUE, use_beta = TRUE)
   
   # Without abundance calibration
