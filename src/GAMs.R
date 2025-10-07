@@ -51,7 +51,7 @@
                        "max_Hsig", "dir_at_max_hsig", "mean_Hsig",  "mean_SST",
                        "range_SST", "year", "date", "lat", "lon", "cover", "mean_PAR",
                        "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
-                       "dist_to_deep", "max_BOV", "longitude", "latitude")
+                       "dist_to_deep", "max_BOV", "longitude", "latitude", "mean_dir")
   
   # Function to extract environmental data (reusable)
   extract_env_data <- function(species_data) {
@@ -86,6 +86,7 @@
     species_data$year <- year(species_data$date)
     species_data$longitude = env_data$longitude
     species_data$latitude = env_data$latitude
+    species_data$mean_dir = env_data$mean_dir
     
     return(species_data)
   }
@@ -96,7 +97,7 @@
                                                 "range_SST", "mean_SST", "dir_at_max_hsig", "max_Hsig",
                                                 "mean_Hsig", "year", "mean_PAR", "mean_chla", "mean_kd490",
                                                 "mean_spm", "dist_to_land", "dist_to_deep", "max_BOV",
-                                                "longitude", "latitude")]
+                                                "longitude", "latitude", "mean_dir")]
     
     cor_matrix <- cor(complexity_matrix, use = "complete.obs")
     return(cor_matrix)
@@ -131,13 +132,13 @@
                    planformcurv_multiscale, SAPA, max_hsig_raster, dir_at_max_hsig_raster,
                    mean_hsig_raster, mean_sst_raster, range_sst_raster, mean_par_raster,
                    mean_chlor_a_raster, mean_kd490_raster, mean_spm_raster, dist_to_land_raster,
-                   distance_to_deep_raster, bov_full, lon_raster, lat_raster)
+                   distance_to_deep_raster, bov_full, lon_raster, lat_raster, dir_erddap_raster)
   
   names(env_complex) <- c("depth", "aspect", "slope", "complexity", "TPI", "VRM", "planform_curv",
                           "SAPA", "max_Hsig", "dir_at_max_hsig", "mean_Hsig", "mean_SST",
                           "range_SST", "mean_PAR", "mean_chla", "mean_kd490", "mean_spm", "dist_to_land",
-                          "dist_to_deep", "max_BOV", "longitude", "latitude")
-
+                          "dist_to_deep", "max_BOV", "longitude", "latitude", "mean_dir")
+  
   # Extract environmental values for simple variables
   site_env_values <- terra::extract(env_simple,
                                        cbind(site_data$x_utm,
@@ -610,7 +611,7 @@
   agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                        s(slope) +
                                        s(complexity) + s(planform_curv) +
-                                       s(dir_at_max_hsig, bs = 'cc') +
+                                       s(mean_dir, bs = 'cc') +
                                        s(mean_spm) + s(max_BOV) + s(longitude, latitude, k = 75),
                                      data = agaricia_model_data,
                                      # select = TRUE,
@@ -904,7 +905,7 @@
   # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
   porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
                                       s(complexity) + s(slope) +
-                                      s(max_BOV) + s(dir_at_max_hsig, bs = 'cc') +
+                                      s(max_BOV) + s(mean_dir, bs = 'cc') +
                                       s(mean_spm) +
                                       s(longitude, latitude, k = 50),
                                     data = porites_model_data,
@@ -1265,7 +1266,7 @@
   #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
-  #                               s(dist_to_land),
+  #                               s(dist_to_land) + s(mean_dir),
   #                             data = orbicella_model_data,
   #                             weights = weights_vec,
   #                             # select = TRUE,
@@ -1314,9 +1315,8 @@
   # # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
   # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) + s(SAPA) +
-  #                                       s(dir_at_max_hsig, bs = 'cc') +
   #                                       s(mean_SST) + s(mean_chla) + s(mean_kd490) +
-  #                                       s(range_SST),
+  #                                       s(range_SST) + s(mean_dir, bs = 'cc'),
   #                                     data = orbicella_model_data,
   #                                     # weights = weights_vec,
   #                                     # select = TRUE,
@@ -1324,7 +1324,7 @@
   # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(slope) + s(complexity) +
-                                        s(dir_at_max_hsig, bs = 'cc') +
+                                        s(mean_dir, bs = 'cc') +
                                         s(longitude, latitude, k = 200),
                                       data = orbicella_model_data,
                                       # select = TRUE,

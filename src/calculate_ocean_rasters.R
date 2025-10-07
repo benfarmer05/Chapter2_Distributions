@@ -32,54 +32,6 @@
   
   ################################## Import waves ##################################
   
-  # # VERSION where SWAN data was pulled from ERDDAP (old)
-  # #
-  # # wave_summary <- read.csv(here("output", "swan_wave_summary_for_R.csv"))
-  # 
-  # # 2. Load coordinate information
-  # lon_vec <- read.csv(here("output", "swan_longitude.csv"))$longitude
-  # lat_vec <- read.csv(here("output", "swan_latitude.csv"))$latitude
-  # grid_info <- read.csv(here("output", "swan_grid_info.csv"))
-  # 
-  # # Get grid dimensions
-  # nlon <- length(lon_vec)
-  # nlat <- length(lat_vec)
-  # lon_range <- range(lon_vec)
-  # lat_range <- range(lat_vec)
-  # 
-  # # Function to load matrix and create raster
-  # create_raster <- function(filename, var_name) {
-  #   cat(sprintf("Loading %s...\n", filename))
-  #   matrix_data <- as.matrix(read.csv(here("output", filename), header = FALSE))
-  #   
-  #   # Flip matrix vertically to match MATLAB orientation
-  #   matrix_data <- matrix_data[nrow(matrix_data):1, ]
-  #   
-  #   # Create SpatRaster using terra
-  #   r <- rast(matrix_data,
-  #             extent = ext(min(lon_vec), max(lon_vec), min(lat_vec), max(lat_vec)),
-  #             crs = "EPSG:4326")
-  #   
-  #   names(r) <- var_name
-  #   return(r)
-  # }
-  # 
-  # # Create rasters for key variables
-  # mean_hsig_raster <- create_raster("mean_hsig_matrix.csv", "Mean_Hsig")
-  # max_hsig_raster <- create_raster("max_hsig_matrix.csv", "Max_Hsig")
-  # mean_hswell_raster <- create_raster("mean_hswell_matrix.csv", "Mean_Hswell")
-  # mean_dir_raster <- create_raster("mean_dir_matrix.csv", "Mean_Direction")
-  # mean_per_raster <- create_raster("mean_per_matrix.csv", "Mean_Period")
-  # 
-  # projected_crs = crs(bathy_final)
-  # 
-  # # Reproject to match bathy_final CRS first
-  # mean_hsig_raster <- project(mean_hsig_raster, projected_crs)
-  # max_hsig_raster <- project(max_hsig_raster, projected_crs)
-  # mean_hswell_raster <- project(mean_hswell_raster, projected_crs)
-  # mean_dir_raster <- project(mean_dir_raster, projected_crs)
-  # mean_per_raster <- project(mean_per_raster, projected_crs)
-  
   # VERSION where SWAN data was provided directly from Miguel Canals
   # 
   SWAN_target_res <- 200
@@ -91,7 +43,7 @@
   # wave_summary <- wave_summary %>%
   #   filter(!is.na(longitude) & !is.na(latitude))
   wave_summary <- wave_summary[!is.na(wave_summary$longitude) & !is.na(wave_summary$latitude), ]
-
+  
   cat(sprintf("Loaded %d SWAN grid points\n", nrow(wave_summary)))
   
   # Create SpatVector from wave data
@@ -161,10 +113,32 @@
     
     # Gap filling with focal operations
     cat("Gap filling...\n")
-    result <- focal(result, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
     
-    # Additional gap filling pass for smoother results
-    result <- focal(result, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+    # For directional data, use circular-aware gap filling
+    if (grepl("dir", var_name, ignore.case = TRUE)) {
+      # Convert to radians for calculation
+      result_rad <- result * pi / 180
+      
+      # Focal mean of sin and cos components with multiple passes
+      sin_comp <- app(result_rad, sin)
+      cos_comp <- app(result_rad, cos)
+      
+      # Iterative gap filling with increasing window sizes
+      for (window_size in c(3, 5, 7, 9)) {
+        sin_comp <- focal(sin_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+        cos_comp <- focal(cos_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+      }
+      
+      # Convert back to degrees
+      result <- atan2(sin_comp, cos_comp) * 180 / pi
+      result[result < 0] <- result[result < 0] + 360
+      
+    } else {
+      # For non-directional data, use regular mean with multiple passes
+      for (window_size in c(3, 5, 7, 9)) {
+        result <- focal(result, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+      }
+    }
     
     # Resample bathymetry to match template and apply mask
     bathy_resampled <- resample(bathy_template, template_raster, method = "near")
@@ -200,9 +174,6 @@
   max_hsig_raster <- resample(max_hsig_raster, template_raster, method = "bilinear")
   per_at_max_hsig_raster <- resample(per_at_max_hsig_raster, template_raster, method = "bilinear")
   dir_at_max_hsig_raster <- resample(dir_at_max_hsig_raster, template_raster, method = "bilinear")
-  
-  
-  
   
   ################################## calculate BOV ##################################
   
@@ -706,6 +677,166 @@
   # bathy_clamper = clamp(bathy_final, lower = -50, upper = 0)
   # plot(bathy_clamper)
   
+  ################################## Import ERDDAP waves ##################################
+  
+  #above wave section was data supplied directly from Dr. Miguel Canals, and is to be used for
+  #   max BOV and mean/max Hsig. this section from ERDDAP is for mean wave direction only
+  
+  # VERSION where SWAN data is from ERDDAP (MATLAB output)
+  
+  SWAN_target_res <- 200
+  
+  # Load the composite wave direction data from MATLAB
+  wave_summary <- read.csv(here("output", "swan_composite_direction.csv"))
+  
+  # Clean the data
+  wave_summary <- wave_summary[!is.na(wave_summary$lon) & !is.na(wave_summary$lat), ]
+  
+  cat(sprintf("Loaded %d SWAN grid points\n", nrow(wave_summary)))
+  
+  # Create SpatVector from wave data
+  wave_points <- vect(wave_summary, 
+                      geom = c("lon", "lat"), 
+                      crs = "EPSG:4326")
+  
+  # Project to match bathymetry
+  wave_points_proj <- project(wave_points, crs(bathy_final))
+  
+  # Filter wave points to only water areas (non-NA bathymetry)
+  cat("Filtering wave points to water areas only...\n")
+  
+  # Extract bathymetry values at each wave point location
+  bathy_at_points <- extract(bathy_final, wave_points_proj)
+  
+  # Find points where bathymetry is NOT NA (i.e., water areas)
+  water_points_idx <- !is.na(bathy_at_points[,2])
+  
+  cat(sprintf("Points over water: %d/%d (%.1f%%)\n", 
+              sum(water_points_idx), length(water_points_idx), 
+              sum(water_points_idx)/length(water_points_idx)*100))
+  
+  # Keep only points that are over water
+  wave_points_water <- wave_points_proj[water_points_idx]
+  
+  cat(sprintf("After filtering to water: %d points\n", nrow(wave_points_water)))
+  
+  
+  create_wave_raster <- function(wave_points, var_name, bathy_template, target_resolution) {
+    cat(sprintf("Creating %dm raster for %s...\n", target_resolution, var_name))
+    
+    # Filter to valid values
+    values <- values(wave_points)[[var_name]]
+    valid_idx <- !is.na(values) & values >= 0
+    
+    if (grepl("dir", var_name, ignore.case = TRUE)) {
+      valid_idx <- valid_idx & values <= 360
+    }
+    
+    wave_points_valid <- wave_points[valid_idx]
+    cat(sprintf("Using %d valid points\n", sum(valid_idx)))
+    
+    # Create template with target resolution
+    bathy_ext <- ext(bathy_template)
+    template_raster <- rast(bathy_ext, 
+                            resolution = target_resolution,
+                            crs = crs(bathy_template))
+    
+    n_cells <- ncell(template_raster)
+    cat(sprintf("Grid: %d x %d cells (%.1f million)\n", 
+                ncol(template_raster), nrow(template_raster), n_cells/1e6))
+    
+    # Memory safety check
+    if (n_cells > 25e6) {
+      stop(sprintf("Grid too large (%.1f million cells). Use resolution > 100m.", n_cells/1e6))
+    }
+    
+    if (n_cells > 10e6) {
+      warning(sprintf("Large grid (%.1f million cells) - may be slow", n_cells/1e6))
+    }
+    
+    # Rasterize wave points to template
+    result <- rasterize(wave_points_valid, template_raster, 
+                        field = var_name, 
+                        fun = mean)
+    
+    # Gap filling with focal operations
+    cat("Gap filling...\n")
+    
+    # For directional data, use circular-aware gap filling
+    if (grepl("dir", var_name, ignore.case = TRUE)) {
+      # Convert to radians for calculation
+      result_rad <- result * pi / 180
+      
+      # Focal mean of sin and cos components with multiple passes
+      sin_comp <- app(result_rad, sin)
+      cos_comp <- app(result_rad, cos)
+      
+      # Iterative gap filling with increasing window sizes
+      for (window_size in c(3, 5, 7, 9)) {
+        sin_comp <- focal(sin_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+        cos_comp <- focal(cos_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+      }
+      
+      # Convert back to degrees
+      result <- atan2(sin_comp, cos_comp) * 180 / pi
+      result[result < 0] <- result[result < 0] + 360
+      
+    } else {
+      # For non-directional data, use regular mean with multiple passes
+      for (window_size in c(3, 5, 7, 9)) {
+        result <- focal(result, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+      }
+    }
+    
+    # Resample bathymetry to match template and apply mask
+    bathy_resampled <- resample(bathy_template, template_raster, method = "near")
+    result <- mask(result, bathy_resampled)
+    
+    names(result) <- var_name
+    return(result)
+  }
+  
+  
+  cat(sprintf("\n=== Creating wave direction raster at %dm resolution ===\n", SWAN_target_res))
+  
+  # Create wave direction raster from ERDDAP composite data
+  dir_erddap_raster <- create_wave_raster(wave_points_water, "mean_dir", bathy_final, SWAN_target_res)
+  
+  # Get extent and properties from bathy_final
+  bathy_ext <- ext(bathy_final)
+  bathy_crs <- crs(bathy_final)
+  bathy_res <- res(bathy_final)
+  
+  # Create template raster matching bathy_final exactly
+  template_raster <- rast(bathy_ext, resolution = bathy_res, crs = bathy_crs)
+  
+  # Resample wave raster to match bathy_final
+  dir_erddap_raster <- resample(dir_erddap_raster, template_raster, method = "bilinear")
+  
+  cat("Wave direction raster created and resampled to match bathymetry\n")
+  
+  # Plot wave direction
+  cat("\n=== Plotting wave direction ===\n")
+  
+  # Plot with extent (if plot_extents is defined)
+  if (exists("plot_extents")) {
+    plot(dir_erddap_raster,
+         col = cmocean("phase")(100),
+         ext = plot_extents,
+         main = "Mean Wave Direction (ERDDAP Composite)")
+    contour(bathy_final, add = TRUE, levels = seq(-30, -5, by = 5), 
+            col = "gray50", lwd = 0.4)
+    contour(bathy_final, add = TRUE, levels = c(-10, -20), 
+            col = "black", lwd = 0.8)
+  }
+  
+  # Plot full extent
+  plot(dir_erddap_raster,
+       col = cmocean("phase")(100),
+       main = "Mean Wave Direction (ERDDAP Composite)")
+  
+  
+  
   ################################## distance from shore ##################################
   
   # Create landmask from bathy_crm_2024 which has positive values for land
@@ -1120,10 +1251,10 @@
   ################################## plots ##################################
   
   # Define plot extent options
-  plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
+  # plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
   # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
   # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
-  # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
+  plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
   # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
@@ -1171,6 +1302,9 @@
   plot(per_at_max_hsig_raster,
        col = cmocean("amp")(100),
        ext = plot_extents)
+  plot(dir_erddap_raster,
+       col = cmocean("phase")(100),
+       ext = plot_extents)
   
   plot(mean_hsig_raster,
        col = cmocean("amp")(100))
@@ -1180,6 +1314,8 @@
        col = cmocean("phase")(100))
   plot(per_at_max_hsig_raster,
        col = cmocean("amp")(100))
+  plot(dir_erddap_raster,
+       col = cmocean("phase")(100))
   
   #plot PAR
   plot(mean_par_raster,

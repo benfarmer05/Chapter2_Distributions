@@ -16,7 +16,7 @@ END_YEAR = 2018;
 END_MONTH = 11;         % 1-12
 
 % File handling option
-KEEP_FILES = true;     % Set to true to keep downloaded files, false to delete them
+KEEP_FILES = false;     % Set to true to keep downloaded files, false to delete them
 
 % Puerto Rico/USVI region coordinates (matching SWAN and SST data)
 lat_min = 17.0;   % Southern boundary
@@ -31,7 +31,7 @@ projectPath = matlab.project.rootProject().RootFolder;
 % Define paths relative to the project root
 dataPath = fullfile(projectPath, 'data');
 srcPath = fullfile(projectPath, 'src');
-outputPath = fullfile(projectPath, 'output/PAR');
+outputPath = fullfile(projectPath, 'output');
 tempPath = fullfile(projectPath, 'temp');
 
 %% Calculate total months and generate year/month list
