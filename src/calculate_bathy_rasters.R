@@ -268,7 +268,7 @@
   # bathy
   bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = -30)
   plot(bathy_final_clamp,
-       col = cmocean("deep")(100),
+       # col = cmocean("deep")(100),
        ext = plot_extents,
        main = "bathy - Terra Raster with cmocean deep")
   
