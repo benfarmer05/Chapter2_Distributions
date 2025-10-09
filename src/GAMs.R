@@ -517,7 +517,8 @@
   
   # NOTE - TPI vs. dist to land difficult to pin down as the one to keep for presence model
   #           -   dist to deep, meanSST, and meanchla seem to be tricky for abundance model
-  
+  #           -   may consider if kd490 is safe to include; large uncertainty
+    
   agaricia_model_data = spp_data %>%
     filter(grepl("Agaricia", spp))
   agaricia_model_data = add_env_variables(agaricia_model_data, variables_at_PSUs)
@@ -544,6 +545,16 @@
   # balance_ratio <- n_absent / n_present
   # 
   # weights_vec <- ifelse(agaricia_model_data$present == 1, balance_ratio, 1)
+  
+  
+  # # # Remove top 1-2% of kd490 values
+  # # agaricia_model_data <- agaricia_model_data %>%
+  # #   filter(mean_kd490 < quantile(mean_kd490, 0.995, na.rm = TRUE))
+  # 
+  # #just remove top X values
+  # agaricia_model_data <- agaricia_model_data %>%
+  #   filter(mean_kd490 < sort(mean_kd490, decreasing = TRUE)[3])
+  
   
   # tic()
   # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -597,25 +608,27 @@
   #                                    data = agaricia_model_data,
   #                                    # select = TRUE,
   #                                    family = binomial())
-  # # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                       s(slope) +
+                                       s(complexity) + s(planform_curv) + s(TPI) +
+                                       s(mean_dir, bs = 'cc') +
+                                       s(mean_SST) +
+                                       s(max_BOV) + s(mean_kd490) + s(mean_chla, k = 12),
+                                     data = agaricia_model_data,
+                                     # data = agaricia_model_data_filtered,
+                                     # select = TRUE,
+                                     family = binomial())
+  # # non-weighted version WITH spatial smooth (TEST); whittled down with worst observed/estimate concurvity
   # agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                      s(slope) +
-  #                                      s(complexity) + s(planform_curv) +
-  #                                      s(dir_at_max_hsig, bs = 'cc') +
-  #                                      s(mean_SST) +
-  #                                      s(mean_spm) + s(max_BOV) + s(lon, lat, k = 75),
+  #                                      s(complexity) + s(planform_curv) + s(TPI) +
+  #                                      s(mean_dir, bs = 'cc') +
+  #                                      s(mean_kd490) +
+  #                                      s(longitude, latitude, k = 100),
   #                                    data = agaricia_model_data,
   #                                    # select = TRUE,
   #                                    family = binomial())
-  # non-weighted version WITH spatial smooth (TEST); whittled down with worst observed/estimate concurvity
-  agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                       s(slope) +
-                                       s(complexity) + s(planform_curv) +
-                                       s(mean_dir, bs = 'cc') +
-                                       s(mean_spm) + s(max_BOV) + s(longitude, latitude, k = 75),
-                                     data = agaricia_model_data,
-                                     # select = TRUE,
-                                     family = binomial())
   
   # Use the model's data directly (avoids length mismatch)
   gam_pred_prob <- predict(agaricia_gam_presence_binom, type = "response")
@@ -667,9 +680,9 @@
   agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                        s(slope) +
                                        s(VRM) +
-                                       s(dir_at_max_hsig, bs = 'cc') +
                                        s(dist_to_land) +
-                                       s(mean_SST) + s(mean_PAR) + s(mean_chla, k = 15),
+                                       s(mean_SST) + s(mean_PAR) +
+                                       s(mean_spm),
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
@@ -891,27 +904,28 @@
   #                                   data = porites_model_data,
   #                                   select = TRUE,
   #                                   family = binomial())
-  # # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
-  # #   NOTE - dropped TPI, planform_curv and kd490 because of extreme partial effects
-  # porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-  #                                     s(complexity) + s(slope) +
-  #                                     s(max_BOV) + s(dir_at_max_hsig, bs = 'cc') +
-  #                                     s(mean_SST, k = 15) + s(mean_spm) +
-  #                                     s(range_SST),
-  #                                   data = porites_model_data,
-  #                                   # weights = weights_vec,
-  #                                   # select = TRUE,
-  #                                   family = binomial())
-  # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  #   NOTE - dropped TPI, planform_curv and kd490 because of extreme partial effects
   porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-                                      s(complexity) + s(slope) +
+                                      s(complexity) + s(slope) + s(TPI) + s(planform_curv) +
+                                      s(SAPA) + s(VRM) +
                                       s(max_BOV) + s(mean_dir, bs = 'cc') +
-                                      s(mean_spm) +
-                                      s(longitude, latitude, k = 50),
+                                      s(mean_SST) +
+                                      s(range_SST) + s(mean_chla) + s(mean_kd490),
                                     data = porites_model_data,
                                     # weights = weights_vec,
                                     # select = TRUE,
                                     family = binomial())
+  # # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  # porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+  #                                     s(complexity) + s(slope) +
+  #                                     s(max_BOV) + s(mean_dir, bs = 'cc') +
+  #                                     s(mean_spm) +
+  #                                     s(longitude, latitude, k = 50),
+  #                                   data = porites_model_data,
+  #                                   # weights = weights_vec,
+  #                                   # select = TRUE,
+  #                                   family = binomial())
   
   gam_pred_prob <- predict(porites_gam_presence_binom, type = "response")
   gam_pred_binary <- ifelse(gam_pred_prob > 0.5, 1, 0)
@@ -971,10 +985,10 @@
   
   
   summary(porites_gam_presence_binom)
-  summary(porites_gam_abundance_gamma)
+  # summary(porites_gam_abundance_gamma)
   summary(porites_gam_abundance_beta)
   AIC(porites_gam_presence_binom)
-  AIC(porites_gam_abundance_gamma)
+  # AIC(porites_gam_abundance_gamma)
   AIC(porites_gam_abundance_beta)
   
   draw(porites_gam_presence_binom)
@@ -1312,23 +1326,24 @@
   #                                     weights = weights_vec,
   #                                     select = TRUE,
   #                                     family = binomial())
-  # # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
-  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(planform_curv) + s(SAPA) +
-  #                                       s(mean_SST) + s(mean_chla) + s(mean_kd490) +
-  #                                       s(range_SST) + s(mean_dir, bs = 'cc'),
-  #                                     data = orbicella_model_data,
-  #                                     # weights = weights_vec,
-  #                                     # select = TRUE,
-  #                                     family = binomial())
-  # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(planform_curv) + s(SAPA) +
                                         s(slope) + s(complexity) +
-                                        s(mean_dir, bs = 'cc') +
-                                        s(longitude, latitude, k = 200),
+                                        s(mean_spm) +
+                                        s(range_SST) + s(mean_dir, bs = 'cc'),
                                       data = orbicella_model_data,
+                                      # weights = weights_vec,
                                       # select = TRUE,
                                       family = binomial())
+  # # non-weighted version WITH spatial smooth; whittled down with observed/estimate concurvity
+  # orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(slope) + s(complexity) +
+  #                                       s(mean_dir, bs = 'cc') +
+  #                                       s(longitude, latitude, k = 200),
+  #                                     data = orbicella_model_data,
+  #                                     # select = TRUE,
+  #                                     family = binomial())
   
   # Use the model's data directly (avoids length mismatch)
   gam_pred_prob <- predict(orbicella_gam_presence_binom, type = "response")
@@ -1396,23 +1411,24 @@
   #                              data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
   #                              # select = TRUE,
   #                              family = betar())
-  # # beta with cloglog using observed/estimate concurvity, no spatial smooth
-  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(slope) +
-  #                                       s(mean_Hsig) +
-  #                                       s(mean_SST) + s(mean_PAR) +
-  #                                       s(range_SST),
-  #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
-  #                                     # select = TRUE,
-  #                                     family = betar(link = "cloglog"))
-  # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
+  # beta with cloglog using observed/estimate concurvity, no spatial smooth
   orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) +
                                         s(planform_curv) +
-                                        s(max_BOV) +
-                                        s(longitude, latitude, k = 100),
+                                        s(mean_Hsig, k = 12) + s(dist_to_land) +
+                                        s(mean_SST) + s(mean_PAR) +
+                                        s(mean_dir, bs = 'cc', k = 15),
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
                                       # select = TRUE,
                                       family = betar(link = "cloglog"))
+  # # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
+  # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                       s(planform_curv) +
+  #                                       s(max_BOV) +
+  #                                       s(longitude, latitude, k = 100),
+  #                                     data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = betar(link = "cloglog"))
   
   # #logit transform
   # orbicella_gam_abundance_beta <- gam(I(qlogis((cover_prop + 0.001)/(1 + 0.002))) ~ 
@@ -2203,18 +2219,30 @@
   #                                        data = colpophyllia_model_data,
   #                                        select = TRUE,
   #                                        family = binomial())
-  # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
-  #   NOTE - very strange partial effects curves. attempting to drop slope, range PAR, kd490, planform, chla
-  #           - possible that weighting is actually making things worse here?
-  colpophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                           s(complexity) +
-                                           s(mean_Hsig) +
-                                           s(mean_SST) +
+  # # weighted version; whittled down with observed/estimate concurvity (seems BEST so far)
+  # #   NOTE - very strange partial effects curves. attempting to drop slope, range PAR, kd490, planform, chla
+  # #           - possible that weighting is actually making things worse here?
+  # colpophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                          s(complexity) +
+  #                                          s(mean_Hsig) +
+  #                                          s(mean_SST) +
+  #                                          s(range_SST),
+  #                                        data = colpophyllia_model_data,
+  #                                        # weights = weights_vec,
+  #                                        # select = TRUE,
+  #                                        family = binomial())
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  colpophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                           s(slope) +
+                                           s(planform_curv) +
+                                           s(mean_dir, bs = 'cc', k = 12) +
+                                           s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
+                                           s(max_BOV) +
                                            s(range_SST),
-                                         data = colpophyllia_model_data,
-                                         # weights = weights_vec,
-                                         # select = TRUE,
-                                         family = binomial())
+                                      data = colpophyllia_model_data,
+                                      # weights = weights_vec,
+                                      # select = TRUE,
+                                      family = binomial())
   
   gam_pred_prob <- predict(colpophyllia_gam_presence_binom, type = "response")
   gam_pred_binary <- ifelse(gam_pred_prob > 0.5, 1, 0)
@@ -2255,14 +2283,23 @@
   #                               data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
   #                               select = TRUE,
   #                               family = betar())
-  # # # beta with observed/estimate concurvity
+  # # # # beta with observed/estimate concurvity
+  # colpophyllia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+  #                                          s(TPI) +
+  #                                          s(max_BOV) +
+  #                                          s(mean_SST) + s(range_SST) + s(mean_PAR),
+  #                                        data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
+  #                                        # select = TRUE,
+  #                                        family = betar())
+  # beta with cloglog using observed/estimate concurvity; NO spatial smooth
   colpophyllia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
-                                           s(TPI) +
-                                           s(max_BOV) +
-                                           s(mean_SST) + s(range_SST) + s(mean_PAR),
-                                         data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
-                                         # select = TRUE,
-                                         family = betar())
+                                        s(TPI) + s(slope) +
+                                        s(mean_SST) + s(mean_PAR, k = 12) +
+                                        s(max_BOV) + s(range_SST) +
+                                        s(mean_dir, bs = 'cc', k = 12),
+                                      data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
+                                      # select = TRUE,
+                                      family = betar(link = "cloglog"))
   
   
   pred <- predict(colpophyllia_gam_abundance_beta, type = "response")
@@ -2276,24 +2313,25 @@
   
   
   summary(colpophyllia_gam_presence_binom)
-  summary(colpophyllia_gam_abundance_gamma)
+  # summary(colpophyllia_gam_abundance_gamma)
   summary(colpophyllia_gam_abundance_beta)
+  
   AIC(colpophyllia_gam_presence_binom)
-  AIC(colpophyllia_gam_abundance_gamma)
+  # AIC(colpophyllia_gam_abundance_gamma)
   AIC(colpophyllia_gam_abundance_beta)
   
   draw(colpophyllia_gam_presence_binom)
-  draw(colpophyllia_gam_abundance_gamma)
+  # draw(colpophyllia_gam_abundance_gamma)
   draw(colpophyllia_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(colpophyllia_gam_presence_binom)
-  gam.check(colpophyllia_gam_abundance_gamma)
+  # gam.check(colpophyllia_gam_abundance_gamma)
   gam.check(colpophyllia_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(colpophyllia_gam_presence_binom, full = TRUE)
-  concurvity(colpophyllia_gam_abundance_gamma, full = TRUE)
+  # concurvity(colpophyllia_gam_abundance_gamma, full = TRUE)
   concurvity(colpophyllia_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC

@@ -16,13 +16,14 @@ END_YEAR = 2018;
 END_MONTH = 11;         % 1-12
 
 % File handling option
-KEEP_FILES = true;     % Set to true to keep downloaded files, false to delete them
+KEEP_FILES = true;     % Set to true to keep downloaded files, false to delete them after each pull
 
 % Puerto Rico/USVI region coordinates (matching SWAN and SST data)
 lat_min = 17.0;   % Southern boundary
 lat_max = 19.5;   % Northern boundary  
 lon_min = -68.0;  % Western boundary
 lon_max = -64.0;  % Eastern boundary
+
 %% =============================================
 
 % Get the project root directory
@@ -351,132 +352,132 @@ saveas(gcf, fullfile(outputPath, 'std_par_map.png'));
 
 fprintf('All PAR summary maps saved to output directory\n');
 
-% %% Export PAR Data for R Analysis
-% %   Exports processed PAR data in R-friendly formats
-% %   Following the same format as MUR SST data export
-% 
-% fprintf('\n=== Exporting Data for R Analysis ===\n');
-% 
-% %% 1. Export Summary Statistics as CSV (Long Format for Easy R Plotting)
-% fprintf('Creating summary statistics CSV for R...\n');
-% 
-% % Create coordinate grids
-% [lon_grid, lat_grid] = meshgrid(longitude, latitude);
-% 
-% % Flatten grids for long format
-% lon_vec = lon_grid(:);
-% lat_vec = lat_grid(:);
-% 
-% % Flatten summary statistics (transpose first to match coordinate orientation)
-% mean_par_t = mean_par';
-% mean_par_vec = mean_par_t(:);
-% max_par_t = max_par';
-% max_par_vec = max_par_t(:);
-% min_par_t = min_par';
-% min_par_vec = min_par_t(:);
-% std_par_t = std_par';
-% std_par_vec = std_par_t(:);
-% 
-% % Create summary table
-% summary_table = table(lon_vec, lat_vec, ...
-%     mean_par_vec, max_par_vec, min_par_vec, std_par_vec, ...
-%     'VariableNames', {'longitude', 'latitude', ...
-%     'mean_par', 'max_par', 'min_par', 'std_par'});
-% 
-% % Export summary CSV
-% writetable(summary_table, fullfile(outputPath, 'par_summary_for_R.csv'));
-% fprintf('Summary statistics saved: par_summary_for_R.csv\n');
-% 
-% %% 2. Export Coordinate Information
-% fprintf('Creating coordinate reference files...\n');
-% 
-% % Export coordinate vectors separately
-% lon_table = table(longitude(:), 'VariableNames', {'longitude'});
-% lat_table = table(latitude(:), 'VariableNames', {'latitude'});
-% writetable(lon_table, fullfile(outputPath, 'par_longitude.csv'));
-% writetable(lat_table, fullfile(outputPath, 'par_latitude.csv'));
-% 
-% % Also save grid dimensions for R raster creation
-% grid_info = table({'longitude'; 'latitude'; 'nlon'; 'nlat'}, ...
-%     {min(longitude); min(latitude); length(longitude); length(latitude)}, ...
-%     {max(longitude); max(latitude); length(longitude); length(latitude)}, ...
-%     'VariableNames', {'dimension', 'min_value', 'max_value'});
-% writetable(grid_info, fullfile(outputPath, 'par_grid_info.csv'));
-% 
-% fprintf('Coordinate files saved: par_longitude.csv, par_latitude.csv, par_grid_info.csv\n');
-% 
-% %% 3. Export Individual Summary Matrices (for direct raster creation in R)
-% fprintf('Exporting individual summary matrices...\n');
-% 
-% % Create a function to save matrices in R-readable format
-% save_matrix_for_R = @(matrix, filename) ...
-%     writematrix(matrix', fullfile(outputPath, [filename '.csv']));
-% 
-% % Export all summary statistics as individual matrices
-% save_matrix_for_R(mean_par, 'mean_par_matrix');
-% save_matrix_for_R(max_par, 'max_par_matrix');
-% save_matrix_for_R(min_par, 'min_par_matrix');
-% save_matrix_for_R(std_par, 'std_par_matrix');
-% 
-% fprintf('Individual matrices saved (4 files)\n');
-% 
-% %% 4. Export Time Series Data (Sample - first grid point)
-% fprintf('Creating time series sample data...\n');
-% 
-% % Convert MATLAB time to datetime
-% time_datetime = datetime(times_data, 'ConvertFrom', 'datenum');
-% 
-% % Extract time series for first valid grid point (avoid NaN locations)
-% [valid_i, valid_j] = find(~isnan(mean_par), 1, 'first');
-% 
-% % Extract time series for this point
-% par_ts = squeeze(par_data(valid_i, valid_j, :));
-% 
-% % Create time series table
-% ts_table = table(time_datetime, par_ts, ...
-%     'VariableNames', {'datetime', 'par_einstein_m2_day'});
-% 
-% % Add location info as metadata
-% sample_lon = longitude(valid_i);
-% sample_lat = latitude(valid_j);
-% 
-% writetable(ts_table, fullfile(outputPath, 'par_timeseries_sample.csv'));
-% fprintf('Time series sample saved: par_timeseries_sample.csv\n');
-% fprintf('Sample location: %.3f°W, %.3f°N\n', sample_lon, sample_lat);
-% 
-% %% 5. Export Summary Report
-% fprintf('Creating export summary...\n');
-% 
-% export_summary = {
-%     sprintf('PAR Data Export Summary - %s', datestr(now))
-%     '=================================================='
-%     ''
-%     'Files Created:'
-%     '1. par_summary_for_R.csv - All summary statistics in long format'
-%     '2. par_longitude.csv, par_latitude.csv - Coordinate vectors'
-%     '3. par_grid_info.csv - Grid dimension and extent information'
-%     '4. Individual matrix files (4 total):'
-%     '   - mean_par_matrix.csv, max_par_matrix.csv, etc.'
-%     '5. par_timeseries_sample.csv - Time series data for one location'
-%     ''
-%     sprintf('Data Characteristics:')
-%     sprintf('- Grid size: %d x %d', length(longitude), length(latitude))
-%     sprintf('- Longitude range: %.3f to %.3f°W', min(longitude), max(longitude))
-%     sprintf('- Latitude range: %.3f to %.3f°N', min(latitude), max(latitude))
-%     sprintf('- Time period: %s', date_range_str)
-%     sprintf('- Total time steps: %d', length(times_data))
-%     sprintf('- Variable: Photosynthetically Available Radiation (einstein m-2 day-1)')
-%     ''
-%     'Ready for R analysis using exported CSV files'
-% };
-% 
-% % Write summary
-% fileID = fopen(fullfile(outputPath, 'par_export_summary.txt'), 'w');
-% for i = 1:length(export_summary)
-%     fprintf(fileID, '%s\n', export_summary{i});
-% end
-% fclose(fileID);
-% 
-% fprintf('\n=== Export Complete ===\n');
-% fprintf('Total files created: %d\n', 9); % Updated count
-% fprintf('All files saved to: %s\n', outputPath);
+%% Export PAR Data for R Analysis
+%   Exports processed PAR data in R-friendly formats
+%   Following the same format as MUR SST data export
+
+fprintf('\n=== Exporting Data for R Analysis ===\n');
+
+%% 1. Export Summary Statistics as CSV (Long Format for Easy R Plotting)
+fprintf('Creating summary statistics CSV for R...\n');
+
+% Create coordinate grids
+[lon_grid, lat_grid] = meshgrid(longitude, latitude);
+
+% Flatten grids for long format
+lon_vec = lon_grid(:);
+lat_vec = lat_grid(:);
+
+% Flatten summary statistics (transpose first to match coordinate orientation)
+mean_par_t = mean_par';
+mean_par_vec = mean_par_t(:);
+max_par_t = max_par';
+max_par_vec = max_par_t(:);
+min_par_t = min_par';
+min_par_vec = min_par_t(:);
+std_par_t = std_par';
+std_par_vec = std_par_t(:);
+
+% Create summary table
+summary_table = table(lon_vec, lat_vec, ...
+    mean_par_vec, max_par_vec, min_par_vec, std_par_vec, ...
+    'VariableNames', {'longitude', 'latitude', ...
+    'mean_par', 'max_par', 'min_par', 'std_par'});
+
+% Export summary CSV
+writetable(summary_table, fullfile(outputPath, 'par_summary_for_R.csv'));
+fprintf('Summary statistics saved: par_summary_for_R.csv\n');
+
+%% 2. Export Coordinate Information
+fprintf('Creating coordinate reference files...\n');
+
+% Export coordinate vectors separately
+lon_table = table(longitude(:), 'VariableNames', {'longitude'});
+lat_table = table(latitude(:), 'VariableNames', {'latitude'});
+writetable(lon_table, fullfile(outputPath, 'par_longitude.csv'));
+writetable(lat_table, fullfile(outputPath, 'par_latitude.csv'));
+
+% Also save grid dimensions for R raster creation
+grid_info = table({'longitude'; 'latitude'; 'nlon'; 'nlat'}, ...
+    {min(longitude); min(latitude); length(longitude); length(latitude)}, ...
+    {max(longitude); max(latitude); length(longitude); length(latitude)}, ...
+    'VariableNames', {'dimension', 'min_value', 'max_value'});
+writetable(grid_info, fullfile(outputPath, 'par_grid_info.csv'));
+
+fprintf('Coordinate files saved: par_longitude.csv, par_latitude.csv, par_grid_info.csv\n');
+
+%% 3. Export Individual Summary Matrices (for direct raster creation in R)
+fprintf('Exporting individual summary matrices...\n');
+
+% Create a function to save matrices in R-readable format
+save_matrix_for_R = @(matrix, filename) ...
+    writematrix(matrix', fullfile(outputPath, [filename '.csv']));
+
+% Export all summary statistics as individual matrices
+save_matrix_for_R(mean_par, 'mean_par_matrix');
+save_matrix_for_R(max_par, 'max_par_matrix');
+save_matrix_for_R(min_par, 'min_par_matrix');
+save_matrix_for_R(std_par, 'std_par_matrix');
+
+fprintf('Individual matrices saved (4 files)\n');
+
+%% 4. Export Time Series Data (Sample - first grid point)
+fprintf('Creating time series sample data...\n');
+
+% Convert MATLAB time to datetime
+time_datetime = datetime(times_data, 'ConvertFrom', 'datenum');
+
+% Extract time series for first valid grid point (avoid NaN locations)
+[valid_i, valid_j] = find(~isnan(mean_par), 1, 'first');
+
+% Extract time series for this point
+par_ts = squeeze(par_data(valid_i, valid_j, :));
+
+% Create time series table
+ts_table = table(time_datetime, par_ts, ...
+    'VariableNames', {'datetime', 'par_einstein_m2_day'});
+
+% Add location info as metadata
+sample_lon = longitude(valid_i);
+sample_lat = latitude(valid_j);
+
+writetable(ts_table, fullfile(outputPath, 'par_timeseries_sample.csv'));
+fprintf('Time series sample saved: par_timeseries_sample.csv\n');
+fprintf('Sample location: %.3f°W, %.3f°N\n', sample_lon, sample_lat);
+
+%% 5. Export Summary Report
+fprintf('Creating export summary...\n');
+
+export_summary = {
+    sprintf('PAR Data Export Summary - %s', datestr(now))
+    '=================================================='
+    ''
+    'Files Created:'
+    '1. par_summary_for_R.csv - All summary statistics in long format'
+    '2. par_longitude.csv, par_latitude.csv - Coordinate vectors'
+    '3. par_grid_info.csv - Grid dimension and extent information'
+    '4. Individual matrix files (4 total):'
+    '   - mean_par_matrix.csv, max_par_matrix.csv, etc.'
+    '5. par_timeseries_sample.csv - Time series data for one location'
+    ''
+    sprintf('Data Characteristics:')
+    sprintf('- Grid size: %d x %d', length(longitude), length(latitude))
+    sprintf('- Longitude range: %.3f to %.3f°W', min(longitude), max(longitude))
+    sprintf('- Latitude range: %.3f to %.3f°N', min(latitude), max(latitude))
+    sprintf('- Time period: %s', date_range_str)
+    sprintf('- Total time steps: %d', length(times_data))
+    sprintf('- Variable: Photosynthetically Available Radiation (einstein m-2 day-1)')
+    ''
+    'Ready for R analysis using exported CSV files'
+};
+
+% Write summary
+fileID = fopen(fullfile(outputPath, 'par_export_summary.txt'), 'w');
+for i = 1:length(export_summary)
+    fprintf(fileID, '%s\n', export_summary{i});
+end
+fclose(fileID);
+
+fprintf('\n=== Export Complete ===\n');
+fprintf('Total files created: %d\n', 9); % Updated count
+fprintf('All files saved to: %s\n', outputPath);

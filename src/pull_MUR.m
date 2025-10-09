@@ -14,6 +14,7 @@ START_YEAR = 2013;
 START_MONTH = 1;        % 1-12
 END_YEAR = 2018;
 END_MONTH = 11;         % 1-12
+KEEP_FILES = true;  % Set to true to keep downloaded files
 
 % Puerto Rico/USVI region coordinates (adjust as needed)
 lat_min = 17.0;   % Southern boundary
@@ -28,7 +29,7 @@ projectPath = matlab.project.rootProject().RootFolder;
 % Define paths relative to the project root
 dataPath = fullfile(projectPath, 'data');
 srcPath = fullfile(projectPath, 'src');
-outputPath = fullfile(projectPath, 'output');
+outputPath = fullfile(projectPath, 'output/SST');
 tempPath = fullfile(projectPath, 'temp');
 
 %% Calculate total months and generate year/month list
@@ -108,7 +109,8 @@ try
                      base_url, start_date, end_date, lat_min, lat_max, lon_min, lon_max);
         
         % Download with increased timeout and better error handling
-        filename = sprintf('mur_sst_%d_%02d.nc', year, month);
+        % filename = sprintf('mur_sst_%d_%02d.nc', year, month);
+        filename = fullfile(outputPath, sprintf('mur_sst_%d_%02d.nc', year, month));
         download_success = false;
         retry_count = 0;
         max_retries = 10;
@@ -230,16 +232,18 @@ try
             warning('Failed to read data from %s: %s', filename, ME.message);
         end
         
-        % Clean up file
-        if exist(filename, 'file')
-            delete(filename);
+        % % Clean up file
+        % if exist(filename, 'file')
+        %     delete(filename);
+        % end
+        
+        if KEEP_FILES
+            fprintf('Keeping file: %s\n', filename);
+        else
+            if exist(filename, 'file')
+                delete(filename);
+            end
         end
-
-        % % Keep file (no cleanup)
-        % % NOTE - use this instead of above clean-up if desiring a full set
-        % % of the data to be backed up. For MUR SST, this is only ~1.5 GB
-        % % total so very reasonable
-        % fprintf('Keeping file: %s\n', filename);
         
         % Record timing for this month
         month_time = toc(month_start_time);

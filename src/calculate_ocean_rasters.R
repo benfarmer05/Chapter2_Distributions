@@ -1358,9 +1358,9 @@
   plot(std_kd490_raster,
        col = cmocean("turbid")(100),
        ext = plot_extents)
-  plot(range_kd490_raster,
-       col = cmocean("turbid")(100),
-       ext = plot_extents)
+  # plot(range_kd490_raster,
+  #      col = cmocean("turbid")(100),
+  #      ext = plot_extents)
   
   plot(mean_kd490_raster,
        col = cmocean("turbid")(100))
@@ -1370,8 +1370,8 @@
        col = cmocean("turbid")(100))
   plot(std_kd490_raster,
        col = cmocean("turbid")(100))
-  plot(range_kd490_raster,
-       col = cmocean("turbid")(100))
+  # plot(range_kd490_raster,
+  #      col = cmocean("turbid")(100))
   
   mean_kd490_clamp <- clamp(mean_kd490_raster, lower = 0, upper = 0.5)
   plot(mean_kd490_clamp,
@@ -1394,9 +1394,9 @@
   plot(std_chlor_a_raster,
        col = cmocean("algae")(100),
        ext = plot_extents)
-  plot(range_chlor_a_raster,
-       col = cmocean("algae")(100),
-       ext = plot_extents)
+  # plot(range_chlor_a_raster,
+  #      col = cmocean("algae")(100),
+  #      ext = plot_extents)
   
   plot(mean_chlor_a_raster,
        col = cmocean("algae")(100))
@@ -1406,8 +1406,8 @@
        col = cmocean("algae")(100))
   plot(std_chlor_a_raster,
        col = cmocean("algae")(100))
-  plot(range_chlor_a_raster,
-       col = cmocean("algae")(100))
+  # plot(range_chlor_a_raster,
+  #      col = cmocean("algae")(100))
   
   #plot particulates
   plot(mean_spm_raster,
@@ -1422,9 +1422,9 @@
   plot(std_spm_raster,
        col = cmocean("matter")(100),
        ext = plot_extents)
-  plot(range_spm_raster,
-       col = cmocean("matter")(100),
-       ext = plot_extents)
+  # plot(range_spm_raster,
+  #      col = cmocean("matter")(100),
+  #      ext = plot_extents)
   
   plot(mean_spm_raster,
        col = cmocean("matter")(100))
@@ -1434,8 +1434,8 @@
        col = cmocean("matter")(100))
   plot(std_spm_raster,
        col = cmocean("matter")(100))
-  plot(range_spm_raster,
-       col = cmocean("matter")(100))
+  # plot(range_spm_raster,
+  #      col = cmocean("matter")(100))
   
   mean_spm_clamp <- clamp(mean_spm_raster, lower = 0, upper = 1)
   plot(mean_spm_clamp,
@@ -1458,14 +1458,6 @@
        col = cmocean("solar")(100))
   plot(distance_to_deep_raster,
        col = cmocean("solar")(100))
-  
-  # STOPPING POINT - 23 August 2025
-  #   - strongly consider adding year as a variable, given that Viehman 2025 / NCRMP
-  #       clearly demonstrate a large decline in coral cover from 2013-2017.
-  #       I would not like to make this a full-blown spatiotemporal SDM, as I do
-  #       not think that is appropriate for the project scope - but should explore
-  #       to what degree adding in "time" is possible
-  #   - will ideally incorporate mean BOV and mean wave direction from Canals
   
   ################################## Save objects/workspace ##################################
   
