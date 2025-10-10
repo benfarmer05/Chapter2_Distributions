@@ -145,11 +145,13 @@
   ymin_combined <- min(e_crm$ymin, e_pr_east$ymin, e_pr_south$ymin, e_pr_west$ymin, e_pr_north$ymin)
   ymax_combined <- max(e_crm$ymax, e_pr_east$ymax, e_pr_south$ymax, e_pr_west$ymax, e_pr_north$ymax)
   
+  res_for_bathy = 50 #can try 30 too
+  
   # Round to nearest 50m grid
-  xmin <- floor(xmin_combined / 50) * 50
-  xmax <- ceiling(xmax_combined / 50) * 50
-  ymin <- floor(ymin_combined / 50) * 50
-  ymax <- ceiling(ymax_combined / 50) * 50
+  xmin <- floor(xmin_combined / res_for_bathy) * res_for_bathy
+  xmax <- ceiling(xmax_combined / res_for_bathy) * res_for_bathy
+  ymin <- floor(ymin_combined / res_for_bathy) * res_for_bathy
+  ymax <- ceiling(ymax_combined / res_for_bathy) * res_for_bathy
   
   # xmin_combined <- min(e_crm$xmin, e_pr$xmin)
   # xmax_combined <- max(e_crm$xmax, e_pr$xmax)
@@ -165,7 +167,7 @@
   # ymax = 2087500 #2080000 #manual edit to greatly cut down the size of the raster over deep ocean
   
   new_ext <- ext(xmin, xmax, ymin, ymax)
-  template_raster <- rast(new_ext, resolution = 50, crs = crs(projected_crs))
+  template_raster <- rast(new_ext, resolution = res_for_bathy, crs = crs(projected_crs))
   
   bathy_STTSTJ_agg <- resample(bathy_STTSTJ_clipped, template_raster, method = "average")
   bathy_STX_agg <- resample(bathy_STX_clipped, template_raster, method = "average")
@@ -187,12 +189,7 @@
   rm(bathy_STTSTJ_clipped, bathy_STX_clipped, bathy_PR_East_clipped, bathy_PR_South_clipped,
      bathy_PR_West_clipped, bathy_PR_North_clipped)
   
-  # NOTE - 3 JULY 2025
-  #   2.) consider Edmunds / CSUN coral data [probably not necessary honestly]
-  #   3.) splice in fix for the "pit" in the MCD, and the "tear" between PR & STT (if needed)
-  
-  #plot briefly
-   
+
   
   
   ################################## Apply "good" landmask ##################################
@@ -292,7 +289,7 @@
   # Recreate the template raster using the same approach as upstream
   # (You can reuse the same extent calculations if they're still in memory)
   new_ext <- ext(xmin, xmax, ymin, ymax)
-  template_raster <- rast(new_ext, resolution = 50, crs = crs(projected_crs))
+  template_raster <- rast(new_ext, resolution = res_for_bathy, crs = crs(projected_crs))
 
   # Resample to 50m grid using the template
   south_of_STT_agg <- resample(south_of_STT_clipped, template_raster, method = "average")
@@ -549,12 +546,6 @@
   
   # Apply mask
   bathy_sealed <- mask(bathy_Blondeau_BVI_Anegada, ocean_mask)
-  
-  # NOTE / STOPPING POINT - 7 JULY 2025
-  #   - ideally would be able to define where the sealed "coastline" contours are, and just "fill in"
-  #       anything within those contours. this may be harder than expected, though. would also be nice
-  #       if I end up looking at "distance from coastline", etc. but I guess could just use landmask for
-  #       that
   
   bathy_final = bathy_sealed
   

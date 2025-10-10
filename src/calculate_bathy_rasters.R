@@ -262,8 +262,11 @@
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
   # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating St Croix
-  plot_extents = ext(270000, 320000, 2000000, 2040000) #for investigating St Thomas
+  plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating STT
   # plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
+  plot_extents <- ext(280000, 340000, 2000000, 2050000)  # STTSTJ
+  plot_extents = ext(100000, 400000, 1950000, 2070000) #for looking at a lot of area
+  plot_extents = ext(265000, 345000, 1997000, 2060000) #for looking at a bit of area
   
   # bathy
   bathy_final_clamp <- clamp(bathy_final, lower = -60, upper = -30)

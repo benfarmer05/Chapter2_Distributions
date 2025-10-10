@@ -680,7 +680,7 @@
   agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                        s(slope) +
                                        s(VRM) +
-                                       s(dist_to_land) +
+                                       s(dist_to_land) + s(mean_Hsig) +
                                        s(mean_SST) + s(mean_PAR) +
                                        s(mean_spm),
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
@@ -1327,10 +1327,11 @@
   #                                     select = TRUE,
   #                                     family = binomial())
   # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  #   look again at spm, max BOV, max hsig, SAPA
   orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
                                         s(planform_curv) + s(SAPA) +
                                         s(slope) + s(complexity) +
-                                        s(mean_spm) +
+                                        s(mean_spm) + s(max_Hsig) + 
                                         s(range_SST) + s(mean_dir, bs = 'cc'),
                                       data = orbicella_model_data,
                                       # weights = weights_vec,
@@ -1417,6 +1418,7 @@
                                         s(planform_curv) +
                                         s(mean_Hsig, k = 12) + s(dist_to_land) +
                                         s(mean_SST) + s(mean_PAR) +
+                                        s(max_BOV) +
                                         s(mean_dir, bs = 'cc', k = 15),
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
                                       # select = TRUE,

@@ -30,18 +30,19 @@
   
   existing_objects <- ls(envir = .GlobalEnv)
   
+
   ################################## Import waves ##################################
   
   # VERSION where SWAN data was provided directly from Miguel Canals
   # 
-  SWAN_target_res <- 50
+  SWAN_target_res <- 55
+  
+  DO_GAP_FILLING <- TRUE   # Set to FALSE to disable gap filling
   
   # Load the comprehensive wave summary data
   wave_summary <- read.csv(here("output", "swan_canals_comprehensive_summary_for_R.csv"))
   
   # Clean the data
-  # wave_summary <- wave_summary %>%
-  #   filter(!is.na(longitude) & !is.na(latitude))
   wave_summary <- wave_summary[!is.na(wave_summary$longitude) & !is.na(wave_summary$latitude), ]
   
   cat(sprintf("Loaded %d SWAN grid points\n", nrow(wave_summary)))
@@ -54,26 +55,11 @@
   # Project to match bathymetry
   wave_points_proj <- project(wave_points, crs(bathy_final))
   
-  # Filter wave points to only water areas (non-NA bathymetry)
-  cat("Filtering wave points to water areas only...\n")
-  
-  # Extract bathymetry values at each wave point location
-  bathy_at_points <- extract(bathy_final, wave_points_proj)
-  
-  # Find points where bathymetry is NOT NA (i.e., water areas)
-  water_points_idx <- !is.na(bathy_at_points[,2])
-  
-  cat(sprintf("Points over water: %d/%d (%.1f%%)\n", 
-              sum(water_points_idx), length(water_points_idx), 
-              sum(water_points_idx)/length(water_points_idx)*100))
-  
-  # Keep only points that are over water
-  wave_points_water <- wave_points_proj[water_points_idx]
-  
-  cat(sprintf("After filtering to water: %d points\n", nrow(wave_points_water)))
+  cat(sprintf("Total points to process: %d\n", nrow(wave_points_proj)))
   
   
-  create_wave_raster <- function(wave_points, var_name, bathy_template, target_resolution) {
+  create_wave_raster <- function(wave_points, var_name, bathy_template, target_resolution, 
+                                 do_gap_filling = TRUE) {
     cat(sprintf("Creating %dm raster for %s...\n", target_resolution, var_name))
     
     # Filter to valid values
@@ -97,52 +83,45 @@
     cat(sprintf("Grid: %d x %d cells (%.1f million)\n", 
                 ncol(template_raster), nrow(template_raster), n_cells/1e6))
     
-    # # Memory safety check
-    # if (n_cells > 25e6) {
-    #   stop(sprintf("Grid too large (%.1f million cells). Use resolution > 100m.", n_cells/1e6))
-    # }
-    # 
-    # if (n_cells > 10e6) {
-    #   warning(sprintf("Large grid (%.1f million cells) - may be slow", n_cells/1e6))
-    # }
-    
     # Rasterize wave points to template
     result <- rasterize(wave_points_valid, template_raster, 
                         field = var_name, 
                         fun = mean)
     
     # Gap filling with focal operations
-    cat("Gap filling...\n")
-    
-    # For directional data, use circular-aware gap filling
-    if (grepl("dir", var_name, ignore.case = TRUE)) {
-      # Convert to radians for calculation
-      result_rad <- result * pi / 180
+    if (do_gap_filling) {
+      cat("Gap filling...\n")
       
-      # Focal mean of sin and cos components with multiple passes
-      sin_comp <- app(result_rad, sin)
-      cos_comp <- app(result_rad, cos)
-      
-      # Iterative gap filling with increasing window sizes
-      for (window_size in c(3, 5, 7, 9)) {
-        sin_comp <- focal(sin_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
-        cos_comp <- focal(cos_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+      # For directional data, use circular-aware gap filling
+      if (grepl("dir", var_name, ignore.case = TRUE)) {
+        # Convert to radians for calculation
+        result_rad <- result * pi / 180
+        
+        # Focal mean of sin and cos components with multiple passes
+        sin_comp <- app(result_rad, sin)
+        cos_comp <- app(result_rad, cos)
+        
+        # Iterative gap filling with increasing window sizes
+        for (window_size in c(3, 5, 7, 9)) {
+          sin_comp <- focal(sin_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+          cos_comp <- focal(cos_comp, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+        }
+        
+        # Convert back to degrees
+        result <- atan2(sin_comp, cos_comp) * 180 / pi
+        result[result < 0] <- result[result < 0] + 360
+        
+      } else {
+        # For non-directional data, use regular mean with multiple passes
+        for (window_size in c(3, 5, 7, 9)) {
+          result <- focal(result, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
+        }
       }
-      
-      # Convert back to degrees
-      result <- atan2(sin_comp, cos_comp) * 180 / pi
-      result[result < 0] <- result[result < 0] + 360
-      
     } else {
-      # For non-directional data, use regular mean with multiple passes
-      for (window_size in c(3, 5, 7, 9)) {
-        result <- focal(result, w = window_size, fun = mean, na.policy = "only", na.rm = TRUE)
-      }
+      cat("Skipping gap filling\n")
     }
     
-    # Resample bathymetry to match template and apply mask
-    bathy_resampled <- resample(bathy_template, template_raster, method = "near")
-    result <- mask(result, bathy_resampled)
+    # Don't apply mask here - will be applied at the end at native bathymetry resolution
     
     names(result) <- var_name
     return(result)
@@ -152,12 +131,18 @@
   cat(sprintf("\n=== Creating all wave rasters at %dm resolution ===\n", SWAN_target_res))
   
   # Create all wave variable rasters
-  mean_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmean", bathy_final, SWAN_target_res)
-  # max_mean_hsig_raster <- create_wave_raster(wave_points_water, "max_hmean", bathy_final, SWAN_target_res)
-  # mean_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_hmax", bathy_final, SWAN_target_res)
-  max_hsig_raster <- create_wave_raster(wave_points_water, "max_hmax", bathy_final, SWAN_target_res)
-  per_at_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_tp", bathy_final, SWAN_target_res)
-  dir_at_max_hsig_raster <- create_wave_raster(wave_points_water, "mean_dir", bathy_final, SWAN_target_res)
+  mean_hsig_raster <- create_wave_raster(wave_points_proj, "mean_hmean", bathy_final, SWAN_target_res, 
+                                         do_gap_filling = DO_GAP_FILLING)
+  # max_mean_hsig_raster <- create_wave_raster(wave_points_proj, "max_hmean", bathy_final, SWAN_target_res, 
+  #                                            do_gap_filling = DO_GAP_FILLING)
+  # mean_max_hsig_raster <- create_wave_raster(wave_points_proj, "mean_hmax", bathy_final, SWAN_target_res, 
+  #                                            do_gap_filling = DO_GAP_FILLING)
+  max_hsig_raster <- create_wave_raster(wave_points_proj, "max_hmax", bathy_final, SWAN_target_res, 
+                                        do_gap_filling = DO_GAP_FILLING)
+  per_at_max_hsig_raster <- create_wave_raster(wave_points_proj, "mean_tp", bathy_final, SWAN_target_res, 
+                                               do_gap_filling = DO_GAP_FILLING)
+  dir_at_max_hsig_raster <- create_wave_raster(wave_points_proj, "mean_dir", bathy_final, SWAN_target_res, 
+                                               do_gap_filling = DO_GAP_FILLING)
   
   # Get extent and properties from bathy_final
   bathy_ext <- ext(bathy_final)
@@ -174,6 +159,23 @@
   max_hsig_raster <- resample(max_hsig_raster, template_raster, method = "bilinear")
   per_at_max_hsig_raster <- resample(per_at_max_hsig_raster, template_raster, method = "bilinear")
   dir_at_max_hsig_raster <- resample(dir_at_max_hsig_raster, template_raster, method = "bilinear")
+  
+  
+  
+  
+
+  # Apply light smoothing to fix jagged edges (single 3x3 focal pass)
+  cat("\n=== Applying final smoothing to fix edge artifacts ===\n")
+  mean_hsig_raster <- focal(mean_hsig_raster, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+  max_hsig_raster <- focal(max_hsig_raster, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+  per_at_max_hsig_raster <- focal(per_at_max_hsig_raster, w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+  
+  # For directional data, use circular-aware smoothing
+  dir_rad <- dir_at_max_hsig_raster * pi / 180
+  sin_comp <- focal(app(dir_rad, sin), w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+  cos_comp <- focal(app(dir_rad, cos), w = 3, fun = mean, na.policy = "only", na.rm = TRUE)
+  dir_at_max_hsig_raster <- atan2(sin_comp, cos_comp) * 180 / pi
+  dir_at_max_hsig_raster[dir_at_max_hsig_raster < 0] <- dir_at_max_hsig_raster[dir_at_max_hsig_raster < 0] + 360
   
   ################################## calculate BOV ##################################
   
@@ -669,13 +671,13 @@
     cat("ERROR: No valid chunks processed!\n")
   }
   
-  # plot(bov_full)
-  # 
-  # BOV_clamp = clamp(bov_full, lower = 0, upper = 3)
-  # plot(BOV_clamp)
-  # 
-  # bathy_clamper = clamp(bathy_final, lower = -50, upper = 0)
-  # plot(bathy_clamper)
+  plot(bov_full)
+
+  BOV_clamp = clamp(bov_full, lower = 0, upper = 3)
+  plot(BOV_clamp)
+
+  bathy_clamper = clamp(bathy_final, lower = -50, upper = 0)
+  plot(bathy_clamper)
   
   ################################## Import ERDDAP waves ##################################
   
@@ -1280,14 +1282,16 @@
   # Define plot extent options
   # plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
   # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
-  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  plot_extents = ext(276000, 284500, 2025000, 2040000) #for investigating MCD issue
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada
-  # plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating STX
-  # plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating STT
+  plot_extents = ext(294000, 350000, 1950000, 1975000) #for investigating STX
+  plot_extents = ext(280000, 320000, 2000000, 2040000) #for investigating STT
   # plot_extents = ext(-30000, 0, 2000000, 2025000) #for investigating Mona Island
   # plot_extents = ext(20000, 40000, 2030000, 2045000) #for investigating Desecheo Island
+  plot_extents = ext(100000, 400000, 1950000, 2070000) #for looking at a lot of area
   
   #plot SST
   plot(mean_sst_raster,
