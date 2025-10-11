@@ -763,29 +763,28 @@
   #                             # select = TRUE,
   #                             family = binomial())
   # toc()
-  # # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
-  # madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                      s(slope) +
-  #                                      s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  #                                      s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                                      s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  #                                      s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  #                                      s(range_SST) +
-  #                                      s(dist_to_land),
-  #                                    data = madracis_model_data,
-  #                                    # select = TRUE,
-  #                                    family = binomial())
-  # non-weighted version WITH spatial smooth; whittled down with worst observed/estimate concurvity
-  madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
+  # mean_dir and aspect were bad. SAPA eh
+  madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) +
                                        s(slope) +
                                        s(complexity) + s(TPI) +
-                                       s(dir_at_max_hsig, bs = 'cc') +
-                                       s(mean_kd490) +
+                                       s(mean_Hsig) +
+                                       s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
                                        s(max_BOV) +
-                                       s(longitude, latitude),
+                                       s(range_SST),
                                      data = madracis_model_data,
                                      # select = TRUE,
                                      family = binomial())
+  # # non-weighted version WITH spatial smooth; whittled down with worst observed/estimate concurvity
+  # madracis_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+  #                                      s(slope) +
+  #                                      s(complexity) + s(TPI) +
+  #                                      s(mean_kd490) +
+  #                                      s(max_BOV) + s(mean_Hsig) +
+  #                                      s(longitude, latitude, k = 30),
+  #                                    data = madracis_model_data,
+  #                                    # select = TRUE,
+  #                                    family = binomial())
   
 
   # madracis_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -824,11 +823,23 @@
   # beta with cloglog using observed/estimate concurvity, WITHOUT spatial smooth (with is not helpful)
   madracis_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                        s(slope) +
-                                       s(mean_SST) + s(max_BOV) + s(mean_kd490) +
-                                       s(range_SST) + s(mean_PAR),
+                                       s(complexity) +
+                                       s(mean_SST) +
+                                       s(mean_PAR) + s(mean_Hsig) + 
+                                       s(max_Hsig),
                                      data = madracis_model_data[madracis_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
+  # # beta with cloglog using observed/estimate concurvity, WITH spatial smooth (with is not helpful)
+  # madracis_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+  #                                      s(slope) +
+  #                                      s(complexity) +
+  #                                      s(mean_SST) +
+  #                                      s(mean_PAR) + s(mean_Hsig) + 
+  #                                      s(max_Hsig) + s(longitude, latitude, k = 30),
+  #                                    data = madracis_model_data[madracis_model_data$cover_prop > 0, ],
+  #                                    # select = TRUE,
+  #                                    family = betar())
   
 
   
