@@ -609,12 +609,13 @@
   #                                    # select = TRUE,
   #                                    family = binomial())
   # non-weighted version NO spatial smooth; whittled down with worst observed/estimate concurvity
-  agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #could consider adding back in chla
+  agaricia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc', k = 15) +
                                        s(slope) +
-                                       s(complexity) + s(planform_curv) + s(TPI) +
-                                       s(mean_dir, bs = 'cc') +
-                                       s(mean_SST) +
-                                       s(max_BOV) + s(mean_kd490) + s(mean_chla, k = 12),
+                                       s(complexity, k = 15) + s(planform_curv) + s(TPI) +
+                                       s(mean_dir, bs = 'cc', k = 12) +
+                                       s(mean_SST, k = 12) +
+                                       s(max_BOV) + s(mean_kd490, k = 15),
                                      data = agaricia_model_data,
                                      # data = agaricia_model_data_filtered,
                                      # select = TRUE,
@@ -917,11 +918,11 @@
   #                                   family = binomial())
   # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
   porites_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-                                      s(complexity) + s(slope) + s(TPI) +
+                                      s(complexity) + s(slope) + s(TPI, k = 12) +
                                       s(SAPA) +
                                       s(max_BOV) + s(mean_dir, bs = 'cc') +
                                       s(mean_SST) +
-                                      s(range_SST) + s(mean_chla) + s(mean_kd490),
+                                      s(range_SST) + s(mean_chla) + s(mean_kd490, k = 12),
                                     data = porites_model_data,
                                     # weights = weights_vec,
                                     # select = TRUE,
@@ -1053,9 +1054,9 @@
   # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
   siderastrea_gam_presence_binom <- gam(present ~ s(depth_bathy) +
                                           s(slope) +
-                                          s(complexity) + s(TPI) + s(planform_curv) + s(complexity) +
-                                          s(mean_dir, bs = 'cc') +
-                                          s(mean_kd490) + s(mean_PAR) +
+                                          s(complexity) + s(TPI, k = 12) + s(planform_curv) + s(complexity) +
+                                          s(mean_dir, bs = 'cc', k = 12) +
+                                          s(mean_kd490, k = 12) + s(mean_PAR) +
                                           s(dist_to_deep, k = 20) + s(max_BOV),
                                     data = siderastrea_model_data,
                                     # weights = weights_vec,
@@ -1122,10 +1123,10 @@
                                           s(slope) +
                                           s(planform_curv) +
                                           s(SAPA) +
-                                          s(max_Hsig) + s(mean_Hsig) +
+                                          s(max_Hsig) + s(mean_Hsig, k = 15) +
                                           s(mean_PAR) +
                                           s(mean_kd490) +
-                                          s(range_SST) + s(dist_to_deep),
+                                          s(range_SST) + s(dist_to_deep, k = 15),
                                     data = siderastrea_model_data[siderastrea_model_data$cover_prop > 0, ],
                                     # select = TRUE,
                                     family = betar())
@@ -1226,7 +1227,7 @@
                                           s(slope) + 
                                           s(planform_curv) +
                                           s(mean_dir, bs = 'cc', k = 18) +
-                                          s(mean_SST) + s(mean_PAR) + s(mean_chla, k = 12) +
+                                          s(mean_SST) + s(mean_PAR, k = 12) + s(mean_chla, k = 12) +
                                           s(dist_to_land) + s(mean_spm),
                                         data = montastraea_model_data,
                                         # weights = weights_vec,
@@ -1290,13 +1291,13 @@
   #                                       family = betar())
   # beta with cloglog with NO spatial smooth using observed/estimate concurvity
   # VRM, planform, SAPA, dist to deep, spm, kd490
-  montastraea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(TPI) +
-                                          s(max_Hsig) +
+  montastraea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                          s(planform_curv) +
                                           s(max_BOV) + s(mean_Hsig) + s(mean_dir, bs = 'cc') +
-                                          s(range_SST) +
+                                          s(mean_SST) + s(mean_spm) +
                                           s(dist_to_deep),
                                         data = montastraea_model_data[montastraea_model_data$cover_prop > 0, ],
-                                        select = TRUE,
+                                        # select = TRUE,
                                         family = betar())
   
   
@@ -1419,11 +1420,11 @@
   #                                     select = TRUE,
   #                                     family = binomial())
   # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
-  #   look again at spm, max BOV, max hsig, SAPA
-  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(planform_curv) + s(SAPA) +
+  #   - NOTE: could consider keeping spm, but very non-significant. max BOV and SAPA may not be able to stay both in
+  orbicella_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                        s(planform_curv) +
                                         s(slope) + s(complexity) +
-                                        s(mean_spm) + s(max_Hsig) + 
+                                        s(max_Hsig, k = 12) + s(SAPA) +
                                         s(range_SST) + s(mean_dir, bs = 'cc'),
                                       data = orbicella_model_data,
                                       # weights = weights_vec,
@@ -2170,112 +2171,128 @@
   
   
   
-  # ############################## SOLENASTREA ##################################
-  # 
-  # # NOTE - likely too low sample size. may need to drop entirely b/c no easy group to pool with
-  # 
-  # solenastrea <- spp_data %>%
-  #   filter(depth_bathy >= -60) %>%
-  #   filter(grepl("Solenastrea", spp))
-  # 
-  # solenastrea_model_data_filtered <- solenastrea
-  # 
-  # # Extract environmental data
-  # solenastrea_species_env_complex <- extract_env_data(solenastrea)
-  # 
-  # # Add environmental variables
-  # solenastrea <- add_env_variables(solenastrea, solenastrea_species_env_complex, solenastrea_model_data_filtered)
-  # 
-  # solenastrea_model_data <- solenastrea
-  # 
-  # # Check how much data you have left
-  # cat("Solenastrea observations with all complexity variables:", nrow(solenastrea_model_data), "\n")
-  # 
-  # # # Fit expanded GAM models
-  # # solenastrea_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
-  # #                                   s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                   s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
-  # #                                   s(dist_to_deep) + s(max_BOV),
-  # #                                 data = solenastrea_model_data, family = tw())
-  # #
-  # # # Check the results
-  # # summary(solenastrea_gam_all_tweedie)
-  # # AIC(solenastrea_gam_all_tweedie)
-  # # gam.check(solenastrea_gam_all_tweedie)
-  # # plot(solenastrea_gam_all_tweedie, pages = 2)
-  # # draw(solenastrea_gam_all_tweedie)
-  # 
-  # # Create correlation matrix
-  # solenastrea_cor_matrix <- create_correlation_matrix(solenastrea_model_data)
-  # print(round(solenastrea_cor_matrix, 2))
-  # 
-  # # Two-part model with complexity
-  # solenastrea_model_data$present <- ifelse(solenastrea_model_data$cover > 0, 1, 0)
-  # 
-  # # tic()
-  # # solenastrea_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                             data = solenastrea_model_data,
-  # #                             select = TRUE,
-  # #                             family = binomial())
-  # # toc()
-  # solenastrea_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-  #                                         s(slope) +
-  #                                         s(mean_SST, k = 15) +
-  #                                         s(mean_spm, k = 15) +
-  #                                         s(range_SST),
-  #                                       data = solenastrea_model_data,
-  #                                       select = TRUE,
-  #                                       family = binomial())
-  # 
-  # # solenastrea_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                              data = solenastrea_model_data[solenastrea_model_data$cover > 0, ],
-  # #                              family = Gamma(link = "log"))
+  ############################## SOLENASTREA ##################################
+
+  # N = 21
+  
+  solenastrea_model_data = spp_data %>%
+    filter(grepl("Solenastrea", spp))
+  solenastrea_model_data = add_env_variables(solenastrea_model_data, variables_at_PSUs)
+  
+  # Two-part model with complexity
+  solenastrea_model_data$present <- ifelse(solenastrea_model_data$cover > 0, 1, 0)
+  
+  # tic()
+  # solenastrea_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = solenastrea_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  solenastrea_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                          s(mean_dir, bs = 'cc', k = 15) +
+                                          s(mean_SST) + s(mean_spm) + s(mean_SST) +
+                                          s(range_SST),
+                                     data = solenastrea_model_data,
+                                     # select = TRUE,
+                                     family = binomial())
+  summary(solenastrea_gam_presence_binom)
+  concurvity(solenastrea_gam_presence_binom, full = TRUE)
+  
+  
   # solenastrea_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                          s(slope) +
-  #                                          s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  #                                          s(range_SST) +
-  #                                          s(dist_to_land),
-  #                                        data = solenastrea_model_data[solenastrea_model_data$cover > 0, ],
-  #                                        # select = TRUE,
-  #                                        family = Gamma(link = "log"))
-  # 
-  # summary(solenastrea_gam_presence_binom)
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = solenastrea_model_data[solenastrea_model_data$cover > 0, ],
+  #                               select = TRUE,
+  #                               family = Gamma(link = "log"))
+  # solenastrea_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 12) + s(aspect, bs = 'cc') +
+  #                                       s(SAPA) +
+  #                                       s(mean_chla) +
+  #                                       s(dist_to_deep),
+  #                                     data = solenastrea_model_data[solenastrea_model_data$cover > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = Gamma(link = "log"))
+  
+  
+  solenastrea_model_data$cover_prop <- solenastrea_model_data$cover / 100
+  
+  # solenastrea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = solenastrea_model_data[solenastrea_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  #beta using observed/estimate concurvity
+  # bad: mean SST, land
+  # neutral: complexity, dist to deep
+  # good: planform curv (?), 
+  solenastrea_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy, k = 3) +
+                                         s(TPI, k = 3) + s(VRM, k = 4) +
+                                         s(mean_kd490, k = 3),
+                                     data = solenastrea_model_data[solenastrea_model_data$cover_prop > 0, ],
+                                     # select = TRUE,
+                                     family = betar())
+  summary(solenastrea_gam_abundance_beta)
+  concurvity(solenastrea_gam_abundance_beta, full = TRUE)
+  
+  
+  pred <- predict(solenastrea_gam_abundance_beta, type = "response")
+  obs <- solenastrea_gam_abundance_beta$model$cover_prop
+  lim <- c(0, max(c(obs, pred)))
+  plot(obs, pred, xlim = lim, ylim = lim)
+  abline(0, 1, col = "red")
+  r <- cor(obs, pred)
+  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  
+  
+  
+  
+  summary(solenastrea_gam_presence_binom)
   # summary(solenastrea_gam_abundance_gamma)
-  # AIC(solenastrea_gam_presence_binom)
+  summary(solenastrea_gam_abundance_beta)
+  
+  AIC(solenastrea_gam_presence_binom)
   # AIC(solenastrea_gam_abundance_gamma)
-  # 
-  # draw(solenastrea_gam_presence_binom)
+  AIC(solenastrea_gam_abundance_beta)
+  
+  draw(solenastrea_gam_presence_binom)
   # draw(solenastrea_gam_abundance_gamma)
-  # 
-  # # Check if any smooths are hitting k limits
-  # gam.check(solenastrea_gam_presence_binom)
+  draw(solenastrea_gam_abundance_beta)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(solenastrea_gam_presence_binom)
   # gam.check(solenastrea_gam_abundance_gamma)
-  # 
-  # # Look at concurvity
-  # concurvity(solenastrea_gam_presence_binom, full = TRUE)
+  gam.check(solenastrea_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(solenastrea_gam_presence_binom, full = TRUE)
   # concurvity(solenastrea_gam_abundance_gamma, full = TRUE)
-  # 
-  # #AUC / ROC
-  # solenastrea_fitted_data <- solenastrea_gam_presence_binom$model
-  # solenastrea_roc_curve <- roc(solenastrea_fitted_data$present,
-  #                           fitted(solenastrea_gam_presence_binom))
-  # auc(solenastrea_roc_curve)
-  # plot(solenastrea_roc_curve)
-  # 
+  concurvity(solenastrea_gam_abundance_beta, full = TRUE)
+  
+  #AUC / ROC
+  solenastrea_roc_curve <- roc(solenastrea_gam_presence_binom$model$present, 
+                            fitted(solenastrea_gam_presence_binom))
+  auc(solenastrea_roc_curve)
+  plot(solenastrea_roc_curve)
+  
   ################################## COLPOPHYLLIA ##################################
   
   colpophyllia_model_data = spp_data %>%
@@ -2329,7 +2346,7 @@
   colpophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
                                            s(slope) +
                                            s(planform_curv) +
-                                           s(mean_dir, bs = 'cc', k = 12) +
+                                           s(mean_dir, bs = 'cc', k = 15) +
                                            s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
                                            s(max_BOV) +
                                            s(range_SST),
@@ -2388,9 +2405,9 @@
   # beta with cloglog using observed/estimate concurvity; NO spatial smooth
   colpophyllia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
                                         s(TPI) + s(slope) +
-                                        s(mean_SST) + s(mean_PAR, k = 12) +
+                                        s(mean_SST) + s(mean_PAR) +
                                         s(max_BOV) + s(range_SST) +
-                                        s(mean_dir, bs = 'cc', k = 12),
+                                        s(mean_dir, bs = 'cc'),
                                       data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
                                       # select = TRUE,
                                       family = betar(link = "cloglog"))
@@ -2441,114 +2458,130 @@
   # saveRDS(colpophyllia_gam_abundance_gamma, 
   #         here("output", "output_GAMs", "colpophyllia_gam_abundance_gamma.rds"))
   
-  # ################################## DENDROGYRA ##################################
-  # 
-  # # NOTE - presence & abundance models seems very unstable. likely need to lump with 'RARE HS'
-  # 
-  # dendrogyra <- spp_data %>%
-  #   filter(depth_bathy >= -60) %>%
-  #   filter(grepl("Dendrogyra", spp))
-  # 
-  # dendrogyra_model_data_filtered <- dendrogyra
-  # 
-  # # Extract environmental data
-  # dendrogyra_species_env_complex <- extract_env_data(dendrogyra)
-  # 
-  # # Add environmental variables
-  # dendrogyra <- add_env_variables(dendrogyra, dendrogyra_species_env_complex, dendrogyra_model_data_filtered)
-  # 
-  # dendrogyra_model_data <- dendrogyra
-  # 
-  # # Check how much data you have left
-  # cat("Dendrogyra observations with all complexity variables:", nrow(dendrogyra_model_data), "\n")
-  # 
-  # # # Fit expanded GAM models
-  # # dendrogyra_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
-  # #                                 s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                 s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
-  # #                                 s(dist_to_deep) + s(max_BOV),
-  # #                               data = dendrogyra_model_data, family = tw())
-  # # 
-  # # # Check the results
-  # # summary(dendrogyra_gam_all_tweedie)
-  # # AIC(dendrogyra_gam_all_tweedie)
-  # # gam.check(dendrogyra_gam_all_tweedie)
-  # # plot(dendrogyra_gam_all_tweedie, pages = 2)
-  # # draw(dendrogyra_gam_all_tweedie)
-  # 
-  # # Create correlation matrix
-  # dendrogyra_cor_matrix <- create_correlation_matrix(dendrogyra_model_data)
-  # print(round(dendrogyra_cor_matrix, 2))
-  # 
-  # # Two-part model with complexity
-  # dendrogyra_model_data$present <- ifelse(dendrogyra_model_data$cover > 0, 1, 0)
-  # 
-  # # tic()
-  # # dendrogyra_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                             data = dendrogyra_model_data,
-  # #                             select = TRUE,
-  # #                             family = binomial())
-  # # toc()
-  # dendrogyra_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-  #                                        s(SAPA) +
-  #                                        s(range_SST) +
-  #                                        max_BOV,
-  #                                      data = dendrogyra_model_data,
-  #                                      # select = TRUE,
-  #                                      family = binomial())
-  # 
-  # # dendrogyra_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                              data = dendrogyra_model_data[dendrogyra_model_data$cover > 0, ],
-  # #                              select = TRUE,
-  # #                              family = Gamma(link = "log"))
+  ################################## DENDROGYRA ##################################
+
+  # N = 35
+
+  dendrogyra_model_data = spp_data %>%
+    filter(grepl("Dendrogyra", spp))
+  dendrogyra_model_data = add_env_variables(dendrogyra_model_data, variables_at_PSUs)
+  
+  # Two-part model with complexity
+  dendrogyra_model_data$present <- ifelse(dendrogyra_model_data$cover > 0, 1, 0)
+  
+  # tic()
+  # dendrogyra_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = dendrogyra_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  dendrogyra_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                         s(slope) +
+                                         s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
+                                         s(max_BOV),
+                                         data = dendrogyra_model_data,
+                                         # weights = weights_vec,
+                                         # select = TRUE,
+                                         family = binomial())
+  
   # dendrogyra_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                         s(slope) +
-  #                                         s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  #                                         s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  #                                         s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  #                                         s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  #                                         s(range_SST) +
-  #                                         s(dist_to_land),
-  #                                       data = dendrogyra_model_data[dendrogyra_model_data$cover > 0, ],
-  #                                       # select = TRUE,
-  #                                       family = Gamma(link = "log"))
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                              data = dendrogyra_model_data[dendrogyra_model_data$cover > 0, ],
+  #                              select = TRUE,
+  #                              family = Gamma(link = "log"))
   # dendrogyra_gam_abundance_gamma <- gam(cover ~ s(slope) + TPI + VRM + planform_curv +
   #                                           mean_spm +
   #                                           s(dist_to_deep),
   #                                         data = dendrogyra_model_data[dendrogyra_model_data$cover > 0, ],
   #                                         family = Gamma(link = "log"))
-  # 
-  # summary(dendrogyra_gam_presence_binom)
+
+  
+  dendrogyra_model_data$cover_prop <- dendrogyra_model_data$cover / 100
+  
+  # dendrogyra_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = dendrogyra_model_data[dendrogyra_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  # # # # beta with observed/estimate concurvity
+  # dendrogyra_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+  #                                          s(TPI) +
+  #                                          s(max_BOV) +
+  #                                          s(mean_SST) + s(range_SST) + s(mean_PAR),
+  #                                        data = dendrogyra_model_data[dendrogyra_model_data$cover_prop > 0, ],
+  #                                        # select = TRUE,
+  #                                        family = betar())
+  # beta with cloglog using observed/estimate concurvity; NO spatial smooth
+  # bad: SAPA, aspect, PAR, kd490, chla, max Hsig, land, deep, mean dir, range SST
+  # neutral: depth, complexity, VRM, mean Hsig, BOV
+  # good: TPI (?), slope, mean SST, planform curv (?), spm (?)
+  #   NOTE - difficult to justify keeping mean Hsig in the model because of concurvity, but dropping it really
+  #             lowers the R-squared a lot. just should consider
+  dendrogyra_gam_abundance_beta <- gam(cover_prop ~ s(depth, k = 3) +
+                                         s(mean_SST, k = 5) + s(planform_curv, k = 3) +
+                                         s(slope, k = 7) +
+                                         s(max_BOV, k = 3) + s(mean_dir, bs = 'cc'),
+                                         data = dendrogyra_model_data[dendrogyra_model_data$cover_prop > 0, ],
+                                         # select = TRUE,
+                                         family = betar(link = "cloglog"))
+  summary(dendrogyra_gam_abundance_beta)
+  
+  
+  
+  summary(dendrogyra_gam_presence_binom)
   # summary(dendrogyra_gam_abundance_gamma)
-  # AIC(dendrogyra_gam_presence_binom)
+  summary(dendrogyra_gam_abundance_beta)
+  
+  AIC(dendrogyra_gam_presence_binom)
   # AIC(dendrogyra_gam_abundance_gamma)
-  # 
-  # draw(dendrogyra_gam_presence_binom)
+  AIC(dendrogyra_gam_abundance_beta)
+  
+  draw(dendrogyra_gam_presence_binom)
   # draw(dendrogyra_gam_abundance_gamma)
-  # 
-  # # Check if any smooths are hitting k limits
-  # gam.check(dendrogyra_gam_presence_binom)
+  draw(dendrogyra_gam_abundance_beta)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(dendrogyra_gam_presence_binom)
   # gam.check(dendrogyra_gam_abundance_gamma)
-  # 
-  # # Look at concurvity
-  # concurvity(dendrogyra_gam_presence_binom, full = TRUE)
+  gam.check(dendrogyra_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(dendrogyra_gam_presence_binom, full = TRUE)
   # concurvity(dendrogyra_gam_abundance_gamma, full = TRUE)
-  # 
+  concurvity(dendrogyra_gam_abundance_beta, full = TRUE)
+  
+  
+  #AUC / ROC
+  dendrogyra_roc_curve <- roc(dendrogyra_gam_presence_binom$model$present, 
+                                fitted(dendrogyra_gam_presence_binom))
+  auc(dendrogyra_roc_curve)
+  plot(dendrogyra_roc_curve)
+  
+  
   ################################## DICHOCOENIA ##################################
+  
+  # N = 76
+  # note - try reducing k and bringing in linear terms
   
   dichocoenia_model_data = spp_data %>%
     filter(grepl("Dichocoenia", spp))
@@ -2561,7 +2594,7 @@
   # dichocoenia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
   #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
@@ -2570,12 +2603,15 @@
   #                             select = TRUE,
   #                             family = binomial())
   # toc()
-  dichocoenia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-                                          s(mean_SST) +
-                                          s(dist_to_land),
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  dichocoenia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(slope) +
+                                          s(mean_PAR) + s(dist_to_deep) + s(mean_SST) +
+                                          s(mean_Hsig) +
+                                          s(range_SST),
                                         data = dichocoenia_model_data,
-                                        select = TRUE,
+                                        # select = TRUE,
                                         family = binomial())
+
   
   # dichocoenia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
@@ -2628,6 +2664,15 @@
                                            # select = TRUE,
                                            family = betar())
   
+  pred <- predict(dichocoenia_gam_abundance_beta, type = "response")
+  obs <- dichocoenia_gam_abundance_beta$model$cover_prop
+  lim <- c(0, max(c(obs, pred)))
+  plot(obs, pred, xlim = lim, ylim = lim)
+  abline(0, 1, col = "red")
+  r <- cor(obs, pred)
+  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  
+  
   summary(dichocoenia_gam_presence_binom)
   # summary(dichocoenia_gam_abundance_gamma)
   summary(dichocoenia_gam_abundance_beta)
@@ -2665,7 +2710,7 @@
   
   ################################## DIPLORIA ##################################
   
-  # NOTE - some k issues with the presence model
+  # N = 120
   
   diploria_model_data = spp_data %>%
     filter(grepl("Diploria", spp))
@@ -2678,7 +2723,7 @@
   # diploria_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                               s(slope) +
   #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
   #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
   #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
   #                               s(range_SST) +
@@ -2687,13 +2732,13 @@
   #                             select = TRUE,
   #                             family = binomial())
   # toc()
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
   diploria_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-                                       slope +
-                                       TPI + s(VRM) +
-                                       s(dir_at_max_hsig, k = 12, bs = 'cc') +
-                                       s(mean_SST, k = 12) + s(dist_to_deep) + s(max_BOV),
+                                       s(TPI) + s(VRM, k = 12) +
+                                       s(mean_dir, bs = 'cc', k = 20) +
+                                       s(mean_SST, k = 15) + s(dist_to_deep) + s(max_BOV, k = 12),
                                      data = diploria_model_data,
-                                     select = TRUE,
+                                     # select = TRUE,
                                      family = binomial())
   
   # diploria_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
@@ -2707,29 +2752,63 @@
   #                               data = diploria_model_data[diploria_model_data$cover > 0, ],
   #                               select = TRUE,
   #                               family = Gamma(link = "log"))
-  diploria_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-                                        s(SAPA) +
-                                        s(mean_chla) +
-                                        s(dist_to_deep),
-                                      data = diploria_model_data[diploria_model_data$cover > 0, ],
-                                      select = TRUE,
-                                      family = Gamma(link = "log"))
+  # diploria_gam_abundance_gamma <- gam(cover ~ s(depth_bathy, k = 12) + s(aspect, bs = 'cc') +
+  #                                       s(SAPA) +
+  #                                       s(mean_chla) +
+  #                                       s(dist_to_deep),
+  #                                     data = diploria_model_data[diploria_model_data$cover > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = Gamma(link = "log"))
+  
+  
+  diploria_model_data$cover_prop <- diploria_model_data$cover / 100
+  
+  # diploria_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = diploria_model_data[diploria_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  #beta using observed/estimate concurvity
+  # bad: SAPA, slope
+  # neutral: VRM, chla, complexity, max Hsig, mean Hsig, max BOV, PAR, SST, range SST
+  # good: depth, complexity, meandir, deep, TPI, planform
+  #     - "best" model without accounting for concurvity is depth, ...
+  diploria_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(planform_curv) +
+                                          s(complexity) +
+                                          s(mean_dir, bs = 'cc') +
+                                          s(dist_to_deep),
+                                        data = diploria_model_data[diploria_model_data$cover_prop > 0, ],
+                                        # select = TRUE,
+                                        family = betar())
+  
   
   summary(diploria_gam_presence_binom)
-  summary(diploria_gam_abundance_gamma)
+  # summary(diploria_gam_abundance_gamma)
+  summary(diploria_gam_abundance_beta)
+  
   AIC(diploria_gam_presence_binom)
-  AIC(diploria_gam_abundance_gamma)
+  # AIC(diploria_gam_abundance_gamma)
+  AIC(diploria_gam_abundance_beta)
   
   draw(diploria_gam_presence_binom)
-  draw(diploria_gam_abundance_gamma)
+  # draw(diploria_gam_abundance_gamma)
+  draw(diploria_gam_abundance_beta)
   
   # Check if any smooths are hitting k limits
   gam.check(diploria_gam_presence_binom)
-  gam.check(diploria_gam_abundance_gamma)
+  # gam.check(diploria_gam_abundance_gamma)
+  gam.check(diploria_gam_abundance_beta)
   
   # Look at concurvity
   concurvity(diploria_gam_presence_binom, full = TRUE)
-  concurvity(diploria_gam_abundance_gamma, full = TRUE)
+  # concurvity(diploria_gam_abundance_gamma, full = TRUE)
+  concurvity(diploria_gam_abundance_beta, full = TRUE)
   
   #AUC / ROC
   diploria_roc_curve <- roc(diploria_gam_presence_binom$model$present, 
@@ -2737,73 +2816,31 @@
   auc(diploria_roc_curve)
   plot(diploria_roc_curve)
   
-  # # Save models
-  # saveRDS(diploria_gam_presence_binom, 
-  #         here("output", "output_GAMs", "diploria_gam_presence_binom.rds"))
-  # 
-  # saveRDS(diploria_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "diploria_gam_abundance_gamma.rds"))
   
+  ################################## EUSMILIA ##################################
   
-  # ################################## EUSMILIA ##################################
-  # 
-  # # NOTE - abundance model seems very unstable due to sample size. likely need to lump with 'RARE HS'
-  # 
-  # eusmilia <- spp_data %>%
-  #   filter(depth_bathy >= -60) %>%
-  #   filter(grepl("Eusmilia", spp))
-  # 
-  # eusmilia_model_data_filtered <- eusmilia
-  # 
-  # # Extract environmental data
-  # eusmilia_species_env_complex <- extract_env_data(eusmilia)
-  # 
-  # # Add environmental variables
-  # eusmilia <- add_env_variables(eusmilia, eusmilia_species_env_complex, eusmilia_model_data_filtered)
-  # 
-  # eusmilia_model_data <- eusmilia
-  # 
-  # # Check how much data you have left
-  # cat("eusmilia observations with all complexity variables:", nrow(eusmilia_model_data), "\n")
-  # 
-  # # # Fit expanded GAM models
-  # # eusmilia_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
-  # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
-  # #                                    s(dist_to_deep) + s(max_BOV),
-  # #                                  data = eusmilia_model_data, family = tw())
-  # # 
-  # # # Check the results
-  # # summary(eusmilia_gam_all_tweedie)
-  # # AIC(eusmilia_gam_all_tweedie)
-  # # gam.check(eusmilia_gam_all_tweedie)
-  # # plot(eusmilia_gam_all_tweedie, pages = 2)
-  # # draw(eusmilia_gam_all_tweedie)
-  # 
-  # # Create correlation matrix
-  # eusmilia_cor_matrix <- create_correlation_matrix(eusmilia_model_data)
-  # print(round(eusmilia_cor_matrix, 2))
-  # 
-  # # Two-part model with complexity
-  # #
-  # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
-  # #   dist_to_land, dist_to_deep, max_BOV, year
-  # eusmilia_model_data$present <- ifelse(eusmilia_model_data$cover > 0, 1, 0)
-  # 
-  # # tic()
-  # # eusmilia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                             data = eusmilia_model_data,
-  # #                             select = TRUE,
-  # #                             family = binomial())
-  # # toc()
+  # N = 39
+  
+  eusmilia_model_data = spp_data %>%
+    filter(grepl("Eusmilia", spp))
+  eusmilia_model_data = add_env_variables(eusmilia_model_data, variables_at_PSUs)
+  
+  # Two-part model with complexity
+  eusmilia_model_data$present <- ifelse(eusmilia_model_data$cover > 0, 1, 0)
+  
+  # tic()
+  # eusmilia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = eusmilia_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
   # eusmilia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                      s(complexity) +
   #                                      s(mean_kd490) +
@@ -2812,292 +2849,373 @@
   #                                    data = eusmilia_model_data,
   #                                    select = TRUE,
   #                                    family = binomial())
-  # 
-  # # eusmilia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                               data = eusmilia_model_data[eusmilia_model_data$cover > 0, ],
-  # #                               select = TRUE,
-  # #                               family = Gamma(link = "log"))
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  #     NOTE - spatial smooth does not help at all
+  eusmilia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                       s(slope) +
+                                       s(complexity) + s(planform_curv) +
+                                       s(mean_PAR) +
+                                       s(SAPA) +
+                                       s(mean_spm) + s(dist_to_deep),
+                                     data = eusmilia_model_data,
+                                     # select = TRUE,
+                                     family = binomial())
+  
+  # eusmilia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = eusmilia_model_data[eusmilia_model_data$cover > 0, ],
+  #                               select = TRUE,
+  #                               family = Gamma(link = "log"))
   # eusmilia_gam_abundance_gamma <- gam(cover ~ depth_bathy +
   #                                       s(max_Hsig),
   #                                     data = eusmilia_model_data[eusmilia_model_data$cover > 0, ],
   #                                     # select = TRUE,
   #                                     family = Gamma(link = "log"))
-  # 
-  # summary(eusmilia_gam_presence_binom)
+
+  
+  eusmilia_model_data$cover_prop <- eusmilia_model_data$cover / 100
+  
+  # eusmilia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = eusmilia_model_data[eusmilia_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  #beta using observed/estimate concurvity
+  # bad: mean dir, range SST, VRM, planform, max Hsig, mean Hsig, kd490, slope
+  # neutral: TPI, chla, PAR, complexity, land, deep, SAPA
+  # good: depth, spm, BOV, SST
+  eusmilia_gam_abundance_beta <- gam(cover_prop ~ s(depth, k = 3) + s(mean_spm, k = 3) +
+                                       s(mean_SST, k = 5) + s(max_BOV, k = 3) +
+                                       s(TPI, k = 3),
+                                     data = eusmilia_model_data[eusmilia_model_data$cover_prop > 0, ],
+                                     # select = TRUE,
+                                     family = betar())
+  summary(eusmilia_gam_abundance_beta)
+  
+  
+  summary(eusmilia_gam_presence_binom)
   # summary(eusmilia_gam_abundance_gamma)
-  # AIC(eusmilia_gam_presence_binom)
+  summary(eusmilia_gam_abundance_beta)
+  
+  AIC(eusmilia_gam_presence_binom)
   # AIC(eusmilia_gam_abundance_gamma)
-  # 
-  # draw(eusmilia_gam_presence_binom)
+  AIC(eusmilia_gam_abundance_beta)
+  
+  draw(eusmilia_gam_presence_binom)
   # draw(eusmilia_gam_abundance_gamma)
-  # 
-  # # Check if any smooths are hitting k limits
-  # gam.check(eusmilia_gam_presence_binom)
+  draw(eusmilia_gam_abundance_beta)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(eusmilia_gam_presence_binom)
   # gam.check(eusmilia_gam_abundance_gamma)
-  # 
-  # # Look at concurvity
-  # concurvity(eusmilia_gam_presence_binom, full = TRUE)
+  gam.check(eusmilia_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(eusmilia_gam_presence_binom, full = TRUE)
   # concurvity(eusmilia_gam_abundance_gamma, full = TRUE)
-  # 
-  # #AUC / ROC
-  # eusmilia_fitted_data <- eusmilia_gam_presence_binom$model
-  # eusmilia_roc_curve <- roc(eusmilia_fitted_data$present, 
-  #                           fitted(eusmilia_gam_presence_binom))
-  # auc(eusmilia_roc_curve)
-  # plot(eusmilia_roc_curve, main = "ROC Curve for Madracis Presence Model")
-  # 
-  # # Save models
-  # saveRDS(eusmilia_gam_presence_binom, 
-  #         here("output", "output_GAMs", "eusmilia_gam_presence_binom.rds"))
-  # 
-  # saveRDS(eusmilia_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "eusmilia_gam_abundance_gamma.rds"))
-  # 
-  # 
-  # ################################## MEANDRINA ##################################
-  # 
-  # # NOTE - abundance model seems very unstable due to sample size. likely need to lump with 'RARE HS'
-  # 
-  # meandrina <- spp_data %>%
-  #   filter(depth_bathy >= -60) %>%
-  #   filter(grepl("Meandrina", spp))
-  # 
-  # meandrina_model_data_filtered <- meandrina
-  # 
-  # # Extract environmental data
-  # meandrina_species_env_complex <- extract_env_data(meandrina)
-  # 
-  # # Add environmental variables
-  # meandrina <- add_env_variables(meandrina, meandrina_species_env_complex, meandrina_model_data_filtered)
-  # 
-  # meandrina_model_data <- meandrina
-  # 
-  # # Check how much data you have left
-  # cat("meandrina observations with all complexity variables:", nrow(meandrina_model_data), "\n")
-  # 
-  # # # Fit expanded GAM models
-  # # meandrina_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
-  # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
-  # #                                    s(dist_to_deep) + s(max_BOV),
-  # #                                  data = meandrina_model_data, family = tw())
-  # # 
-  # # # Check the results
-  # # summary(meandrina_gam_all_tweedie)
-  # # AIC(meandrina_gam_all_tweedie)
-  # # gam.check(meandrina_gam_all_tweedie)
-  # # plot(meandrina_gam_all_tweedie, pages = 2)
-  # # draw(meandrina_gam_all_tweedie)
-  # 
-  # # Create correlation matrix
-  # meandrina_cor_matrix <- create_correlation_matrix(meandrina_model_data)
-  # print(round(meandrina_cor_matrix, 2))
-  # 
-  # # Two-part model with complexity
-  # #
-  # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
-  # #   dist_to_land, dist_to_deep, max_BOV, year
-  # meandrina_model_data$present <- ifelse(meandrina_model_data$cover > 0, 1, 0)
-  # 
-  # # tic()
-  # # meandrina_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                             data = meandrina_model_data,
-  # #                             select = TRUE,
-  # #                             family = binomial())
-  # # toc()
-  # 
-  # #maybe drop Hsig
+  concurvity(eusmilia_gam_abundance_beta, full = TRUE)
+  
+  
+  
+  #AUC / ROC
+  eusmilia_fitted_data <- eusmilia_gam_presence_binom$model
+  eusmilia_roc_curve <- roc(eusmilia_fitted_data$present,
+                            fitted(eusmilia_gam_presence_binom))
+  auc(eusmilia_roc_curve)
+  plot(eusmilia_roc_curve, main = "ROC Curve for Madracis Presence Model")
+
+  
+  ################################## MEANDRINA ##################################
+  
+  meandrina_model_data = spp_data %>%
+    filter(grepl("Meandrina", spp))
+  meandrina_model_data = add_env_variables(meandrina_model_data, variables_at_PSUs)
+  
+  # # NOTE - tested distributing observed 1s to a range of values around 1; did not benefit model
+  # meandrina_model_data <- meandrina_model_data %>%
+  #   mutate(cover = ifelse(cover == 1, 
+  #                         rnorm(n(), mean = 1, sd = 0.2), 
+  #                         cover))
+  
+  # Two-part model with complexity
+  meandrina_model_data$present <- ifelse(meandrina_model_data$cover > 0, 1, 0)
+  
+  # tic()
   # meandrina_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  #                                       s(VRM) +
-  #                                       s(dir_at_max_hsig, bs = 'cc') +
-  #                                       s(mean_SST) + s(mean_PAR) + s(mean_kd490) +
-  #                                       s(range_SST),
-  #                                     data = meandrina_model_data,
-  #                                     select = TRUE,
-  #                                     family = binomial())
-  # 
-  # # meandrina_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                               data = meandrina_model_data[meandrina_model_data$cover > 0, ],
-  # #                               select = TRUE,
-  # #                               family = Gamma(link = "log"))
-  # 
-  # #meanSST, rangePAR, meanchla, diratmax, maxBOV, disttodeep?
-  # meandrina_gam_abundance_gamma <- gam(cover ~ s(TPI) + s(dir_at_max_hsig, bs = 'cc') +
-  #                                        mean_chla + s(mean_PAR),
-  #                                      data = meandrina_model_data[meandrina_model_data$cover > 0, ],
-  #                                      select = TRUE,
-  #                                      family = Gamma(link = "log"))
-  # 
-  # summary(meandrina_gam_presence_binom)
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = meandrina_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
+  # meandrina_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                      s(complexity) +
+  #                                      s(mean_kd490) +
+  #                                      s(dist_to_deep) +
+  #                                      range_SST,
+  #                                    data = meandrina_model_data,
+  #                                    select = TRUE,
+  #                                    family = binomial())
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  meandrina_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+                                        s(slope) +
+                                        s(TPI) + s(VRM) + s(max_Hsig) +
+                                        s(mean_dir, bs = 'cc') +
+                                        s(mean_PAR) + s(mean_kd490),
+                                     data = meandrina_model_data,
+                                     # select = TRUE,
+                                     family = binomial())
+  
+  # meandrina_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = meandrina_model_data[meandrina_model_data$cover > 0, ],
+  #                               select = TRUE,
+  #                               family = Gamma(link = "log"))
+  # meandrina_gam_abundance_gamma <- gam(cover ~ depth_bathy +
+  #                                       s(max_Hsig),
+  #                                     data = meandrina_model_data[meandrina_model_data$cover > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = Gamma(link = "log"))
+  
+  
+  meandrina_model_data$cover_prop <- meandrina_model_data$cover / 100
+  
+  # meandrina_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = meandrina_model_data[meandrina_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  #beta using observed/estimate concurvity
+  meandrina_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                        s(complexity) + s(TPI) + s(planform_curv) +
+                                        s(mean_dir, bs = 'cc') +
+                                        s(mean_PAR) +
+                                        s(mean_spm) + s(dist_to_deep) +
+                                        s(range_SST),
+                                     data = meandrina_model_data[meandrina_model_data$cover_prop > 0, ],
+                                     # select = TRUE,
+                                     family = betar())
+  summary(meandrina_gam_abundance_beta)
+  
+  pred <- predict(meandrina_gam_abundance_beta, type = "response")
+  obs <- meandrina_gam_abundance_beta$model$cover_prop
+  lim <- c(0, max(c(obs, pred)))
+  plot(obs, pred, xlim = lim, ylim = lim)
+  abline(0, 1, col = "red")
+  r <- cor(obs, pred)
+  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  
+  
+  summary(meandrina_gam_presence_binom)
   # summary(meandrina_gam_abundance_gamma)
-  # AIC(meandrina_gam_presence_binom)
+  summary(meandrina_gam_abundance_beta)
+  
+  AIC(meandrina_gam_presence_binom)
   # AIC(meandrina_gam_abundance_gamma)
-  # 
-  # draw(meandrina_gam_presence_binom)
+  AIC(meandrina_gam_abundance_beta)
+  
+  draw(meandrina_gam_presence_binom)
   # draw(meandrina_gam_abundance_gamma)
-  # 
-  # # Check if any smooths are hitting k limits
-  # gam.check(meandrina_gam_presence_binom)
+  draw(meandrina_gam_abundance_beta)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(meandrina_gam_presence_binom)
   # gam.check(meandrina_gam_abundance_gamma)
-  # 
-  # # Look at concurvity
-  # concurvity(meandrina_gam_presence_binom, full = TRUE)
+  gam.check(meandrina_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(meandrina_gam_presence_binom, full = TRUE)
   # concurvity(meandrina_gam_abundance_gamma, full = TRUE)
+  concurvity(meandrina_gam_abundance_beta, full = TRUE)
+  
+  
+  
+  #AUC / ROC
+  meandrina_fitted_data <- meandrina_gam_presence_binom$model
+  meandrina_roc_curve <- roc(meandrina_fitted_data$present,
+                            fitted(meandrina_gam_presence_binom))
+  auc(meandrina_roc_curve)
+  plot(meandrina_roc_curve, main = "ROC Curve for Meandrina Presence Model")
+  
+
+
+  ################################## MYCETOPHYLLIA ##################################
+  
+  # NOTE - presence model might be unstable due to sample size. had to drop meanHsig because of k issues
+  #           - yeah. the abundance model is definitely unstable too. crazy overfitted. should
+  #               pool with the Rare HS group
+  
+  # N = 28
+  
+  mycetophyllia_model_data = spp_data %>%
+    filter(grepl("Mycetophyllia", spp))
+  mycetophyllia_model_data = add_env_variables(mycetophyllia_model_data, variables_at_PSUs)
+  
+  # # NOTE - tested distributing observed 1s to a range of values around 1; did not benefit model
+  # mycetophyllia_model_data <- mycetophyllia_model_data %>%
+  #   mutate(cover = ifelse(cover == 1, 
+  #                         rnorm(n(), mean = 1, sd = 0.2), 
+  #                         cover))
+  
+  # Two-part model with complexity
+  mycetophyllia_model_data$present <- ifelse(mycetophyllia_model_data$cover > 0, 1, 0)
+  
+  # tic()
+  # mycetophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = mycetophyllia_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
+  # mycetophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                                      s(complexity) +
+  #                                      s(mean_kd490) +
+  #                                      s(dist_to_deep) +
+  #                                      range_SST,
+  #                                    data = mycetophyllia_model_data,
+  #                                    select = TRUE,
+  #                                    family = binomial())
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  mycetophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                            s(TPI, k = 15) + s(planform_curv) +
+                                            s(mean_PAR) + s(mean_kd490),
+                                      data = mycetophyllia_model_data,
+                                      # select = TRUE,
+                                      family = binomial())
+  
+  # mycetophyllia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = mycetophyllia_model_data[mycetophyllia_model_data$cover > 0, ],
+  #                               select = TRUE,
+  #                               family = Gamma(link = "log"))
+  # mycetophyllia_gam_abundance_gamma <- gam(cover ~ depth_bathy +
+  #                                       s(max_Hsig),
+  #                                     data = mycetophyllia_model_data[mycetophyllia_model_data$cover > 0, ],
+  #                                     # select = TRUE,
+  #                                     family = Gamma(link = "log"))
+  
+  
+  mycetophyllia_model_data$cover_prop <- mycetophyllia_model_data$cover / 100
+  
+  # mycetophyllia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = mycetophyllia_model_data[mycetophyllia_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  #beta using observed/estimate concurvity
+  # bad: max Hsig, PAR, chla, BOV
+  # neutral: kd490, spm, deep, land, range SST
+  # good: VRM, TPI, meanHsig, depth, mean SST, complexity, planform
+  # nonlinear ? : 
+  mycetophyllia_gam_abundance_beta <- gam(cover_prop ~  s(depth_bathy, k = 3) +
+                                        s(mean_SST, k = 5) + s(planform_curv, k = 5) +
+                                          s(TPI, k = 3) +
+                                          s(mean_Hsig, k = 3) + s(mean_Hsig, k = 3),
+                                      data = mycetophyllia_model_data[mycetophyllia_model_data$cover_prop > 0, ],
+                                      # select = TRUE,
+                                      family = betar())
+  summary(mycetophyllia_gam_abundance_beta)
+  
+  # # NOTE - for species with very low sample size which can only handle so many smooths (and often none of which
+  # #           are "curvy" anyways), setting up a basic linear model to assess collinearity using 'vif'. otherwise,
+  # #           essentially same process as selecting variables for the other species which have smooths and no
+  # #           linear predictors. aiming for VIF <10 and ideally closer to 5 or less
+  # temp_lm <- lm(cover_prop ~ complexity + mean_SST + depth_bathy + 
+  #                 slope + VRM + TPI + mean_Hsig,
+  #               data = mycetophyllia_model_data[mycetophyllia_model_data$cover_prop > 0, ])
   # 
-  # #AUC / ROC
-  # meandrina_fitted_data <- meandrina_gam_presence_binom$model
-  # meandrina_roc_curve <- roc(meandrina_fitted_data$present, 
-  #                           fitted(meandrina_gam_presence_binom))
-  # auc(meandrina_roc_curve)
-  # plot(meandrina_roc_curve, main = "ROC Curve for Madracis Presence Model")
-  # 
-  # # Save models
-  # saveRDS(meandrina_gam_presence_binom, 
-  #         here("output", "output_GAMs", "meandrina_gam_presence_binom.rds"))
-  # 
-  # saveRDS(meandrina_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "meandrina_gam_abundance_gamma.rds"))
-  # 
-  # 
-  # 
-  # ################################## MYCETOPHYLLIA ##################################
-  # 
-  # # NOTE - presence model might be unstable due to sample size. had to drop meanHsig because of k issues
-  # #           - yeah. the abundance model is definitely unstable too. crazy overfitted. should
-  # #               pool with the Rare HS group
-  # 
-  # mycetophyllia <- spp_data %>%
-  #   filter(depth_bathy >= -60) %>%
-  #   filter(grepl("Mycetophyllia", spp))
-  # 
-  # mycetophyllia_model_data_filtered <- mycetophyllia
-  # 
-  # # Extract environmental data
-  # mycetophyllia_species_env_complex <- extract_env_data(mycetophyllia)
-  # 
-  # # Add environmental variables
-  # mycetophyllia <- add_env_variables(mycetophyllia, mycetophyllia_species_env_complex, mycetophyllia_model_data_filtered)
-  # 
-  # mycetophyllia_model_data <- mycetophyllia
-  # 
-  # # Check how much data you have left
-  # cat("mycetophyllia observations with all complexity variables:", nrow(mycetophyllia_model_data), "\n")
-  # 
-  # # # Fit expanded GAM models
-  # # mycetophyllia_gam_all_tweedie <- gam(cover ~ s(depth_bathy) + s(TPI) + s(complexity) +
-  # #                                    s(range_SST) + s(mean_SST) + s(dir_at_max_hsig, bs = 'cc') +
-  # #                                    s(mean_Hsig) + s(mean_PAR) + s(mean_chla) + s(dist_to_land) +
-  # #                                    s(dist_to_deep) + s(max_BOV),
-  # #                                  data = mycetophyllia_model_data, family = tw())
-  # # 
-  # # # Check the results
-  # # summary(mycetophyllia_gam_all_tweedie)
-  # # AIC(mycetophyllia_gam_all_tweedie)
-  # # gam.check(mycetophyllia_gam_all_tweedie)
-  # # plot(mycetophyllia_gam_all_tweedie, pages = 2)
-  # # draw(mycetophyllia_gam_all_tweedie)
-  # 
-  # # Create correlation matrix
-  # mycetophyllia_cor_matrix <- create_correlation_matrix(mycetophyllia_model_data)
-  # print(round(mycetophyllia_cor_matrix, 2))
-  # 
-  # # Two-part model with complexity
-  # #
-  # #depth_bathy, aspect, slope, complexity, TPI, VRM, planform_curv, SAPA, max_Hsig,
-  # #   dir_at_max_Hsig, mean_Hsig, mean_SST, range_SST, mean_PAR, mean_chla, mean_kd490, mean_spm,
-  # #   dist_to_land, dist_to_deep, max_BOV, year
-  # mycetophyllia_model_data$present <- ifelse(mycetophyllia_model_data$cover > 0, 1, 0)
-  # 
-  # # tic()
-  # # mycetophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                             data = mycetophyllia_model_data,
-  # #                             select = TRUE,
-  # #                             family = binomial())
-  # # toc()
-  # mycetophyllia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
-  #                                           s(VRM) +
-  #                                           s(dir_at_max_hsig, bs = 'cc'),
-  #                                         data = mycetophyllia_model_data,
-  #                                         select = TRUE,
-  #                                         family = binomial())
-  # 
-  # # mycetophyllia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
-  # #                               s(slope) +
-  # #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
-  # #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
-  # #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
-  # #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
-  # #                               s(range_SST) +
-  # #                               s(dist_to_land),
-  # #                               data = mycetophyllia_model_data[mycetophyllia_model_data$cover > 0, ],
-  # #                               select = TRUE,
-  # #                               family = Gamma(link = "log"))
-  # mycetophyllia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) +
-  #                                            s(TPI),
-  #                                          data = mycetophyllia_model_data[mycetophyllia_model_data$cover > 0, ],
-  #                                          # select = TRUE,
-  #                                          family = Gamma(link = "log"))
-  # 
-  # summary(mycetophyllia_gam_presence_binom)
+  # # VIF from linear model (valid for collinearity assessment)
+  # vif(temp_lm)
+  
+  
+  pred <- predict(mycetophyllia_gam_abundance_beta, type = "response")
+  obs <- mycetophyllia_gam_abundance_beta$model$cover_prop
+  lim <- c(0, max(c(obs, pred)))
+  plot(obs, pred, xlim = lim, ylim = lim)
+  abline(0, 1, col = "red")
+  r <- cor(obs, pred)
+  text(0.05*max(lim), 0.95*max(lim), paste("R² =", round(r^2, 3), "\nR =", round(r, 3), ifelse(cor.test(obs, pred)$p.value < 0.05, "*", "ns")), adj = c(0, 1))
+  
+  
+  summary(mycetophyllia_gam_presence_binom)
   # summary(mycetophyllia_gam_abundance_gamma)
-  # AIC(mycetophyllia_gam_presence_binom)
+  summary(mycetophyllia_gam_abundance_beta)
+  
+  AIC(mycetophyllia_gam_presence_binom)
   # AIC(mycetophyllia_gam_abundance_gamma)
-  # 
-  # draw(mycetophyllia_gam_presence_binom)
+  AIC(mycetophyllia_gam_abundance_beta)
+  
+  draw(mycetophyllia_gam_presence_binom)
   # draw(mycetophyllia_gam_abundance_gamma)
-  # 
-  # # Check if any smooths are hitting k limits
-  # gam.check(mycetophyllia_gam_presence_binom)
+  draw(mycetophyllia_gam_abundance_beta, parametric = TRUE)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(mycetophyllia_gam_presence_binom)
   # gam.check(mycetophyllia_gam_abundance_gamma)
-  # 
-  # # Look at concurvity
-  # concurvity(mycetophyllia_gam_presence_binom, full = TRUE)
+  gam.check(mycetophyllia_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(mycetophyllia_gam_presence_binom, full = TRUE)
   # concurvity(mycetophyllia_gam_abundance_gamma, full = TRUE)
-  # 
-  # #AUC / ROC
-  # mycetophyllia_fitted_data <- mycetophyllia_gam_presence_binom$model
-  # mycetophyllia_roc_curve <- roc(mycetophyllia_fitted_data$present, 
-  #                           fitted(mycetophyllia_gam_presence_binom))
-  # auc(mycetophyllia_roc_curve)
-  # plot(mycetophyllia_roc_curve, main = "ROC Curve for Madracis Presence Model")
-  # 
-  # # Save models
-  # saveRDS(mycetophyllia_gam_presence_binom, 
-  #         here("output", "output_GAMs", "mycetophyllia_gam_presence_binom.rds"))
-  # 
-  # saveRDS(mycetophyllia_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "mycetophyllia_gam_abundance_gamma.rds"))
-  # 
-  # 
+  concurvity(mycetophyllia_gam_abundance_beta, full = TRUE)
+  
+  
+  
+  #AUC / ROC
+  mycetophyllia_fitted_data <- mycetophyllia_gam_presence_binom$model
+  mycetophyllia_roc_curve <- roc(mycetophyllia_fitted_data$present,
+                             fitted(mycetophyllia_gam_presence_binom))
+  auc(mycetophyllia_roc_curve)
+  plot(mycetophyllia_roc_curve, main = "ROC Curve for Mycetophyllia Presence Model")
+  
+
   ################################## PSEUDODIPLORIA ##################################
   
   # NOTE - should consider removing SST for presence because of k issue
@@ -3307,114 +3425,107 @@
   
   ################################## RARE HS ##################################
   
+  # actually may have figured out the below!!
+  #   - dendrogyra, eusmilia, meandrina, mycetophyllia
   
-  #Dendrogyra cylindrus, Eusmilia fastigiata, Favia fragum, Isophyllia spp., Manicina areolata,
-  #   Meandrina spp., Mussa angulosa, Mycetophyllia spp., and Scolymia spp. (9 species)
-  
-  
-  
-  
-  # stopping point - 11 sep 2025
-  #
-  #   - main goal now is actually seeing how long a full SDM output will take to chug with the hurdle 
-  #       model approach. then, running all the 80/20 validations to create R-squared, MAE, RMSE, etc.
-  #
-  #   - may need to handle some predictor outliers...but for now, table that until I see whether the
-  #       predictions are turning out well. along the same lines, can later consider mean BOV,
-  #       mean wavedir, and mean PAR if needed
-  #   - also will go back upstream to group the rare HS corals....but can wait on that for now
-  
-  
-  ################################## test prediction of Orbicella ##################################
-
-  # Manually specify required variables (using raster layer names)
-  presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
-  abundance_vars <- c("depth", "range_SST", "mean_chla")
-  required_vars <- unique(c(presence_vars, abundance_vars))
-
-  # Subset raster stack to only required variables
-  env_subset <- env_complex[[required_vars]]
-
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)  # For reproducible sampling
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-
-  # Test predictions on sample
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-
-  # Create hurdle predictions
-  hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
-
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-
-  # Quick plot of sample results
-  library(ggplot2)
-  library(viridis)
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle("Orbicella Presence Probability")
-
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-
-  ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
-
+  # Favia fragum (N = 4), Isophyllia spp. (N = 4), Manicina areolata (N = 8), Mussa angulosa (N = 1),
+  #     and Scolymia spp. (N = 10)
+  #       - 5 species; total N = 27
   
   
   
+  
+  
+  # ################################## test prediction of Orbicella ##################################
+  # 
+  # # Manually specify required variables (using raster layer names)
+  # presence_vars <- c("depth", "complexity", "range_SST", "dir_at_max_hsig", "max_BOV")
+  # abundance_vars <- c("depth", "range_SST", "mean_chla")
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)  # For reproducible sampling
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(orbicella_gam_presence_binom, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(orbicella_gam_abundance_gamma, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions
+  # hurdle_pred_sample <- presence_prob_sample * abundance_pred_sample
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # library(ggplot2)
+  # library(viridis)
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability", limits = c(0.1, 1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle("Orbicella Presence Probability")
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Hurdle Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 15)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Raw Abundance Model Sample Prediction (n =", nrow(env_df_sample), ")"))
+  # 
+  # 
+  # 
+  # 
   # ################################## test prediction of Agaricia ##################################
   # 
   # # Manually specify required variables for agaricia models
@@ -3587,266 +3698,266 @@
   # 
   # 
   
-  ################################## hard hurdle test & map ##################################
-  
-  # STOPPING POINT - 17 sep 2025
-  #   - need to add lon and lat as spatrasters to env_complex to be able to make any
-  #       predictions using them. still not convinced they'll work anyways...
-  
-  # Species toggle - change this to switch between species
-  # species <- "orbicella" #0.5
-  # species <- "pseudodiploria" #0.45
-  species <- "orbicella" #0.38
-  # species <- "montastraea" #0.25
-  # species <- "colpophyllia" #0.1
-  # species <- "porites" #0.54
-  
-  # Dynamically construct model variable names based on species
-  presence_model_name <- paste0(species, "_gam_presence_binom")
-  abundance_model_name <- paste0(species, "_gam_abundance_beta")
-  # abundance_model_name <- paste0(species, "_gam_abundance_gamma")
-  
-  # Get the actual model objects (assuming they exist in your environment)
-  presence_model <- get(presence_model_name)
-  abundance_model <- get(abundance_model_name)
-  
-  # Manually specify required variables (using raster layer names)
-  presence_vars <- all.vars(formula(presence_model))[-1]
-  abundance_vars <- all.vars(formula(abundance_model))[-1]
-  required_vars <- unique(c(presence_vars, abundance_vars))
-  
-  # Subset raster stack to only required variables
-  required_vars <- gsub("^depth_bathy$", "depth", required_vars)
-  env_subset <- env_complex[[required_vars]]
-  
-  # Convert subset raster to dataframe
-  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  
-  # Rename depth column to match model expectation
-  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-  
-  # Take only 1/100th of the data for testing
-  sample_size <- ceiling(nrow(env_df) / 100)
-  set.seed(123)  # For reproducible sampling
-  sample_indices <- sample(nrow(env_df), sample_size)
-  env_df_sample <- env_df[sample_indices, ]
-  
-  cat("Species:", species, "\n")
-  cat("Full dataset size:", nrow(env_df), "cells\n")
-  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-  
-  # Test predictions on sample
-  cat("Testing presence prediction...\n")
-  start_time <- Sys.time()
-  presence_prob_sample <- predict(presence_model, newdata = env_df_sample, type = "response")
-  presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-  
-  # Convert presence probability to binary (hard hurdle)
-  presence_threshold <- 0.5 # 0.1 # 0.25 # 0.38 # 0.45 # 0.5
-  presence_binary_sample <- ifelse(presence_prob_sample > presence_threshold, 1, 0)
-  
-  cat("Testing abundance prediction...\n")
-  start_time <- Sys.time()
-  abundance_pred_sample <- predict(abundance_model, newdata = env_df_sample, type = "response")
-  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-  
-  # Create hurdle predictions (only abundance where presence predicted)
-  hurdle_pred_sample <- ifelse(presence_binary_sample == 1, abundance_pred_sample, 0)
-  
-  # Add predictions to sample dataframe
-  env_df_sample$presence_prob <- presence_prob_sample
-  env_df_sample$presence_binary <- presence_binary_sample
-  env_df_sample$abundance_pred <- abundance_pred_sample
-  env_df_sample$hurdle_pred <- hurdle_pred_sample
-  
-  # Estimate full dataset time
-  total_sample_time <- as.numeric(presence_time + abundance_time)
-  estimated_full_time <- total_sample_time * 100
-  
-  cat("\nSample results summary:\n")
-  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-  
-  cat("\nTime estimates:\n")
-  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  if(estimated_full_time > 60) {
-    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  }
-  cat("\n")
-  
-  # Quick plot of sample results
-  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Presence\nProbability") +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste(stringr::str_to_title(species), "Presence Probability"))
-  
-  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
-  
-  hist(env_df_sample$hurdle_pred[env_df_sample$hurdle_pred > 0 & env_df_sample$hurdle_pred < 1])
-  
-  ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
-    geom_point(size = 0.5) +
-    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
-    coord_equal() +
-    theme_minimal() +
-    ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  # Run full model predictions - THIS TAKES A LOT OF TIME / COMPUTING RESOURCES. 15-20+ MINUTES
-  cat("\nRunning full model predictions...\n")
-  start_time <- Sys.time()
-  
-  # Full presence prediction
-  presence_threshold = 0.5 # 0.38 # 0.5
-  presence_prob_full <- predict(presence_model, newdata = env_df, type = "response")
-  presence_binary_full <- ifelse(presence_prob_full > presence_threshold, 1, 0)
-  
-  # Full abundance prediction
-  abundance_pred_full <- predict(abundance_model, newdata = env_df, type = "response")
-  
-  # Full hurdle prediction
-  hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full, 0)
-  
-  full_time <- difftime(Sys.time(), start_time, units = "secs")
-  cat("Full prediction time:", round(full_time, 1), "seconds\n")
-  
-  # Add predictions to full dataframe
-  env_df$hurdle_pred <- hurdle_pred_full
-  
-  # # Plot full results
-  # ggplot(env_df, aes(x = x, y = y, color = hurdle_pred)) +
-  #   geom_point(size = 0.1) +
-  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
+  # ################################## hard hurdle test & map ##################################
+  # 
+  # # STOPPING POINT - 17 sep 2025
+  # #   - need to add lon and lat as spatrasters to env_complex to be able to make any
+  # #       predictions using them. still not convinced they'll work anyways...
+  # 
+  # # Species toggle - change this to switch between species
+  # # species <- "orbicella" #0.5
+  # # species <- "pseudodiploria" #0.45
+  # species <- "orbicella" #0.38
+  # # species <- "montastraea" #0.25
+  # # species <- "colpophyllia" #0.1
+  # # species <- "porites" #0.54
+  # 
+  # # Dynamically construct model variable names based on species
+  # presence_model_name <- paste0(species, "_gam_presence_binom")
+  # abundance_model_name <- paste0(species, "_gam_abundance_beta")
+  # # abundance_model_name <- paste0(species, "_gam_abundance_gamma")
+  # 
+  # # Get the actual model objects (assuming they exist in your environment)
+  # presence_model <- get(presence_model_name)
+  # abundance_model <- get(abundance_model_name)
+  # 
+  # # Manually specify required variables (using raster layer names)
+  # presence_vars <- all.vars(formula(presence_model))[-1]
+  # abundance_vars <- all.vars(formula(abundance_model))[-1]
+  # required_vars <- unique(c(presence_vars, abundance_vars))
+  # 
+  # # Subset raster stack to only required variables
+  # required_vars <- gsub("^depth_bathy$", "depth", required_vars)
+  # env_subset <- env_complex[[required_vars]]
+  # 
+  # # Convert subset raster to dataframe
+  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+  # 
+  # # Rename depth column to match model expectation
+  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+  # 
+  # # Take only 1/100th of the data for testing
+  # sample_size <- ceiling(nrow(env_df) / 100)
+  # set.seed(123)  # For reproducible sampling
+  # sample_indices <- sample(nrow(env_df), sample_size)
+  # env_df_sample <- env_df[sample_indices, ]
+  # 
+  # cat("Species:", species, "\n")
+  # cat("Full dataset size:", nrow(env_df), "cells\n")
+  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+  # 
+  # # Test predictions on sample
+  # cat("Testing presence prediction...\n")
+  # start_time <- Sys.time()
+  # presence_prob_sample <- predict(presence_model, newdata = env_df_sample, type = "response")
+  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+  # 
+  # # Convert presence probability to binary (hard hurdle)
+  # presence_threshold <- 0.5 # 0.1 # 0.25 # 0.38 # 0.45 # 0.5
+  # presence_binary_sample <- ifelse(presence_prob_sample > presence_threshold, 1, 0)
+  # 
+  # cat("Testing abundance prediction...\n")
+  # start_time <- Sys.time()
+  # abundance_pred_sample <- predict(abundance_model, newdata = env_df_sample, type = "response")
+  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+  # 
+  # # Create hurdle predictions (only abundance where presence predicted)
+  # hurdle_pred_sample <- ifelse(presence_binary_sample == 1, abundance_pred_sample, 0)
+  # 
+  # # Add predictions to sample dataframe
+  # env_df_sample$presence_prob <- presence_prob_sample
+  # env_df_sample$presence_binary <- presence_binary_sample
+  # env_df_sample$abundance_pred <- abundance_pred_sample
+  # env_df_sample$hurdle_pred <- hurdle_pred_sample
+  # 
+  # # Estimate full dataset time
+  # total_sample_time <- as.numeric(presence_time + abundance_time)
+  # estimated_full_time <- total_sample_time * 100
+  # 
+  # cat("\nSample results summary:\n")
+  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+  # 
+  # cat("\nTime estimates:\n")
+  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  # if(estimated_full_time > 60) {
+  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  # }
+  # cat("\n")
+  # 
+  # # Quick plot of sample results
+  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Presence\nProbability") +
   #   coord_equal() +
   #   theme_minimal() +
-  #   ggtitle(paste("Full Hurdle Model Prediction -", stringr::str_to_title(species)))
-  
-  
-  
-  # Convert predictions back to raster using the original env_df coordinates
-  hurdle_raster <- rast(env_df[, c("x", "y", "hurdle_pred")], type="xyz")
-  shallow_mask <- bathy_final > -60
-  hurdle_raster <- resample(hurdle_raster, bathy_final)
-  hurdle_raster <- mask(hurdle_raster, shallow_mask, maskvalues = FALSE)
-  
-  # Plot with terra
-  hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 0.1, values = TRUE)
-  # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 1.0, values = TRUE)
-  # plot(hurdle_raster_clamped, main = paste("Full Hurdle Model -", stringr::str_to_title(species)), 
-  #      colNA = "gray90")  
-  
-  
-  
-  
-  # Create leaflet map with hurdle predictions
-  pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
-  
-  leaflet() %>%
-    addTiles(group = "OpenStreetMap") %>%
-    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
-    addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
-    addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
-              title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
-    addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
-                     options = layersControlOptions(collapsed = FALSE))
-  
-  
-  
-  
-  
-  
-  
-  
-  #draft code to pull up another leaflet with spp-specific cover
-  species <- "orbicella" #0.1
-  
-  # Get unique PSU locations with coral cover data for the selected species
-  spp_leaflet_cover_data <- combined_benthic_data_averaged %>%
-    filter(grepl(species, spp, ignore.case = TRUE)) %>%
-    group_by(PSU) %>%
-    summarise(
-      lat = first(lat),
-      lon = first(lon),
-      dataset = first(dataset),
-      avg_cover = mean(cover, na.rm = TRUE),
-      .groups = 'drop'
-    )
-  
-  # Create color palette for coral cover (yellow to red)
-  color_pal <- colorNumeric(
-    palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
-    domain = spp_leaflet_cover_data$avg_cover,
-    na.color = "gray"
-  )
-  
-  # Create the interactive leaflet map
-  coral_cover_map <- leaflet(spp_leaflet_cover_data) %>%
-    addTiles(group = "OpenStreetMap") %>%
-    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
-    addCircleMarkers(
-      lng = ~lon, 
-      lat = ~lat,
-      popup = ~paste0(
-        "<b>PSU:</b> ", PSU, "<br>",
-        "<b>Dataset:</b> ", dataset, "<br>",
-        "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
-        "<b>Latitude:</b> ", round(lat, 5), "<br>",
-        "<b>Longitude:</b> ", round(lon, 5)
-      ),
-      label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
-      radius = 8,
-      color = "white",
-      fillColor = ~color_pal(avg_cover),
-      fillOpacity = 0.8,
-      weight = 2,
-      stroke = TRUE
-    ) %>%
-    addLegend(
-      "bottomright",
-      pal = color_pal,
-      values = ~avg_cover,
-      title = "Coral Cover (%)",
-      opacity = 1,
-      labFormat = labelFormat(suffix = "%")
-    ) %>%
-    addLayersControl(
-      baseGroups = c("OpenStreetMap", "Satellite"),
-      options = layersControlOptions(collapsed = FALSE)
-    ) %>%
-    fitBounds(
-      lng1 = min(spp_leaflet_cover_data$lon, na.rm = TRUE) - 0.1,
-      lat1 = min(spp_leaflet_cover_data$lat, na.rm = TRUE) - 0.1,
-      lng2 = max(spp_leaflet_cover_data$lon, na.rm = TRUE) + 0.1,
-      lat2 = max(spp_leaflet_cover_data$lat, na.rm = TRUE) + 0.1
-    )
-  
-  # Display the map
-  coral_cover_map
-
+  #   ggtitle(paste(stringr::str_to_title(species), "Presence Probability"))
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
+  # 
+  # hist(env_df_sample$hurdle_pred[env_df_sample$hurdle_pred > 0 & env_df_sample$hurdle_pred < 1])
+  # 
+  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+  #   geom_point(size = 0.5) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
+  #   coord_equal() +
+  #   theme_minimal() +
+  #   ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))  
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # # Run full model predictions - THIS TAKES A LOT OF TIME / COMPUTING RESOURCES. 15-20+ MINUTES
+  # cat("\nRunning full model predictions...\n")
+  # start_time <- Sys.time()
+  # 
+  # # Full presence prediction
+  # presence_threshold = 0.5 # 0.38 # 0.5
+  # presence_prob_full <- predict(presence_model, newdata = env_df, type = "response")
+  # presence_binary_full <- ifelse(presence_prob_full > presence_threshold, 1, 0)
+  # 
+  # # Full abundance prediction
+  # abundance_pred_full <- predict(abundance_model, newdata = env_df, type = "response")
+  # 
+  # # Full hurdle prediction
+  # hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full, 0)
+  # 
+  # full_time <- difftime(Sys.time(), start_time, units = "secs")
+  # cat("Full prediction time:", round(full_time, 1), "seconds\n")
+  # 
+  # # Add predictions to full dataframe
+  # env_df$hurdle_pred <- hurdle_pred_full
+  # 
+  # # # Plot full results
+  # # ggplot(env_df, aes(x = x, y = y, color = hurdle_pred)) +
+  # #   geom_point(size = 0.1) +
+  # #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
+  # #   coord_equal() +
+  # #   theme_minimal() +
+  # #   ggtitle(paste("Full Hurdle Model Prediction -", stringr::str_to_title(species)))
+  # 
+  # 
+  # 
+  # # Convert predictions back to raster using the original env_df coordinates
+  # hurdle_raster <- rast(env_df[, c("x", "y", "hurdle_pred")], type="xyz")
+  # shallow_mask <- bathy_final > -60
+  # hurdle_raster <- resample(hurdle_raster, bathy_final)
+  # hurdle_raster <- mask(hurdle_raster, shallow_mask, maskvalues = FALSE)
+  # 
+  # # Plot with terra
+  # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 0.1, values = TRUE)
+  # # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 1.0, values = TRUE)
+  # # plot(hurdle_raster_clamped, main = paste("Full Hurdle Model -", stringr::str_to_title(species)), 
+  # #      colNA = "gray90")  
+  # 
+  # 
+  # 
+  # 
+  # # Create leaflet map with hurdle predictions
+  # pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
+  # 
+  # leaflet() %>%
+  #   addTiles(group = "OpenStreetMap") %>%
+  #   addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  #   addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
+  #   addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
+  #             title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
+  #   addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
+  #                    options = layersControlOptions(collapsed = FALSE))
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # #draft code to pull up another leaflet with spp-specific cover
+  # species <- "orbicella" #0.1
+  # 
+  # # Get unique PSU locations with coral cover data for the selected species
+  # spp_leaflet_cover_data <- combined_benthic_data_averaged %>%
+  #   filter(grepl(species, spp, ignore.case = TRUE)) %>%
+  #   group_by(PSU) %>%
+  #   summarise(
+  #     lat = first(lat),
+  #     lon = first(lon),
+  #     dataset = first(dataset),
+  #     avg_cover = mean(cover, na.rm = TRUE),
+  #     .groups = 'drop'
+  #   )
+  # 
+  # # Create color palette for coral cover (yellow to red)
+  # color_pal <- colorNumeric(
+  #   palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
+  #   domain = spp_leaflet_cover_data$avg_cover,
+  #   na.color = "gray"
+  # )
+  # 
+  # # Create the interactive leaflet map
+  # coral_cover_map <- leaflet(spp_leaflet_cover_data) %>%
+  #   addTiles(group = "OpenStreetMap") %>%
+  #   addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  #   addCircleMarkers(
+  #     lng = ~lon, 
+  #     lat = ~lat,
+  #     popup = ~paste0(
+  #       "<b>PSU:</b> ", PSU, "<br>",
+  #       "<b>Dataset:</b> ", dataset, "<br>",
+  #       "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
+  #       "<b>Latitude:</b> ", round(lat, 5), "<br>",
+  #       "<b>Longitude:</b> ", round(lon, 5)
+  #     ),
+  #     label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
+  #     radius = 8,
+  #     color = "white",
+  #     fillColor = ~color_pal(avg_cover),
+  #     fillOpacity = 0.8,
+  #     weight = 2,
+  #     stroke = TRUE
+  #   ) %>%
+  #   addLegend(
+  #     "bottomright",
+  #     pal = color_pal,
+  #     values = ~avg_cover,
+  #     title = "Coral Cover (%)",
+  #     opacity = 1,
+  #     labFormat = labelFormat(suffix = "%")
+  #   ) %>%
+  #   addLayersControl(
+  #     baseGroups = c("OpenStreetMap", "Satellite"),
+  #     options = layersControlOptions(collapsed = FALSE)
+  #   ) %>%
+  #   fitBounds(
+  #     lng1 = min(spp_leaflet_cover_data$lon, na.rm = TRUE) - 0.1,
+  #     lat1 = min(spp_leaflet_cover_data$lat, na.rm = TRUE) - 0.1,
+  #     lng2 = max(spp_leaflet_cover_data$lon, na.rm = TRUE) + 0.1,
+  #     lat2 = max(spp_leaflet_cover_data$lat, na.rm = TRUE) + 0.1
+  #   )
+  # 
+  # # Display the map
+  # coral_cover_map
+  # 
   ################################## Save objects/workspace ##################################
   
   # # Get all objects matching the patterns
@@ -3860,6 +3971,6 @@
   # }
   
   
-  #updated way to handle saving of new objects
-  save_new_objects("output/output_GAMs", existing_objects)
+  # #updated way to handle saving of new objects
+  # save_new_objects("output/output_GAMs", existing_objects)
   

@@ -1,9 +1,58 @@
+    
+  
+  # .rs.restartR(clean = TRUE)
+  rm(list=ls())
+  
+  library(here)
+  library(mgcv)
+  library(pROC)
+  library(terra)
+  library(ggplot2)
+  library(parallel)
+  library(leaflet)
+  library(tidyverse)
+  # library(cmocean)
+  # library(gridExtra)
+  # library(gratia)
+  # library(tictoc)
+  # library(pROC)
+  # library(gam.hp)
+  
+  source(here("src/functions.R"))
+  
+  ################################## setup ##################################
+  
+  load(here("output", "all_combined_data.rda"))
+  
+  
+  #load bathy_final
+  # Load the spatial metadata
+  spatial_metadata <- readRDS(here('output/output_import_merge_rasters_higher-res/spatial_metadata.rds'))
+  #
+  # Load the raster
+  bathy_final <- readRDS(here('output/output_import_merge_rasters_higher-res/bathy_final.rds'))
+  #
+  # Apply the stored CRS
+  terra::crs(bathy_final) <- spatial_metadata$bathy_final$crs
+  
+  
+  load_spat_objects(directory = 'output/output_GAMs/')
+  source(here("src/functions.R"))
+  load(here("output/output_GAMs", "output_GAMs_workspace.Rdata"))
+  
+  #save information for exporting new objects later
+  existing_objects <- ls(envir = .GlobalEnv)
+  
+  
+  ################################## decide species ##################################
+  
   # Species toggle - change this to switch between species
   # species <- "orbicella"
   # species <- "agaricia"
-  species <- "porites"
+  # species <- "porites"
   # species <- "colpophyllia"
   # species <- "madracis"
+  species <- "meandrina"
   
   # Dynamically construct model variable names based on species
   presence_model_name <- paste0(species, "_gam_presence_binom")
@@ -22,12 +71,20 @@
     presence_model$model
   }
   
-  # ============================================================================
-  # SECTION 1: OPTIMIZE PRESENCE THRESHOLD (5-FOLD CV)
-  # ============================================================================
   
-  # # OPTION 1: OPTIMIZE BY PREVALENCE (comment out the below block and use this instead)
-  # #
+  
+  ###                                                    ###
+  ###                                                    ###
+  ###     BELOW: options for optimizing P/A threshold    ###
+  ###                                                    ###
+  ###                                                    ###
+  
+  
+  
+  
+  
+  # ################################## OPTION 1: prevalence ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -80,11 +137,11 @@
   # min_mean_prev_diff <- min(mean_prevalence_diffs)
   # cat("Mean prevalence difference across folds: ", round(min_mean_prev_diff, 6), "\n")
   # cat("Optimal threshold (minimizes prevalence difference): ", optimal_threshold, "\n\n")
-  
-  
-  
-  
-  
+  # 
+  # 
+  # 
+  # ################################## OPTION 2: TSS ##################################
+  # 
   # # OPTION 2: OPTIMIZE BY TSS (comment out the above block and use this instead)
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
@@ -139,16 +196,16 @@
   # max_mean_tss <- max(mean_tss_values)
   # cat("Mean TSS across folds: ", round(max_mean_tss, 6), "\n")
   # cat("Optimal threshold (maximizes TSS): ", optimal_threshold, "\n\n")
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  # # OPTION 4: OPTIMIZE BY KAPPA (accounts for chance agreement and class imbalance)
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # ################################## OPTION 3: Kappa ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -204,15 +261,14 @@
   # max_mean_kappa <- max(mean_kappa_values, na.rm = TRUE)
   # cat("Mean Kappa across folds: ", round(max_mean_kappa, 6), "\n")
   # cat("Optimal threshold (maximizes Kappa): ", optimal_threshold, "\n\n")
-
-  
-  
-  
-  
-  
-  
-  
-  # # OPTION 5: OPTIMIZE BY F2-SCORE (favors sensitivity over precision - good for rare species)
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # ################################## OPTION 4: F2-score ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -225,28 +281,28 @@
   # f2_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
   # for(fold in 1:5) {
   #   cat("\n--- Fold", fold, "---\n")
-  #   
+  # 
   #   # Split data
   #   test_idx <- which(fold_ids == fold)
   #   train_data <- complete_data[-test_idx, ]
   #   test_data <- complete_data[test_idx, ]
-  #   
+  # 
   #   cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
-  #   
+  # 
   #   # Fit presence model on training data
   #   presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
-  #   
+  # 
   #   # Predict on test data
   #   presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
   #   actual_binary <- as.numeric(test_data$cover > 0)
-  #   
+  # 
   #   # Calculate F2-score for each threshold (weights recall/sensitivity 2x more than precision)
   #   for(i in seq_along(test_thresholds)) {
   #     predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
   #     TP <- sum(actual_binary == 1 & predicted_binary == 1)
   #     FP <- sum(actual_binary == 0 & predicted_binary == 1)
   #     FN <- sum(actual_binary == 1 & predicted_binary == 0)
-  #     
+  # 
   #     precision <- if((TP + FP) > 0) TP / (TP + FP) else 0
   #     recall <- if((TP + FN) > 0) TP / (TP + FN) else 0
   #     beta <- 2  # Weights recall (sensitivity) MORE than precision
@@ -254,11 +310,11 @@
   #       (1 + beta^2) * (precision * recall) / ((beta^2 * precision) + recall)
   #     } else 0
   #   }
-  #   
+  # 
   #   # Find best threshold for this fold
   #   fold_best_threshold <- test_thresholds[which.max(f2_values[fold, ])]
   #   fold_best_f2 <- max(f2_values[fold, ], na.rm = TRUE)
-  #   
+  # 
   #   cat("  Best threshold for this fold:", fold_best_threshold, "\n")
   #   cat("  Maximum F2-score:", round(fold_best_f2, 6), "\n")
   # }
@@ -268,14 +324,13 @@
   # optimal_threshold <- test_thresholds[which.max(mean_f2_values)]
   # max_mean_f2 <- max(mean_f2_values, na.rm = TRUE)
   # cat("Mean F2-score across folds: ", round(max_mean_f2, 6), "\n")
-  # cat("Optimal threshold (maximizes F2-score): ", optimal_threshold, "\n\n")  
-  
-  
-  
-  
-  
-  
-  # # OPTION 6: OPTIMIZE BY BALANCED ACCURACY (equal weight to sensitivity and specificity)
+  # cat("Optimal threshold (maximizes F2-score): ", optimal_threshold, "\n\n")
+  # 
+  # 
+  # 
+  # 
+  # ################################## OPTION 5: balance sens. & spec. ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -331,12 +386,11 @@
   # max_mean_balanced_acc <- max(mean_balanced_acc_values, na.rm = TRUE)
   # cat("Mean Balanced Accuracy across folds: ", round(max_mean_balanced_acc, 6), "\n")
   # cat("Optimal threshold (maximizes Balanced Accuracy): ", optimal_threshold, "\n\n")
-  
-  
-  
-  
-  
-  # # OPTION 7A: OPTIMIZE TO TARGET SENSITIVITY AND SPECIFICITY (based on best-performing species)
+  # 
+  # 
+  # 
+  # ################################## OPTION 6a: target sens. & spec. ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -404,9 +458,10 @@
   # min_mean_distance <- min(mean_target_distance, na.rm = TRUE)
   # cat("Mean distance from target across folds: ", round(min_mean_distance, 6), "\n")
   # cat("Optimal threshold (minimizes distance from target): ", optimal_threshold, "\n\n")
-  
-  
-  # # OPTION 7B: OPTIMIZE TO TARGET SENSITIVITY:SPECIFICITY RATIO
+  # 
+  # 
+  # ################################## OPTION 6b: target sens.:spec. ratio ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
@@ -426,21 +481,21 @@
   # 
   # for(fold in 1:5) {
   #   cat("\n--- Fold", fold, "---\n")
-  #   
+  # 
   #   # Split data
   #   test_idx <- which(fold_ids == fold)
   #   train_data <- complete_data[-test_idx, ]
   #   test_data <- complete_data[test_idx, ]
-  #   
+  # 
   #   cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
-  #   
+  # 
   #   # Fit presence model on training data
   #   presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
-  #   
+  # 
   #   # Predict on test data
   #   presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
   #   actual_binary <- as.numeric(test_data$cover > 0)
-  #   
+  # 
   #   # Calculate ratio difference for each threshold
   #   for(i in seq_along(test_thresholds)) {
   #     predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
@@ -448,21 +503,21 @@
   #     TN <- sum(actual_binary == 0 & predicted_binary == 0)
   #     FP <- sum(actual_binary == 0 & predicted_binary == 1)
   #     FN <- sum(actual_binary == 1 & predicted_binary == 0)
-  #     
+  # 
   #     sensitivity <- TP / (TP + FN)
   #     specificity <- TN / (TN + FP)
-  #     
+  # 
   #     # Calculate ratio (avoid division by zero)
   #     current_ratio <- if(specificity > 0) sensitivity / specificity else NA
-  #     
+  # 
   #     # Absolute difference from target ratio
   #     ratio_diff[fold, i] <- abs(current_ratio - target_ratio)
   #   }
-  #   
+  # 
   #   # Find best threshold for this fold (minimum ratio difference)
   #   fold_best_threshold <- test_thresholds[which.min(ratio_diff[fold, ])]
   #   fold_min_diff <- min(ratio_diff[fold, ], na.rm = TRUE)
-  #   
+  # 
   #   cat("  Best threshold for this fold:", fold_best_threshold, "\n")
   #   cat("  Minimum ratio difference:", round(fold_min_diff, 6), "\n")
   # }
@@ -474,23 +529,112 @@
   # min_mean_ratio_diff <- min(mean_ratio_diff, na.rm = TRUE)
   # cat("Mean ratio difference across folds: ", round(min_mean_ratio_diff, 6), "\n")
   # cat("Optimal threshold (minimizes ratio difference from target): ", optimal_threshold, "\n\n")
-  
-  
-  # # OPTION 7C: OPTIMIZE TO TARGET PREDICTED:ACTUAL PREVALENCE RATIO
+  # 
+  # 
+  ################################## OPTION 6c: target prev. ratio ##################################
+
+  cat("Optimizing presence threshold via 5-fold cross-validation...\n")
+  # Prepare complete data
+  all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
+  complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+
+  # Target prevalence ratio from well-calibrated model (e.g., Orbicella with Kappa)
+  # 0.4412 / 0.398 = 1.109 (slight overprediction)
+  target_prev_ratio <- 1.109
+
+  cat("Target predicted:actual prevalence ratio:", round(target_prev_ratio, 3), "\n")
+  cat("(Target allows ~", round((target_prev_ratio - 1) * 100, 1), "% overprediction)\n\n", sep="")
+
+  # 5-fold cross-validation
+  # set.seed(42)
+  n <- nrow(complete_data)
+  fold_ids <- sample(rep(1:5, length.out = n))
+  test_thresholds <- seq(0.01, 0.99, by = 0.001)
+  prev_ratio_diff <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+
+  for(fold in 1:5) {
+    cat("\n--- Fold", fold, "---\n")
+
+    # Split data
+    test_idx <- which(fold_ids == fold)
+    train_data <- complete_data[-test_idx, ]
+    test_data <- complete_data[test_idx, ]
+
+    cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
+
+    # Fit presence model on training data
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+
+    # Predict on test data
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    actual_binary <- as.numeric(test_data$cover > 0)
+    actual_prev <- mean(actual_binary)
+
+    # Calculate prevalence ratio difference for each threshold
+    for(i in seq_along(test_thresholds)) {
+      predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
+      predicted_prev <- mean(predicted_binary)
+
+      # Calculate ratio (avoid division by zero)
+      current_ratio <- if(actual_prev > 0) predicted_prev / actual_prev else NA
+
+      # Absolute difference from target ratio
+      prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio)
+    }
+
+    # Find best threshold for this fold
+    fold_best_threshold <- test_thresholds[which.min(prev_ratio_diff[fold, ])]
+    fold_min_diff <- min(prev_ratio_diff[fold, ], na.rm = TRUE)
+
+    # Get actual metrics at this threshold
+    fold_pred_binary <- as.numeric(presence_prob > fold_best_threshold)
+    fold_pred_prev <- mean(fold_pred_binary)
+    fold_actual_ratio <- fold_pred_prev / actual_prev
+
+    cat("  Best threshold for this fold:", fold_best_threshold, "\n")
+    cat("  Achieved ratio:", round(fold_actual_ratio, 3),
+        "| Target:", round(target_prev_ratio, 3), "\n")
+  }
+
+  # Average across folds and find optimal threshold
+  cat("\n--- Aggregating Results ---\n")
+  mean_prev_ratio_diff <- colMeans(prev_ratio_diff, na.rm = TRUE)
+  optimal_threshold <- test_thresholds[which.min(mean_prev_ratio_diff)]
+  min_mean_diff <- min(mean_prev_ratio_diff, na.rm = TRUE)
+  cat("Mean prevalence ratio difference across folds: ", round(min_mean_diff, 6), "\n")
+  cat("Optimal threshold (minimizes difference from target ratio): ", optimal_threshold, "\n\n")
+
+
+  # ################################## OPTION 6e: prevalence w/ constraint ##################################
+  # 
   # cat("Optimizing presence threshold via 5-fold cross-validation...\n")
   # # Prepare complete data
   # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
   # complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
   # 
-  # # Target prevalence ratio from well-calibrated model (e.g., Orbicella with Kappa)
-  # # 0.4412 / 0.398 = 1.109 (slight overprediction)
-  # target_prev_ratio <- 1.109
+  # # Calculate actual prevalence
+  # actual_prevalence_full <- mean(complete_data$cover > 0)
+  # 
+  # # Set prevalence-adaptive target ratio (always ≥ 1.0)
+  # if(actual_prevalence_full >= 0.25) {
+  #   target_prev_ratio <- 1.08  # 8% overprediction for common species
+  #   cat("Species prevalence:", round(actual_prevalence_full, 3), "(common)\n")
+  # } else if(actual_prevalence_full >= 0.15) {
+  #   target_prev_ratio <- 1.12  # 12% overprediction for moderately common
+  #   cat("Species prevalence:", round(actual_prevalence_full, 3), "(moderately common)\n")
+  # } else if(actual_prevalence_full >= 0.08) {
+  #   target_prev_ratio <- 1.25  # 25% overprediction for moderately rare
+  #   cat("Species prevalence:", round(actual_prevalence_full, 3), "(moderately rare)\n")
+  # } else {
+  #   target_prev_ratio <- 1.50  # 50% overprediction for rare species
+  #   cat("Species prevalence:", round(actual_prevalence_full, 3), "(rare)\n")
+  # }
   # 
   # cat("Target predicted:actual prevalence ratio:", round(target_prev_ratio, 3), "\n")
-  # cat("(Target allows ~", round((target_prev_ratio - 1) * 100, 1), "% overprediction)\n\n", sep="")
+  # cat("(Allows ~", round((target_prev_ratio - 1) * 100, 0), "% overprediction)\n\n", sep="")
   # 
   # # 5-fold cross-validation
-  # # set.seed(42)
+  # set.seed(42)
   # n <- nrow(complete_data)
   # fold_ids <- sample(rep(1:5, length.out = n))
   # test_thresholds <- seq(0.01, 0.99, by = 0.001)
@@ -498,141 +642,60 @@
   # 
   # for(fold in 1:5) {
   #   cat("\n--- Fold", fold, "---\n")
-  #   
+  # 
   #   # Split data
   #   test_idx <- which(fold_ids == fold)
   #   train_data <- complete_data[-test_idx, ]
   #   test_data <- complete_data[test_idx, ]
-  #   
+  # 
   #   cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
-  #   
+  # 
   #   # Fit presence model on training data
   #   presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
-  #   
+  # 
   #   # Predict on test data
   #   presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
   #   actual_binary <- as.numeric(test_data$cover > 0)
   #   actual_prev <- mean(actual_binary)
-  #   
+  # 
   #   # Calculate prevalence ratio difference for each threshold
   #   for(i in seq_along(test_thresholds)) {
   #     predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
   #     predicted_prev <- mean(predicted_binary)
-  #     
+  # 
   #     # Calculate ratio (avoid division by zero)
   #     current_ratio <- if(actual_prev > 0) predicted_prev / actual_prev else NA
-  #     
-  #     # Absolute difference from target ratio
-  #     prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio)
+  # 
+  #     # CONSTRAINT: Penalize ratios < 1.0 (underprediction) heavily
+  #     if(!is.na(current_ratio) && current_ratio < 1.0) {
+  #       # Add large penalty for underprediction
+  #       prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio) + (1.0 - current_ratio) * 10
+  #     } else {
+  #       # Normal calculation for overprediction
+  #       prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio)
+  #     }
   #   }
-  #   
+  # 
   #   # Find best threshold for this fold
   #   fold_best_threshold <- test_thresholds[which.min(prev_ratio_diff[fold, ])]
   #   fold_min_diff <- min(prev_ratio_diff[fold, ], na.rm = TRUE)
-  #   
+  # 
   #   # Get actual metrics at this threshold
   #   fold_pred_binary <- as.numeric(presence_prob > fold_best_threshold)
   #   fold_pred_prev <- mean(fold_pred_binary)
   #   fold_actual_ratio <- fold_pred_prev / actual_prev
-  #   
+  # 
   #   cat("  Best threshold for this fold:", fold_best_threshold, "\n")
-  #   cat("  Achieved ratio:", round(fold_actual_ratio, 3), 
+  #   cat("  Achieved ratio:", round(fold_actual_ratio, 3),
   #       "| Target:", round(target_prev_ratio, 3), "\n")
   # }
   # 
-  # # Average across folds and find optimal threshold
-  # cat("\n--- Aggregating Results ---\n")
-  # mean_prev_ratio_diff <- colMeans(prev_ratio_diff, na.rm = TRUE)
-  # optimal_threshold <- test_thresholds[which.min(mean_prev_ratio_diff)]
-  # min_mean_diff <- min(mean_prev_ratio_diff, na.rm = TRUE)
-  # cat("Mean prevalence ratio difference across folds: ", round(min_mean_diff, 6), "\n")
-  # cat("Optimal threshold (minimizes difference from target ratio): ", optimal_threshold, "\n\n")
+  # 
+  # 
+  # 
+  # 
+  ################################## complete validation ##################################
   
-  
-  
-  # OPTION 7E: PREVALENCE-ADAPTIVE RATIO WITH MINIMUM CONSTRAINT
-  cat("Optimizing presence threshold via 5-fold cross-validation...\n")
-  # Prepare complete data
-  all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
-  complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
-  
-  # Calculate actual prevalence
-  actual_prevalence_full <- mean(complete_data$cover > 0)
-  
-  # Set prevalence-adaptive target ratio (always ≥ 1.0)
-  if(actual_prevalence_full >= 0.25) {
-    target_prev_ratio <- 1.08  # 8% overprediction for common species
-    cat("Species prevalence:", round(actual_prevalence_full, 3), "(common)\n")
-  } else if(actual_prevalence_full >= 0.15) {
-    target_prev_ratio <- 1.12  # 12% overprediction for moderately common
-    cat("Species prevalence:", round(actual_prevalence_full, 3), "(moderately common)\n")
-  } else if(actual_prevalence_full >= 0.08) {
-    target_prev_ratio <- 1.25  # 25% overprediction for moderately rare
-    cat("Species prevalence:", round(actual_prevalence_full, 3), "(moderately rare)\n")
-  } else {
-    target_prev_ratio <- 1.50  # 50% overprediction for rare species
-    cat("Species prevalence:", round(actual_prevalence_full, 3), "(rare)\n")
-  }
-  
-  cat("Target predicted:actual prevalence ratio:", round(target_prev_ratio, 3), "\n")
-  cat("(Allows ~", round((target_prev_ratio - 1) * 100, 0), "% overprediction)\n\n", sep="")
-  
-  # 5-fold cross-validation
-  set.seed(42)
-  n <- nrow(complete_data)
-  fold_ids <- sample(rep(1:5, length.out = n))
-  test_thresholds <- seq(0.01, 0.99, by = 0.001)
-  prev_ratio_diff <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
-  
-  for(fold in 1:5) {
-    cat("\n--- Fold", fold, "---\n")
-    
-    # Split data
-    test_idx <- which(fold_ids == fold)
-    train_data <- complete_data[-test_idx, ]
-    test_data <- complete_data[test_idx, ]
-    
-    cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
-    
-    # Fit presence model on training data
-    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
-    
-    # Predict on test data
-    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
-    actual_binary <- as.numeric(test_data$cover > 0)
-    actual_prev <- mean(actual_binary)
-    
-    # Calculate prevalence ratio difference for each threshold
-    for(i in seq_along(test_thresholds)) {
-      predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
-      predicted_prev <- mean(predicted_binary)
-      
-      # Calculate ratio (avoid division by zero)
-      current_ratio <- if(actual_prev > 0) predicted_prev / actual_prev else NA
-      
-      # CONSTRAINT: Penalize ratios < 1.0 (underprediction) heavily
-      if(!is.na(current_ratio) && current_ratio < 1.0) {
-        # Add large penalty for underprediction
-        prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio) + (1.0 - current_ratio) * 10
-      } else {
-        # Normal calculation for overprediction
-        prev_ratio_diff[fold, i] <- abs(current_ratio - target_prev_ratio)
-      }
-    }
-    
-    # Find best threshold for this fold
-    fold_best_threshold <- test_thresholds[which.min(prev_ratio_diff[fold, ])]
-    fold_min_diff <- min(prev_ratio_diff[fold, ], na.rm = TRUE)
-    
-    # Get actual metrics at this threshold
-    fold_pred_binary <- as.numeric(presence_prob > fold_best_threshold)
-    fold_pred_prev <- mean(fold_pred_binary)
-    fold_actual_ratio <- fold_pred_prev / actual_prev
-    
-    cat("  Best threshold for this fold:", fold_best_threshold, "\n")
-    cat("  Achieved ratio:", round(fold_actual_ratio, 3), 
-        "| Target:", round(target_prev_ratio, 3), "\n")
-  }
   
   # Average across folds and find optimal threshold
   cat("\n--- Aggregating Results ---\n")
@@ -661,26 +724,27 @@
   
   sensitivity <- TP / (TP + FN)
   specificity <- TN / (TN + FP)
+  accuracy <- (TP + TN) / (TP + TN + FP + FN)
   TSS <- sensitivity + specificity - 1
   actual_prevalence <- mean(full_actual_binary)
   predicted_prevalence <- mean(full_predicted_binary)
   prevalence_diff <- abs(predicted_prevalence - actual_prevalence)
   
-  library(pROC)
+  
   full_auc <- as.numeric(auc(full_actual_binary, full_presence_prob))
   
   cat("Threshold:", optimal_threshold, "\n")
   cat("Sensitivity:", round(sensitivity, 3), "| Specificity:", round(specificity, 3), "\n")
-  cat("TSS:", round(TSS, 3), "| AUC:", round(full_auc, 3), "\n")
+  cat("Accuracy:", round(accuracy, 3), "| TSS:", round(TSS, 3), "| AUC:", round(full_auc, 3), "\n")  # MODIFIED THIS LINE
   cat("Actual prevalence:", round(actual_prevalence, 4), "| Predicted prevalence:", round(predicted_prevalence, 4), "\n")
   cat("Prevalence difference:", round(prevalence_diff, 6), "\n\n")
   
   
   
   
-  # ============================================================================
-  # SECTION 2: TRAIN ABUNDANCE CALIBRATION FUNCTION
-  # ============================================================================
+  
+  
+  ################################## train abundance calibration function ##################################
   
   cat("Training abundance calibration function...\n")
   
@@ -708,9 +772,8 @@
   
   cat("Abundance calibration function trained\n\n")
   
-  # ============================================================================
-  # SECTION 3: PREDICT ON FULL SPATIAL GRID
-  # ============================================================================
+  
+  ################################## predict on full spatial grid ##################################
   
   cat("Preparing spatial predictions (chunked to save memory)...\n")
   
@@ -773,9 +836,7 @@
   cat("Full dataset size:", nrow(env_df), "cells\n")
   cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n\n")
   
-  # ============================================================================
-  # SECTION 4: MAKE PREDICTIONS AND APPLY CALIBRATION
-  # ============================================================================
+  ################################## make predictions & apply calibration ##################################
   
   # Presence predictions
   cat("Predicting presence...\n")
@@ -826,12 +887,8 @@
   }
   cat("\n\n")
   
-  # ============================================================================
-  # SECTION 5: SAMPLE VISUALIZATIONS
-  # ============================================================================
   
-  library(ggplot2)
-  library(viridis)
+  ################################## sample visualizations ##################################
   
   # Presence probability map
   ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
@@ -856,10 +913,9 @@
        main = "Distribution of Non-Zero Hurdle Predictions (Sample)",
        xlab = "Predicted Cover")
   
-  # # ============================================================================
-  # # SECTION 6: FULL SPATIAL PREDICTIONS (SERIAL - DEFAULT)
-  # # ============================================================================
-  # # Comment out this section if using parallelized version below (Section 6.5)
+  
+  
+  # ################################## full predictions (serial) ##################################
   # 
   # cat("\n=== RUNNING FULL MODEL PREDICTIONS (SERIAL) ===\n")
   # cat("Warning: This may take 15-20+ minutes depending on dataset size\n\n")
@@ -885,15 +941,9 @@
   # 
   # # Full hurdle prediction
   # hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full_calibrated, 0)
-  
-  # ============================================================================
-  # SECTION 6.5: FULL SPATIAL PREDICTIONS (PARALLELIZED - OPTIONAL)
-  # ============================================================================
-  # Uncomment this section (and comment out Section 6) for faster predictions
-  # Requires: parallel package
-  # Expected speedup: 2-4x on typical home machines
-  
-  library(parallel)
+  # 
+  # 
+  ################################## full predictions (parallel) ##################################
   
   cat("\n=== RUNNING FULL MODEL PREDICTIONS (PARALLELIZED) ===\n")
   cat("Warning: This may take 5-10 minutes depending on cores and dataset size\n\n")
@@ -908,7 +958,7 @@
   # Split data into chunks
   chunks <- split(1:nrow(env_df), cut(1:nrow(env_df), n_cores))
   
-  # ---- Presence prediction ----
+  
   cat("Predicting presence on full dataset (parallel)...\n")
   cat("  Started at:", format(Sys.time(), "%H:%M:%S"), "\n")
   
@@ -925,7 +975,7 @@
   cat("  Finished at:", format(Sys.time(), "%H:%M:%S"), "\n")
   presence_binary_full <- ifelse(presence_prob_full > optimal_threshold, 1, 0)
   
-  # ---- Abundance prediction ----
+  
   cat("Predicting abundance on full dataset (parallel)...\n")
   cat("  Started at:", format(Sys.time(), "%H:%M:%S"), "\n")
   
@@ -950,9 +1000,8 @@
   # Full hurdle prediction
   hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full_calibrated, 0)
   
-  # ============================================================================
-  # SECTION 6.9: PREDICTION SUMMARY (COMMON TO BOTH METHODS)
-  # ============================================================================
+
+  ################################## prediction summary ##################################
   
   full_time <- difftime(Sys.time(), start_time, units = "secs")
   cat("\nFull prediction time:", round(full_time, 1), "seconds (", 
@@ -971,12 +1020,8 @@
   cat("Hurdle prediction range:", round(range(hurdle_pred_full), 6), "\n")
   cat("Number of predicted presences:", sum(presence_binary_full), "\n\n")
   
-  # ============================================================================
-  # SECTION 7: CONVERT TO RASTER AND CREATE INTERACTIVE MAP
-  # ============================================================================
   
-  library(terra)
-  library(leaflet)
+  ################################## maps ##################################
   
   cat("Converting predictions to raster...\n")
   
@@ -991,7 +1036,7 @@
   }
   
   # Clamp values for visualization
-  cover_clamp_val = 17 #in percent
+  cover_clamp_val = 5 #in percent
   cover_clamp_val = cover_clamp_val / 100
   hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = cover_clamp_val, values = TRUE)
   
@@ -1000,26 +1045,26 @@
   # Create leaflet map
   pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
   
-  interactive_map <- leaflet() %>%
-    addTiles(group = "OpenStreetMap") %>%
-    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
-    addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
-    addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
-              title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
-    addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
-                     options = layersControlOptions(collapsed = FALSE))
+  # interactive_map <- leaflet() %>%
+  #   addTiles(group = "OpenStreetMap") %>%
+  #   addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  #   addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
+  #   addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
+  #             title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
+  #   addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
+  #                    options = layersControlOptions(collapsed = FALSE))
+  # 
+  # # Display the map
+  # interactive_map
+  # 
+  # cat("\n=== PREDICTION COMPLETE ===\n")
+  # cat("Threshold used:", optimal_threshold, "\n")
+  # cat("Calibration applied: Yes\n")
+  # cat("Full dataset predicted:", nrow(env_df), "cells\n")
   
-  # Display the map
-  interactive_map
-  
-  cat("\n=== PREDICTION COMPLETE ===\n")
-  cat("Threshold used:", optimal_threshold, "\n")
-  cat("Calibration applied: Yes\n")
-  cat("Full dataset predicted:", nrow(env_df), "cells\n")
   
   
-  
-  #WITH CORAL COVER VERSION (VIRIDIS)
+  #WITH CORAL COVER
   psu_cover_data <- combined_benthic_data_averaged %>%
     filter(grepl(species, spp, ignore.case = TRUE)) %>%
     group_by(PSU) %>%
@@ -1048,3 +1093,10 @@
     addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
                      options = layersControlOptions(collapsed = FALSE))
   interactive_map
+  
+  
+  
+  ################################## Save objects/workspace ##################################
+  
+  # save_new_objects("output/output_maps", existing_objects)
+  

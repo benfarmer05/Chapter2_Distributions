@@ -59,51 +59,99 @@
 
   load_spat_objects <- function(directory = here("output")) {
     rds_files <- list.files(directory, pattern = "\\.rds$", full.names = TRUE)
-
+    
+    message("=== Starting load_spat_objects ===")
+    message("Directory: ", directory)
+    message("Found ", length(rds_files), " .rds files")
+    
     # Load spatial metadata if available
     metadata_file <- here(directory, "spatial_metadata.rds")
     spatial_metadata <- if (file.exists(metadata_file)) {
+      message("Loading spatial metadata from: ", metadata_file)
       readRDS(metadata_file)
     } else {
+      message("No spatial metadata file found")
       NULL
     }
-
+    
     crs_restored_count <- 0
-
+    unpacked_count <- 0
+    
     for (file in rds_files) {
-      if (basename(file) == "spatial_metadata.rds") next
-
+      message("\n--- Processing file: ", basename(file), " ---")
+      
+      if (basename(file) == "spatial_metadata.rds") {
+        message("Skipping metadata file")
+        next
+      }
+      
       tryCatch({
+        message("Reading RDS file...")
         obj <- readRDS(file)
-
+        
+        message("Object class: ", class(obj)[1])
+        
+        # NEW: Check if object is a Packed spatial object (S4 class) and unwrap it
+        if (inherits(obj, c("PackedSpatRaster", "PackedSpatVector", "PackedSpatExtent"))) {
+          message("🔍 Detected ", class(obj)[1], " - attempting to unwrap...")
+          obj <- terra::unwrap(obj)
+          message("✅ Successfully unwrapped!")
+          message("Unwrapped class: ", class(obj)[1])
+          unpacked_count <- unpacked_count + 1
+        }
+        
+        message("Checking if object inherits spatial classes...")
+        message("Is SpatRaster? ", inherits(obj, "SpatRaster"))
+        message("Is SpatVector? ", inherits(obj, "SpatVector"))
+        message("Is SpatExtent? ", inherits(obj, "SpatExtent"))
+        
         if (inherits(obj, c("SpatRaster", "SpatVector", "SpatExtent"))) {
           obj_name <- tools::file_path_sans_ext(basename(file))
-
+          message("Object name will be: ", obj_name)
+          
           # CRS restoration for spatial objects
           if (inherits(obj, c("SpatRaster", "SpatVector"))) {
             current_crs <- terra::crs(obj)
+            message("Current CRS: ", substr(current_crs, 1, 50), "...")
             expected_metadata <- spatial_metadata[[obj_name]]
-
+            
             # Restore CRS if corrupted and we have backup
-            if (!is.null(expected_metadata) && current_crs != expected_metadata$crs) {
-              terra::crs(obj) <- expected_metadata$crs
-              crs_restored_count <- crs_restored_count + 1
+            if (!is.null(expected_metadata)) {
+              message("Found metadata for this object")
+              if (current_crs != expected_metadata$crs) {
+                message("Restoring CRS...")
+                terra::crs(obj) <- expected_metadata$crs
+                crs_restored_count <- crs_restored_count + 1
+              } else {
+                message("CRS matches metadata - no restoration needed")
+              }
+            } else {
+              message("No metadata found for this object")
             }
           }
-
+          
+          message("Assigning to global environment...")
           assign(obj_name, obj, envir = .GlobalEnv)
-          message("Loaded: ", obj_name)
+          message("✅ Loaded: ", obj_name)
+        } else {
+          message("⚠️ Object does not inherit from spatial classes - skipping")
         }
       }, error = function(e) {
+        message("❌ ERROR: ", conditionMessage(e))
         warning("Skipping ", basename(file), " due to error: ", conditionMessage(e))
       })
     }
-
+    
+    message("\n=== Summary ===")
+    if (unpacked_count > 0) {
+      message("📦 Unpacked ", unpacked_count, " packed spatial objects")
+    }
     if (crs_restored_count > 0) {
       message("✅ Restored CRS for ", crs_restored_count, " objects")
     }
+    message("=== Done ===")
   }
-
+  
   save_new_objects <- function(output_dir = "output", existing_objects) {
     current_objects <- ls(envir = .GlobalEnv)
     new_objects <- setdiff(current_objects, existing_objects)
