@@ -18,6 +18,57 @@
   
   source(here("src/functions.R"))
   
+  
+  # # NOTE - consider adding dynamic saving system (e.g., below) if I need to come back and
+  # #         start tweaking specific models:
+  # # Save models and data for this species
+  # saveRDS(list(
+  #   presence_model = agaricia_gam_presence_binom,
+  #   abundance_model = agaricia_gam_abundance_beta,
+  #   model_data = agaricia_model_data
+  # ), here("output", "output_GAMs", "agaricia_models.rds"))
+  # 
+  # #Load all species models
+  # 
+  # # List of all species
+  # species_list <- c("agaricia", "colpophyllia", "dendrogyra", "dichocoenia", 
+  #                   "diploria", "eusmilia", "madracis", "meandrina", 
+  #                   "montastraea", "mycetophyllia", "orbicella", "porites", 
+  #                   "pseudodiploria", "siderastrea", "solenastrea")
+  # 
+  # # Load all species models into a list
+  # all_species_models <- lapply(species_list, function(sp) {
+  #   file_path <- here("output", "output_GAMs", paste0(sp, "_models.rds"))
+  #   if(file.exists(file_path)) {
+  #     readRDS(file_path)
+  #   } else {
+  #     warning(paste("Model file not found for:", sp))
+  #     NULL
+  #   }
+  # })
+  # names(all_species_models) <- species_list
+  # 
+  # # Quick check of what loaded
+  # cat("Loaded models for:\n")
+  # for(sp in species_list) {
+  #   if(!is.null(all_species_models[[sp]])) {
+  #     cat("  ✓", sp, "\n")
+  #   } else {
+  #     cat("  ✗", sp, "(missing)\n")
+  #   }
+  # }
+  # 
+  # # Species toggle
+  # species <- "dendrogyra"
+  # 
+  # # Extract models for this species
+  # presence_model <- all_species_models[[species]]$presence_model
+  # abundance_model <- all_species_models[[species]]$abundance_model
+  # model_data <- all_species_models[[species]]$model_data
+  # 
+  # # Now continue with your analysis...
+  
+  
   ################################## setup ##################################
   
   load(here("output", "all_combined_data.rda"))
@@ -1031,6 +1082,8 @@
   
   ################################## SIDERASTREA ##################################
   
+  # N = 845
+  
   siderastrea_model_data = spp_data %>%
     filter(grepl("Siderastrea", spp))
   siderastrea_model_data = add_env_variables(siderastrea_model_data, variables_at_PSUs)
@@ -1168,8 +1221,7 @@
   
   ################################## MONTASTRAEA ##################################
   
-  # NOTE - presence model is not the best. I think MCAV just struggles for some reason
-  #       - abundance model could take a look as well
+  # N = 490
   
   montastraea_model_data = spp_data %>%
     filter(grepl("Montastraea", spp))
@@ -2295,6 +2347,8 @@
   
   ################################## COLPOPHYLLIA ##################################
   
+  # N = 116
+  
   colpophyllia_model_data = spp_data %>%
     filter(grepl("Colpophyllia", spp))
   colpophyllia_model_data = add_env_variables(colpophyllia_model_data, variables_at_PSUs)
@@ -2537,10 +2591,10 @@
   # good: TPI (?), slope, mean SST, planform curv (?), spm (?)
   #   NOTE - difficult to justify keeping mean Hsig in the model because of concurvity, but dropping it really
   #             lowers the R-squared a lot. just should consider
-  dendrogyra_gam_abundance_beta <- gam(cover_prop ~ s(depth, k = 3) +
+  dendrogyra_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy, k = 3) +
                                          s(mean_SST, k = 5) + s(planform_curv, k = 3) +
                                          s(slope, k = 7) +
-                                         s(max_BOV, k = 3) + s(mean_dir, bs = 'cc'),
+                                         s(mean_dir, bs = 'cc'),
                                          data = dendrogyra_model_data[dendrogyra_model_data$cover_prop > 0, ],
                                          # select = TRUE,
                                          family = betar(link = "cloglog"))
@@ -2896,7 +2950,7 @@
   # bad: mean dir, range SST, VRM, planform, max Hsig, mean Hsig, kd490, slope
   # neutral: TPI, chla, PAR, complexity, land, deep, SAPA
   # good: depth, spm, BOV, SST
-  eusmilia_gam_abundance_beta <- gam(cover_prop ~ s(depth, k = 3) + s(mean_spm, k = 3) +
+  eusmilia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy, k = 3) + s(mean_spm, k = 3) +
                                        s(mean_SST, k = 5) + s(max_BOV, k = 3) +
                                        s(TPI, k = 3),
                                      data = eusmilia_model_data[eusmilia_model_data$cover_prop > 0, ],
