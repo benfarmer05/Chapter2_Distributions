@@ -33,6 +33,43 @@
   source(here("src/functions.R"))
   load(here("output/output_GAMs", "output_GAMs_workspace.Rdata"))
   
+  
+  #load in the species-specific GAM model output
+  #   NOTE - this will overwrite any species model data that were in 
+  #             'output_GAMs_workspace'. that is fine, as I just want to make sure
+  #             that the models are easily update-able.
+  #Load all species models
+  
+  species_list <- c("agaricia", "colpophyllia", "dendrogyra", "dichocoenia",
+                    "diploria", "eusmilia", "madracis", "meandrina",
+                    "montastraea", "mycetophyllia", "orbicella", "porites",
+                    "pseudodiploria", "siderastrea", "solenastrea")
+  
+  # Load all species models into a list
+  all_species_models <- lapply(species_list, function(sp) {
+    file_path <- here("output", "output_GAMs", paste0(sp, "_models.rds"))
+    if(file.exists(file_path)) {
+      readRDS(file_path)
+    } else {
+      warning(paste("Model file not found for:", sp))
+      NULL
+    }
+  })
+  names(all_species_models) <- species_list
+  
+  # Quick check of what loaded
+  cat("Loaded models for:\n")
+  for(sp in species_list) {
+    if(!is.null(all_species_models[[sp]])) {
+      cat("  ✓", sp, "\n")
+    } else {
+      cat("  ✗", sp, "(missing)\n")
+    }
+  }
+  
+
+  
+  
   #save information for exporting new objects later
   existing_objects <- ls(envir = .GlobalEnv)
   
@@ -40,38 +77,46 @@
   ################################## select species ##################################
   
   # Species toggle - change this to switch between species
-  # species <- "agaricia" # best is target prev. ratio
-  # species <- "colpophyllia" # best is sens. w/ constraints
-  # species <- "dendrogyra" # best is sens. w/ MORE constraints - could use even more though
-  # species <- "dichocoenia" # sens. w/ constraints is okay - could maybe use more constraint
-  # species <- "diploria" # best is sens. w/ constraints
-  # species <- "eusmilia"
-  # species <- "madracis"
-  # species <- "meandrina"
-  # species <- "montastraea" # best is target prev. ratio. looks good! slightly overstated north of STT/STJ
-  # species <- "mycetophyllia"
-  # species <- "orbicella" # best is Kappa (maybe ?). prev ratio actually does a good job, though overstates extent a bit most likely
-  # species <- "porites" # best is target prev. ratio. looks good!!
-  # species <- "pseudodiploria"
-  species <- "siderastrea" # best is target prev. ratio. looks good! probably slightly overstated
-  # species <- "solenastrea"
+  # species <- "agaricia" # N = 651. best is target prev. ratio
+  # species <- "colpophyllia" # N = 116. best is sens. w/ constraints
+  # species <- "dendrogyra" # N = 35. best is sens. w/ MORE constraints - could use even more though
+  # species <- "dichocoenia" # N = 76. sens. w/ constraints is okay - could maybe use more constraint
+  # species <- "diploria" # N = 120. best is sens. w/ constraints
+  # species <- "eusmilia" # N = 39. best is sens. w/ MORE constraints
+  # species <- "madracis" # N = 131. best is sens. w/ constraints. probably a bit overpredicted
+  # species <- "meandrina" # N = 193. best is sens. w/ constraints. again, probably a bit overpredicted
+  # species <- "montastraea" # N = 490. best is target prev. ratio. looks good! slightly overstated north of STT/STJ
+  # species <- "mycetophyllia" # N = 28. best is sens. w/ EVEN MORE constraints. pretty good
+  # species <- "orbicella" # N = 795. best is Kappa (maybe ?). prev ratio actually does a good job, though overstates extent a bit most likely
+  # species <- "porites" # N = 1016. best is target prev. ratio. looks good!!
+  # species <- "pseudodiploria" # N = 401. best is target prev ratio (tried sens. w/ LESS constraint to handle slight underestimation but this just overstated extent in the wrong places). NOTE - need to re-run and save with target prev. ratio; currently saved is sens. w/ LESS constraint
+  # species <- "siderastrea" # N = 845. best is target prev. ratio. looks good! probably slightly overstated
+  # species <- "solenastrea" # N = 21. tried sens. w/ EVEN MORE constraints, but predictions are much too overestimated. may drop this species
   
-  # Dynamically construct model variable names based on species
-  presence_model_name <- paste0(species, "_gam_presence_binom")
-  abundance_model_name <- paste0(species, "_gam_abundance_beta")
+  # Extract models for this species
+  presence_model <- all_species_models[[species]]$presence_model
+  abundance_model <- all_species_models[[species]]$abundance_model
+  model_data <- all_species_models[[species]]$model_data
   
-  # Get the actual model objects
-  presence_model <- get(presence_model_name)
-  abundance_model <- get(abundance_model_name)
   
-  # Get model data for calibration
-  data_name <- paste0(species, "_model_data")
-  all_objects <- ls(envir = .GlobalEnv)
-  model_data <- if(data_name %in% all_objects) {
-    get(data_name, envir = .GlobalEnv)
-  } else {
-    presence_model$model
-  }
+  # # Dynamically construct model variable names based on species
+  # presence_model_name <- paste0(species, "_gam_presence_binom")
+  # abundance_model_name <- paste0(species, "_gam_abundance_beta")
+  # 
+  # # Get the actual model objects
+  # presence_model <- get(presence_model_name)
+  # abundance_model <- get(abundance_model_name)
+  # 
+  # # Get model data for calibration
+  # data_name <- paste0(species, "_model_data")
+  # all_objects <- ls(envir = .GlobalEnv)
+  # model_data <- if(data_name %in% all_objects) {
+  #   get(data_name, envir = .GlobalEnv)
+  # } else {
+  #   presence_model$model
+  # }
+  
+  
   
   
   
@@ -80,10 +125,6 @@
   ###     BELOW: options for optimizing P/A threshold    ###
   ###                                                    ###
   ###                                                    ###
-  
-  
-  
-  
   
   # ################################## OPTION 1: prevalence ##################################
   # 
@@ -696,64 +737,64 @@
   # cat("Optimal threshold (minimizes difference from target ratio): ", optimal_threshold, "\n\n")
   # 
   # 
-  # ################################## OPTION 7: sensitivity ##################################
-  # 
-  # cat("Optimizing presence threshold to maximize sensitivity via 5-fold cross-validation...\n")
-  # 
-  # # Prepare complete data
-  # all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
-  # complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
-  # 
-  # # 5-fold cross-validation
-  # # set.seed(42)
-  # n <- nrow(complete_data)
-  # fold_ids <- sample(rep(1:5, length.out = n))
-  # test_thresholds <- seq(0.001, 0.99, by = 0.0001)
-  # sensitivity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
-  # 
-  # for(fold in 1:5) {
-  #   cat("\n--- Fold", fold, "---\n")
-  #   
-  #   # Split data
-  #   test_idx <- which(fold_ids == fold)
-  #   train_data <- complete_data[-test_idx, ]
-  #   test_data <- complete_data[test_idx, ]
-  #   cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
-  #   
-  #   # Fit presence model on training data
-  #   presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
-  #   
-  #   # Predict on test data
-  #   presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
-  #   actual_binary <- as.numeric(test_data$cover > 0)
-  #   
-  #   # Calculate Sensitivity for each threshold
-  #   for(i in seq_along(test_thresholds)) {
-  #     predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
-  #     
-  #     TP <- sum(actual_binary == 1 & predicted_binary == 1)
-  #     FN <- sum(actual_binary == 1 & predicted_binary == 0)
-  #     
-  #     sensitivity <- TP / (TP + FN)
-  #     sensitivity_values[fold, i] <- sensitivity
-  #   }
-  #   
-  #   # Find best threshold for this fold
-  #   fold_best_threshold <- test_thresholds[which.max(sensitivity_values[fold, ])]
-  #   fold_best_sensitivity <- max(sensitivity_values[fold, ], na.rm = TRUE)
-  #   cat("  Best threshold for this fold:", fold_best_threshold, "\n")
-  #   cat("  Maximum Sensitivity:", round(fold_best_sensitivity, 6), "\n")
-  # }
-  # 
-  # # Average across folds and find optimal threshold
-  # cat("\n--- Aggregating Results ---\n")
-  # mean_sensitivity_values <- colMeans(sensitivity_values, na.rm = TRUE)
-  # optimal_threshold <- test_thresholds[which.max(mean_sensitivity_values)]
-  # max_mean_sensitivity <- max(mean_sensitivity_values, na.rm = TRUE)
-  # 
-  # cat("Mean Sensitivity across folds: ", round(max_mean_sensitivity, 6), "\n")
-  # cat("Optimal threshold (maximizes Sensitivity): ", optimal_threshold, "\n\n")
-  # 
+  ################################## OPTION 7: sensitivity ##################################
+
+  cat("Optimizing presence threshold to maximize sensitivity via 5-fold cross-validation...\n")
+
+  # Prepare complete data
+  all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
+  complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+
+  # 5-fold cross-validation
+  # set.seed(42)
+  n <- nrow(complete_data)
+  fold_ids <- sample(rep(1:5, length.out = n))
+  test_thresholds <- seq(0.001, 0.99, by = 0.0001)
+  sensitivity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+
+  for(fold in 1:5) {
+    cat("\n--- Fold", fold, "---\n")
+
+    # Split data
+    test_idx <- which(fold_ids == fold)
+    train_data <- complete_data[-test_idx, ]
+    test_data <- complete_data[test_idx, ]
+    cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
+
+    # Fit presence model on training data
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+
+    # Predict on test data
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    actual_binary <- as.numeric(test_data$cover > 0)
+
+    # Calculate Sensitivity for each threshold
+    for(i in seq_along(test_thresholds)) {
+      predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
+
+      TP <- sum(actual_binary == 1 & predicted_binary == 1)
+      FN <- sum(actual_binary == 1 & predicted_binary == 0)
+
+      sensitivity <- TP / (TP + FN)
+      sensitivity_values[fold, i] <- sensitivity
+    }
+
+    # Find best threshold for this fold
+    fold_best_threshold <- test_thresholds[which.max(sensitivity_values[fold, ])]
+    fold_best_sensitivity <- max(sensitivity_values[fold, ], na.rm = TRUE)
+    cat("  Best threshold for this fold:", fold_best_threshold, "\n")
+    cat("  Maximum Sensitivity:", round(fold_best_sensitivity, 6), "\n")
+  }
+
+  # Average across folds and find optimal threshold
+  cat("\n--- Aggregating Results ---\n")
+  mean_sensitivity_values <- colMeans(sensitivity_values, na.rm = TRUE)
+  optimal_threshold <- test_thresholds[which.max(mean_sensitivity_values)]
+  max_mean_sensitivity <- max(mean_sensitivity_values, na.rm = TRUE)
+
+  cat("Mean Sensitivity across folds: ", round(max_mean_sensitivity, 6), "\n")
+  cat("Optimal threshold (maximizes Sensitivity): ", optimal_threshold, "\n\n")
+
   ################################## OPTION 8: sens. w/ constraints (maybe best for rare corals) ##################################
   
   cat("Optimizing presence threshold to maximize sensitivity (max 0.5) with specificity >= 0.8...\n")
@@ -955,6 +996,213 @@
     cat("Fallback threshold: ", optimal_threshold, "\n")
     cat("Sensitivity: ", round(optimal_sensitivity, 4), "| Specificity: ", round(optimal_specificity, 4), "\n\n")
   }
+  
+  
+  ################################## OPTION 9: sens. w/ EVEN MORE constraint ##################################
+  
+  cat("Optimizing presence threshold to maximize sensitivity (max 0.5) with specificity >= 0.95...\n")
+  
+  upper_constrant = 0.95
+  
+  # Prepare complete data
+  all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
+  complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+  
+  # 5-fold cross-validation
+  # set.seed(42)
+  n <- nrow(complete_data)
+  fold_ids <- sample(rep(1:5, length.out = n))
+  test_thresholds <- seq(0.01, 0.99, by = 0.001)
+  sensitivity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+  specificity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+  
+  for(fold in 1:5) {
+    cat("\n--- Fold", fold, "---\n")
+    
+    # Split data
+    test_idx <- which(fold_ids == fold)
+    train_data <- complete_data[-test_idx, ]
+    test_data <- complete_data[test_idx, ]
+    cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
+    
+    # Fit presence model on training data
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+    
+    # Predict on test data
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    actual_binary <- as.numeric(test_data$cover > 0)
+    
+    # Calculate Sensitivity and Specificity for each threshold
+    for(i in seq_along(test_thresholds)) {
+      predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
+      
+      TP <- sum(actual_binary == 1 & predicted_binary == 1)
+      TN <- sum(actual_binary == 0 & predicted_binary == 0)
+      FP <- sum(actual_binary == 0 & predicted_binary == 1)
+      FN <- sum(actual_binary == 1 & predicted_binary == 0)
+      
+      sensitivity <- TP / (TP + FN)
+      specificity <- TN / (TN + FP)
+      
+      sensitivity_values[fold, i] <- sensitivity
+      specificity_values[fold, i] <- specificity
+    }
+    
+    # Find best threshold for this fold (with constraints)
+    # Only consider thresholds where specificity >= 0.8 and sensitivity <= 0.5
+    valid_thresholds <- which(specificity_values[fold, ] >= upper_constrant & sensitivity_values[fold, ] <= 0.5)
+    
+    if(length(valid_thresholds) > 0) {
+      fold_best_idx <- valid_thresholds[which.max(sensitivity_values[fold, valid_thresholds])]
+      fold_best_threshold <- test_thresholds[fold_best_idx]
+      fold_best_sensitivity <- sensitivity_values[fold, fold_best_idx]
+      fold_best_specificity <- specificity_values[fold, fold_best_idx]
+      
+      cat("  Best threshold for this fold:", fold_best_threshold, "\n")
+      cat("  Sensitivity:", round(fold_best_sensitivity, 4), "| Specificity:", round(fold_best_specificity, 4), "\n")
+    } else {
+      cat("  WARNING: No threshold met constraints (spec >= 0.8, sens <= 0.5) for this fold\n")
+    }
+  }
+  
+  # Average across folds and find optimal threshold
+  cat("\n--- Aggregating Results ---\n")
+  mean_sensitivity_values <- colMeans(sensitivity_values, na.rm = TRUE)
+  mean_specificity_values <- colMeans(specificity_values, na.rm = TRUE)
+  
+  # Apply constraints: specificity >= 0.8 and sensitivity <= 0.5
+  valid_thresholds <- which(mean_specificity_values >= upper_constrant & mean_sensitivity_values <= 0.5)
+  
+  if(length(valid_thresholds) > 0) {
+    optimal_idx <- valid_thresholds[which.max(mean_sensitivity_values[valid_thresholds])]
+    optimal_threshold <- test_thresholds[optimal_idx]
+    optimal_sensitivity <- mean_sensitivity_values[optimal_idx]
+    optimal_specificity <- mean_specificity_values[optimal_idx]
+    
+    cat("Mean Sensitivity across folds: ", round(optimal_sensitivity, 4), "\n")
+    cat("Mean Specificity across folds: ", round(optimal_specificity, 4), "\n")
+    cat("Optimal threshold: ", optimal_threshold, "\n")
+    
+    if(optimal_sensitivity >= 0.4) {
+      cat("✓ Sensitivity >= 0.4 target achieved\n\n")
+    } else {
+      cat("⚠ Warning: Sensitivity < 0.4 (target not achieved)\n\n")
+    }
+  } else {
+    cat("ERROR: No threshold met constraints (spec >= 0.8, sens <= 0.5)\n")
+    cat("Falling back to threshold that maximizes balanced accuracy...\n")
+    optimal_idx <- which.max((mean_sensitivity_values + mean_specificity_values) / 2)
+    optimal_threshold <- test_thresholds[optimal_idx]
+    optimal_sensitivity <- mean_sensitivity_values[optimal_idx]
+    optimal_specificity <- mean_specificity_values[optimal_idx]
+    
+    cat("Fallback threshold: ", optimal_threshold, "\n")
+    cat("Sensitivity: ", round(optimal_sensitivity, 4), "| Specificity: ", round(optimal_specificity, 4), "\n\n")
+  }
+  
+  ################################## OPTION 10: sens. w/ LESS constraint ##################################
+  
+  cat("Optimizing presence threshold to maximize sensitivity (max 0.6) with specificity >= 0.80...\n")
+  
+  upper_constrant = 0.80
+  sens_upper_constraint = 0.60
+  
+  # Prepare complete data
+  all_vars <- unique(c(all.vars(formula(presence_model)), all.vars(formula(abundance_model))))
+  complete_data <- model_data[complete.cases(model_data[, all_vars]), ]
+  
+  # 5-fold cross-validation
+  # set.seed(42)
+  n <- nrow(complete_data)
+  fold_ids <- sample(rep(1:5, length.out = n))
+  test_thresholds <- seq(0.01, 0.99, by = 0.001)
+  sensitivity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+  specificity_values <- matrix(NA, nrow = 5, ncol = length(test_thresholds))
+  
+  for(fold in 1:5) {
+    cat("\n--- Fold", fold, "---\n")
+    
+    # Split data
+    test_idx <- which(fold_ids == fold)
+    train_data <- complete_data[-test_idx, ]
+    test_data <- complete_data[test_idx, ]
+    cat("  Training size:", nrow(train_data), "| Test size:", nrow(test_idx), "\n")
+    
+    # Fit presence model on training data
+    presence_fit <- gam(formula(presence_model), data = train_data, family = binomial())
+    
+    # Predict on test data
+    presence_prob <- predict(presence_fit, newdata = test_data, type = "response")
+    actual_binary <- as.numeric(test_data$cover > 0)
+    
+    # Calculate Sensitivity and Specificity for each threshold
+    for(i in seq_along(test_thresholds)) {
+      predicted_binary <- as.numeric(presence_prob > test_thresholds[i])
+      
+      TP <- sum(actual_binary == 1 & predicted_binary == 1)
+      TN <- sum(actual_binary == 0 & predicted_binary == 0)
+      FP <- sum(actual_binary == 0 & predicted_binary == 1)
+      FN <- sum(actual_binary == 1 & predicted_binary == 0)
+      
+      sensitivity <- TP / (TP + FN)
+      specificity <- TN / (TN + FP)
+      
+      sensitivity_values[fold, i] <- sensitivity
+      specificity_values[fold, i] <- specificity
+    }
+    
+    # Find best threshold for this fold (with constraints)
+    # Only consider thresholds where specificity >= 0.8 and sensitivity <= 0.5
+    valid_thresholds <- which(specificity_values[fold, ] >= upper_constrant & sensitivity_values[fold, ] <= sens_upper_constraint)
+    
+    if(length(valid_thresholds) > 0) {
+      fold_best_idx <- valid_thresholds[which.max(sensitivity_values[fold, valid_thresholds])]
+      fold_best_threshold <- test_thresholds[fold_best_idx]
+      fold_best_sensitivity <- sensitivity_values[fold, fold_best_idx]
+      fold_best_specificity <- specificity_values[fold, fold_best_idx]
+      
+      cat("  Best threshold for this fold:", fold_best_threshold, "\n")
+      cat("  Sensitivity:", round(fold_best_sensitivity, 4), "| Specificity:", round(fold_best_specificity, 4), "\n")
+    } else {
+      cat("  WARNING: No threshold met constraints (spec >= 0.8, sens <= 0.5) for this fold\n")
+    }
+  }
+  
+  # Average across folds and find optimal threshold
+  cat("\n--- Aggregating Results ---\n")
+  mean_sensitivity_values <- colMeans(sensitivity_values, na.rm = TRUE)
+  mean_specificity_values <- colMeans(specificity_values, na.rm = TRUE)
+  
+  # Apply constraints: specificity >= 0.8 and sensitivity <= 0.5
+  valid_thresholds <- which(mean_specificity_values >= upper_constrant & mean_sensitivity_values <= sens_upper_constraint)
+  
+  if(length(valid_thresholds) > 0) {
+    optimal_idx <- valid_thresholds[which.max(mean_sensitivity_values[valid_thresholds])]
+    optimal_threshold <- test_thresholds[optimal_idx]
+    optimal_sensitivity <- mean_sensitivity_values[optimal_idx]
+    optimal_specificity <- mean_specificity_values[optimal_idx]
+    
+    cat("Mean Sensitivity across folds: ", round(optimal_sensitivity, 4), "\n")
+    cat("Mean Specificity across folds: ", round(optimal_specificity, 4), "\n")
+    cat("Optimal threshold: ", optimal_threshold, "\n")
+    
+    if(optimal_sensitivity >= 0.4) {
+      cat("✓ Sensitivity >= 0.4 target achieved\n\n")
+    } else {
+      cat("⚠ Warning: Sensitivity < 0.4 (target not achieved)\n\n")
+    }
+  } else {
+    cat("ERROR: No threshold met constraints (spec >= 0.8, sens <= 0.5)\n")
+    cat("Falling back to threshold that maximizes balanced accuracy...\n")
+    optimal_idx <- which.max((mean_sensitivity_values + mean_specificity_values) / 2)
+    optimal_threshold <- test_thresholds[optimal_idx]
+    optimal_sensitivity <- mean_sensitivity_values[optimal_idx]
+    optimal_specificity <- mean_specificity_values[optimal_idx]
+    
+    cat("Fallback threshold: ", optimal_threshold, "\n")
+    cat("Sensitivity: ", round(optimal_sensitivity, 4), "| Specificity: ", round(optimal_specificity, 4), "\n\n")
+  }
+  
   
   ################################## in-sample performance ##################################
   
@@ -1338,7 +1586,7 @@
   # )
   # 
   # saveRDS(output_list, file = here('output/output_maps', paste0('results_', species, '.rds')))
-
+  
   
   # #to read:
   # results <- readRDS("results_sppX.rds")

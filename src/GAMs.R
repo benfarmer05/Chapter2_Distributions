@@ -18,57 +18,6 @@
   
   source(here("src/functions.R"))
   
-  
-  # # NOTE - consider adding dynamic saving system (e.g., below) if I need to come back and
-  # #         start tweaking specific models:
-  # # Save models and data for this species
-  # saveRDS(list(
-  #   presence_model = agaricia_gam_presence_binom,
-  #   abundance_model = agaricia_gam_abundance_beta,
-  #   model_data = agaricia_model_data
-  # ), here("output", "output_GAMs", "agaricia_models.rds"))
-  # 
-  # #Load all species models
-  # 
-  # # List of all species
-  # species_list <- c("agaricia", "colpophyllia", "dendrogyra", "dichocoenia", 
-  #                   "diploria", "eusmilia", "madracis", "meandrina", 
-  #                   "montastraea", "mycetophyllia", "orbicella", "porites", 
-  #                   "pseudodiploria", "siderastrea", "solenastrea")
-  # 
-  # # Load all species models into a list
-  # all_species_models <- lapply(species_list, function(sp) {
-  #   file_path <- here("output", "output_GAMs", paste0(sp, "_models.rds"))
-  #   if(file.exists(file_path)) {
-  #     readRDS(file_path)
-  #   } else {
-  #     warning(paste("Model file not found for:", sp))
-  #     NULL
-  #   }
-  # })
-  # names(all_species_models) <- species_list
-  # 
-  # # Quick check of what loaded
-  # cat("Loaded models for:\n")
-  # for(sp in species_list) {
-  #   if(!is.null(all_species_models[[sp]])) {
-  #     cat("  ✓", sp, "\n")
-  #   } else {
-  #     cat("  ✗", sp, "(missing)\n")
-  #   }
-  # }
-  # 
-  # # Species toggle
-  # species <- "dendrogyra"
-  # 
-  # # Extract models for this species
-  # presence_model <- all_species_models[[species]]$presence_model
-  # abundance_model <- all_species_models[[species]]$abundance_model
-  # model_data <- all_species_models[[species]]$model_data
-  # 
-  # # Now continue with your analysis...
-  
-  
   ################################## setup ##################################
   
   load(here("output", "all_combined_data.rda"))
@@ -566,6 +515,8 @@
   
   ################################## AGARICIA ##################################
   
+  # N = 651
+  
   # NOTE - TPI vs. dist to land difficult to pin down as the one to keep for presence model
   #           -   dist to deep, meanSST, and meanchla seem to be tricky for abundance model
   #           -   may consider if kd490 is safe to include; large uncertainty
@@ -784,16 +735,17 @@
   auc(agaricia_roc_curve)
   plot(agaricia_roc_curve)
   
-  # # Save models
-  # saveRDS(agaricia_gam_presence_binom, 
-  #         here("output", "output_GAMs", "agaricia_gam_presence_binom.rds"))
-  # 
-  # saveRDS(agaricia_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "agaricia_gam_abundance_gamma.rds"))
+  
+  
+  saveRDS(list(
+    presence_model = agaricia_gam_presence_binom,
+    abundance_model = agaricia_gam_abundance_beta,
+    model_data = agaricia_model_data
+  ), here("output", "output_GAMs", "agaricia_models.rds"))
   
   ################################## MADRACIS ##################################
   
-  # NOTE - this model looks bad.
+  # N = 131
   
   madracis_model_data = spp_data %>%
     filter(grepl("Madracis", spp))
@@ -923,14 +875,15 @@
   auc(madracis_roc_curve)
   plot(madracis_roc_curve)
   
-  # # Save models
-  # saveRDS(madracis_gam_presence_binom, 
-  #         here("output", "output_GAMs", "madracis_gam_presence_binom.rds"))
-  # 
-  # saveRDS(madracis_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "madracis_gam_abundance_gamma.rds"))
+  saveRDS(list(
+    presence_model = madracis_gam_presence_binom,
+    abundance_model = madracis_gam_abundance_beta,
+    model_data = madracis_model_data
+  ), here("output", "output_GAMs", "madracis_models.rds"))
   
   ################################## PORITES ##################################
+  
+  # N = 1016
   
   porites_model_data = spp_data %>%
     filter(grepl("Porites", spp))
@@ -1073,13 +1026,13 @@
   auc(porites_roc_curve)
   plot(porites_roc_curve)
   
-  # # Save models
-  # saveRDS(porites_gam_presence_binom, 
-  #         here("output", "output_GAMs", "porites_gam_presence_binom.rds"))
-  # 
-  # saveRDS(porites_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "porites_gam_abundance_gamma.rds"))
-  
+  saveRDS(list(
+    presence_model = porites_gam_presence_binom,
+    abundance_model = porites_gam_abundance_beta,
+    model_data = porites_model_data
+  ), here("output", "output_GAMs", "porites_models.rds"))
+
+    
   ################################## SIDERASTREA ##################################
   
   # N = 845
@@ -1212,13 +1165,13 @@
   auc(siderastrea_roc_curve)
   plot(siderastrea_roc_curve)
   
-  # # Save models
-  # saveRDS(siderastrea_gam_presence_binom, 
-  #         here("output", "output_GAMs", "siderastrea_gam_presence_binom.rds"))
-  # 
-  # saveRDS(siderastrea_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "siderastrea_gam_abundance_gamma.rds"))
-  
+  saveRDS(list(
+    presence_model = siderastrea_gam_presence_binom,
+    abundance_model = siderastrea_gam_abundance_beta,
+    model_data = siderastrea_model_data
+  ), here("output", "output_GAMs", "siderastrea_models.rds"))
+
+    
   ################################## MONTASTRAEA ##################################
   
   # N = 490
@@ -1391,14 +1344,15 @@
   auc(montastraea_roc_curve)
   plot(montastraea_roc_curve, main = "ROC Curve for Madracis Presence Model")
   
-  # # Save models
-  # saveRDS(montastraea_gam_presence_binom, 
-  #         here("output", "output_GAMs", "montastraea_gam_presence_binom.rds"))
-  # 
-  # saveRDS(montastraea_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "montastraea_gam_abundance_gamma.rds"))
+  saveRDS(list(
+    presence_model = montastraea_gam_presence_binom,
+    abundance_model = montastraea_gam_abundance_beta,
+    model_data = montastraea_model_data
+  ), here("output", "output_GAMs", "montastraea_models.rds"))
   
   ################################## ORBICELLA ##################################
+  
+  # N = 795
   
   # NOTE - dropped mean_SST from presence model b/c of severe k issues
   #         - also, dropped quite a bit from the abundance model...could maybe get higher deviance
@@ -1695,12 +1649,12 @@
   legend("topright", legend = c("Underprediction", "Overprediction"), 
          col = c("red", "blue"), pch = 1)
   
-  # # Save models
-  # saveRDS(orbicella_gam_presence_binom, 
-  #         here("output", "output_GAMs", "orbicella_gam_presence_binom.rds"))
-  # 
-  # saveRDS(orbicella_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "orbicella_gam_abundance_gamma.rds"))
+  
+  saveRDS(list(
+    presence_model = orbicella_gam_presence_binom,
+    abundance_model = orbicella_gam_abundance_beta,
+    model_data = orbicella_model_data
+  ), here("output", "output_GAMs", "orbicella_models.rds"))
   
   
   
@@ -2345,6 +2299,13 @@
   auc(solenastrea_roc_curve)
   plot(solenastrea_roc_curve)
   
+  
+  saveRDS(list(
+    presence_model = solenastrea_gam_presence_binom,
+    abundance_model = solenastrea_gam_abundance_beta,
+    model_data = solenastrea_model_data
+  ), here("output", "output_GAMs", "solenastrea_models.rds"))
+  
   ################################## COLPOPHYLLIA ##################################
   
   # N = 116
@@ -2505,12 +2466,12 @@
   auc(colpophyllia_roc_curve)
   plot(colpophyllia_roc_curve)
   
-  # # Save models
-  # saveRDS(colpophyllia_gam_presence_binom, 
-  #         here("output", "output_GAMs", "colpophyllia_gam_presence_binom.rds"))
-  # 
-  # saveRDS(colpophyllia_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "colpophyllia_gam_abundance_gamma.rds"))
+  
+  saveRDS(list(
+    presence_model = colpophyllia_gam_presence_binom,
+    abundance_model = colpophyllia_gam_abundance_beta,
+    model_data = colpophyllia_model_data
+  ), here("output", "output_GAMs", "colpophyllia_models.rds"))
   
   ################################## DENDROGYRA ##################################
 
@@ -2630,6 +2591,12 @@
                                 fitted(dendrogyra_gam_presence_binom))
   auc(dendrogyra_roc_curve)
   plot(dendrogyra_roc_curve)
+  
+  saveRDS(list(
+    presence_model = dendrogyra_gam_presence_binom,
+    abundance_model = dendrogyra_gam_abundance_beta,
+    model_data = dendrogyra_model_data
+  ), here("output", "output_GAMs", "dendrogyra_models.rds"))
   
   
   ################################## DICHOCOENIA ##################################
@@ -2755,12 +2722,12 @@
   auc(dichocoenia_roc_curve)
   plot(dichocoenia_roc_curve)
   
-  # # Save models
-  # saveRDS(dichocoenia_gam_presence_binom, 
-  #         here("output", "output_GAMs", "dichocoenia_gam_presence_binom.rds"))
-  # 
-  # saveRDS(dichocoenia_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "dichocoenia_gam_abundance_gamma.rds"))
+  
+  saveRDS(list(
+    presence_model = dichocoenia_gam_presence_binom,
+    abundance_model = dichocoenia_gam_abundance_beta,
+    model_data = dichocoenia_model_data
+  ), here("output", "output_GAMs", "dichocoenia_models.rds"))
   
   ################################## DIPLORIA ##################################
   
@@ -2869,6 +2836,12 @@
                                   fitted(diploria_gam_presence_binom))
   auc(diploria_roc_curve)
   plot(diploria_roc_curve)
+  
+  saveRDS(list(
+    presence_model = diploria_gam_presence_binom,
+    abundance_model = diploria_gam_abundance_beta,
+    model_data = diploria_model_data
+  ), here("output", "output_GAMs", "diploria_models.rds"))
   
   
   ################################## EUSMILIA ##################################
@@ -2982,7 +2955,6 @@
   concurvity(eusmilia_gam_abundance_beta, full = TRUE)
   
   
-  
   #AUC / ROC
   eusmilia_fitted_data <- eusmilia_gam_presence_binom$model
   eusmilia_roc_curve <- roc(eusmilia_fitted_data$present,
@@ -2991,7 +2963,16 @@
   plot(eusmilia_roc_curve, main = "ROC Curve for Madracis Presence Model")
 
   
+  saveRDS(list(
+    presence_model = eusmilia_gam_presence_binom,
+    abundance_model = eusmilia_gam_abundance_beta,
+    model_data = eusmilia_model_data
+  ), here("output", "output_GAMs", "eusmilia_models.rds"))
+  
+  
   ################################## MEANDRINA ##################################
+  
+  # N = 193
   
   meandrina_model_data = spp_data %>%
     filter(grepl("Meandrina", spp))
@@ -3121,6 +3102,12 @@
   plot(meandrina_roc_curve, main = "ROC Curve for Meandrina Presence Model")
   
 
+  saveRDS(list(
+    presence_model = meandrina_gam_presence_binom,
+    abundance_model = meandrina_gam_abundance_beta,
+    model_data = meandrina_model_data
+  ), here("output", "output_GAMs", "meandrina_models.rds"))
+  
 
   ################################## MYCETOPHYLLIA ##################################
   
@@ -3269,12 +3256,22 @@
   auc(mycetophyllia_roc_curve)
   plot(mycetophyllia_roc_curve, main = "ROC Curve for Mycetophyllia Presence Model")
   
+  
+  saveRDS(list(
+    presence_model = mycetophyllia_gam_presence_binom,
+    abundance_model = mycetophyllia_gam_abundance_beta,
+    model_data = mycetophyllia_model_data
+  ), here("output", "output_GAMs", "mycetophyllia_models.rds"))
+  
+  
 
   ################################## PSEUDODIPLORIA ##################################
   
   # NOTE - should consider removing SST for presence because of k issue
   #         - dropped max_Hsig, though seemingly important, because of high concurvity in abundance model
   #         - and dropped mean_PAR from abundance model, because of k issue
+  
+  # N = 401
   
   pseudodiploria_model_data = spp_data %>%
     filter(grepl("Pseudodiploria", spp))
@@ -3467,14 +3464,12 @@
   auc(pseudodiploria_roc_curve)
   plot(pseudodiploria_roc_curve)
   
-  # # Save models
-  # saveRDS(pseudodiploria_gam_presence_binom, 
-  #         here("output", "output_GAMs", "pseudodiploria_gam_presence_binom.rds"))
-  # 
-  # saveRDS(pseudodiploria_gam_abundance_gamma, 
-  #         here("output", "output_GAMs", "pseudodiploria_gam_abundance_gamma.rds"))
   
-  
+  saveRDS(list(
+    presence_model = pseudodiploria_gam_presence_binom,
+    abundance_model = pseudodiploria_gam_abundance_beta,
+    model_data = pseudodiploria_model_data
+  ), here("output", "output_GAMs", "pseudodiploria_models.rds"))
   
   
   ################################## RARE HS ##################################
