@@ -257,7 +257,7 @@
   # Define plot extent options
   # plot_extents = ext(280000, 310000, 2010000, 2060000) #for investigating drops
   # plot_extents = ext(280000, 310000, 2000000, 2040000) #for investigating south of STT
-  # plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
+  plot_extents = ext(270000, 290000, 2000000, 2040000) #for investigating MCD
   # plot_extents = ext(300000, 340000, 2000000, 2050000) #for investigating STJ
   # plot_extents = ext(220000, 260000, 2000000, 2010000) #for investigating Vieques
   # plot_extents = ext(341000, 379000, 2057000, 2078000) # for investigating Anegada

@@ -21,7 +21,7 @@
   
   existing_objects <- ls(envir = .GlobalEnv)
   
-  ################################## Create mask <50 m ##################################
+  ################################## Create mask <60 m ##################################
   
   #read the CMS-formatted hydrodynamic domain extent
   hydro_extent = vect(here("output/", "hydro_domain_extent.shp"))

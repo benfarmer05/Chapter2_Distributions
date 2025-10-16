@@ -689,6 +689,7 @@
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
+
   # # beta with cloglog using observed/estimate concurvity, WITH spatial smooth (test)
   # agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
   #                                      s(slope) +
@@ -1521,7 +1522,7 @@
                                         s(mean_dir, bs = 'cc', k = 15),
                                       data = orbicella_model_data[orbicella_model_data$cover_prop > 0, ],
                                       # select = TRUE,
-                                      family = betar(link = "cloglog"))
+                                      family = betar())
   # # beta with cloglog using observed/estimate concurvity; includes spatial smooth and drops other variables (seems unideal)
   # orbicella_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
   #                                       s(planform_curv) +
@@ -2425,7 +2426,7 @@
                                         s(mean_dir, bs = 'cc'),
                                       data = colpophyllia_model_data[colpophyllia_model_data$cover_prop > 0, ],
                                       # select = TRUE,
-                                      family = betar(link = "cloglog"))
+                                      family = betar())
   
   
   pred <- predict(colpophyllia_gam_abundance_beta, type = "response")
@@ -2558,7 +2559,7 @@
                                          s(mean_dir, bs = 'cc'),
                                          data = dendrogyra_model_data[dendrogyra_model_data$cover_prop > 0, ],
                                          # select = TRUE,
-                                         family = betar(link = "cloglog"))
+                                         family = betar())
   summary(dendrogyra_gam_abundance_beta)
   
   
@@ -4008,17 +4009,6 @@
   # coral_cover_map
   # 
   ################################## Save objects/workspace ##################################
-  
-  # # Get all objects matching the patterns
-  # all_objects <- ls(envir = .GlobalEnv)
-  # patterns <- c("_gam_presence_binom$", "_gam_abundance_gamma$", "_model_data$")
-  # matching_objects <- grep(paste(patterns, collapse = "|"), all_objects, value = TRUE)
-  # 
-  # # Save each object
-  # for (obj_name in matching_objects) {
-  #   saveRDS(get(obj_name), here("output", "output_GAMs", paste0(obj_name, ".rds")))
-  # }
-  
   
   # #updated way to handle saving of new objects
   # save_new_objects("output/output_GAMs", existing_objects)
