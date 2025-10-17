@@ -1172,7 +1172,122 @@
     model_data = siderastrea_model_data
   ), here("output", "output_GAMs", "siderastrea_models.rds"))
 
-    
+  ################################## STEPHANOCOENIA ##################################
+  
+  # N = 192
+  
+  stephanocoenia_model_data = spp_data %>%
+    filter(grepl("Stephanocoenia", spp))
+  stephanocoenia_model_data = add_env_variables(stephanocoenia_model_data, variables_at_PSUs)
+  
+  # Two-part model with complexity
+  stephanocoenia_model_data$present <- ifelse(stephanocoenia_model_data$cover > 0, 1, 0)
+  
+  # tic()
+  # stephanocoenia_gam_presence_binom <- gam(present ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                             data = stephanocoenia_model_data,
+  #                             select = TRUE,
+  #                             family = binomial())
+  # toc()
+  # non-weighted version NO spatial smooth; whittled down with observed/estimate concurvity
+  stephanocoenia_gam_presence_binom <- gam(present ~ s(depth_bathy) +
+                                             s(slope) +
+                                             s(complexity) + s(TPI) + s(planform_curv) +
+                                             s(mean_dir, bs = 'cc', k = 12) + s(mean_Hsig, k = 8) +
+                                             s(mean_SST) + s(mean_chla) +
+                                             s(max_BOV) +
+                                             s(range_SST),
+                                        data = stephanocoenia_model_data,
+                                        # weights = weights_vec,
+                                        # select = TRUE,
+                                        family = binomial())
+  
+  # stephanocoenia_gam_abundance_gamma <- gam(cover ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(dir_at_max_hsig, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = stephanocoenia_model_data[stephanocoenia_model_data$cover > 0, ],
+  #                               select = TRUE,
+  #                               family = Gamma(link = "log"))
+  # stephanocoenia_gam_abundance_gamma <- gam(cover ~ s(depth) +
+  #                                          s(max_Hsig) + s(dir_at_max_hsig, k = 12, bs = 'cc') +
+  #                                          s(mean_kd490) +
+  #                                          s(dist_to_deep, k = 12),
+  #                                        data = stephanocoenia_model_data[stephanocoenia_model_data$cover > 0, ],
+  #                                        select = TRUE,
+  #                                        family = Gamma(link = "log"))
+  
+  stephanocoenia_model_data$cover_prop <- stephanocoenia_model_data$cover / 100
+  
+  # stephanocoenia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) + s(aspect, bs = 'cc') +
+  #                               s(slope) +
+  #                               s(complexity) + s(TPI) + s(VRM) + s(planform_curv) + s(SAPA) +
+  #                               s(max_Hsig) + s(mean_dir, bs = 'cc') + s(mean_Hsig) +
+  #                               s(mean_SST) + s(mean_PAR) + s(mean_chla) + s(mean_kd490) +
+  #                               s(mean_spm) + s(dist_to_deep) + s(max_BOV) +
+  #                               s(range_SST) +
+  #                               s(dist_to_land),
+  #                               data = stephanocoenia_model_data[stephanocoenia_model_data$cover_prop > 0, ],
+  #                               select = TRUE,
+  #                               family = betar())
+  # beta with cloglog with NO spatial smooth using observed/estimate concurvity
+  stephanocoenia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
+                                             s(slope) +
+                                             s(complexity) + s(planform_curv) +
+                                             s(max_BOV) +
+                                             s(mean_SST) + s(range_SST) +
+                                             s(mean_kd490) + s(dist_to_deep),
+                                        data = stephanocoenia_model_data[stephanocoenia_model_data$cover_prop > 0, ],
+                                        # select = TRUE,
+                                        family = betar())
+  
+  
+  summary(stephanocoenia_gam_presence_binom)
+  # summary(stephanocoenia_gam_abundance_gamma)
+  summary(stephanocoenia_gam_abundance_beta)
+  AIC(stephanocoenia_gam_presence_binom)
+  # AIC(stephanocoenia_gam_abundance_gamma)
+  AIC(stephanocoenia_gam_abundance_beta)
+  
+  draw(stephanocoenia_gam_presence_binom)
+  # draw(stephanocoenia_gam_abundance_gamma)
+  draw(stephanocoenia_gam_abundance_beta)
+  
+  # Check if any smooths are hitting k limits
+  gam.check(stephanocoenia_gam_presence_binom)
+  # gam.check(stephanocoenia_gam_abundance_gamma)
+  gam.check(stephanocoenia_gam_abundance_beta)
+  
+  # Look at concurvity
+  concurvity(stephanocoenia_gam_presence_binom, full = TRUE)
+  # concurvity(stephanocoenia_gam_abundance_gamma, full = TRUE)
+  concurvity(stephanocoenia_gam_abundance_beta, full = TRUE)
+  
+  #AUC / ROC
+  stephanocoenia_roc_curve <- roc(stephanocoenia_gam_presence_binom$model$present, 
+                               fitted(stephanocoenia_gam_presence_binom))
+  auc(stephanocoenia_roc_curve)
+  plot(stephanocoenia_roc_curve)
+  
+  saveRDS(list(
+    presence_model = stephanocoenia_gam_presence_binom,
+    abundance_model = stephanocoenia_gam_abundance_beta,
+    model_data = stephanocoenia_model_data
+  ), here("output", "output_GAMs", "stephanocoenia_models.rds"))
+  
+  
+  
   ################################## MONTASTRAEA ##################################
   
   # N = 490

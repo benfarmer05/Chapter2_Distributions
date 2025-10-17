@@ -288,11 +288,11 @@
   #                                  calibrate_abundance = FALSE, use_beta = TRUE)
   
   # With random seed (uses current time/state)
-  result <- validate_hurdle_simple("orbicella", seed = 300, optimize_threshold = "TSS",
-                                   calibrate_abundance = TRUE, use_beta = TRUE)
+  result <- validate_hurdle_simple("eusmilia", seed = 300, optimize_threshold = "TSS",
+                                   calibrate_presence = TRUE, calibrate_abundance = TRUE, use_beta = TRUE)
   
   # Without abundance calibration
-  result <- validate_hurdle_simple("orbicella", seed = NULL, optimize_threshold = "prevalence",
+  result <- validate_hurdle_simple("stephanocoenia", seed = NULL, optimize_threshold = "prevalence",
                                    calibrate_abundance = FALSE, use_beta = TRUE)
   
   

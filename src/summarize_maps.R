@@ -1,4 +1,4 @@
- 
+  
   # .rs.restartR(clean = TRUE)
   rm(list=ls())
   
@@ -11,12 +11,12 @@
   
   source(here("src/functions.R"))
   
-  ################################## load spatial metadata ##################################
+  ################################## setup ##################################
   
-  #load 650 m habitat grid
-  load_spat_objects(directory = 'output/output_create_habitat_grid/')
-  source(here("src/functions.R"))
-  load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
+  # #load 650 m habitat grid
+  # load_spat_objects(directory = 'output/output_create_habitat_grid/')
+  # source(here("src/functions.R"))
+  # load(here('output', 'output_create_habitat_grid/create_habitat_grid_workspace.RData'))
   
   
   
@@ -34,6 +34,7 @@
   terra::crs(bathy_final) <- spatial_metadata$bathy_final$crs
   
   cat("CRS loaded successfully\n\n")
+  
   
   
   ################################## read in all model outputs ##################################
@@ -56,6 +57,10 @@
   
   cat("Loaded", length(all_results), "species models\n\n")  
   
+  #save information for exporting new objects later
+  existing_objects <- ls(envir = .GlobalEnv)
+  
+  
   ################################## restore CRS and sum rasters ##################################
   
   cat("Restoring CRS and calculating total cover...\n")
@@ -73,6 +78,10 @@
   cat("Total raster created\n\n")
   
   
+  #stack LS, MS, & HS rasters
+  # LS: madracis, porites, 
+  
+  
   ################################## sum observed cover by PSU ##################################
   
   cat("Calculating observed total cover...\n")
@@ -82,6 +91,17 @@
   
   # Load benthic data (assuming it's in the workspace or needs to be loaded)
   load(here("output", "all_combined_data.rda"))
+  
+  # Check which species have models vs don't
+  benthic_genera <- combined_benthic_data_averaged %>%
+    mutate(genus = tolower(sub(" .*", "", spp))) %>%
+    distinct(genus, susc)
+  
+  modeled_genera <- benthic_genera %>% filter(genus %in% all_species)
+  excluded_genera <- benthic_genera %>% filter(!genus %in% all_species)
+  
+  cat("Species WITH models:", paste(modeled_genera$genus, collapse = ", "), "\n")
+  cat("Species EXCLUDED (no models):", paste(excluded_genera$genus, collapse = ", "), "\n\n")
   
   # Sum observed cover across all species
   # Extract genus from species name and match with model species
@@ -101,13 +121,17 @@
                                           filter(genus %in% all_species) %>% 
                                           pull(genus))), "\n\n")
   
+  levels(combined_benthic_data_averaged$susc) #[1] "high"     "low"      "moderate"
+  
   
   ################################## create total cover map ##################################
   
   cat("Creating total cover map...\n")
   
+  cover_cutoff = 0.6
+  
   # Clamp total cover
-  total_raster_clamped <- clamp(total_raster, lower = 0, upper = 0.5, values = TRUE)
+  total_raster_clamped <- clamp(total_raster, lower = 0, upper = cover_cutoff, values = TRUE)
   
   # # Create custom color palette matching the paper
   # # Blue → Cyan → Yellow → Orange/Red
@@ -146,7 +170,7 @@
   cat("Creating total cover map...\n")
   
   # Clamp total cover
-  total_raster_clamped <- clamp(total_raster, lower = 0, upper = 0.5, values = TRUE)
+  total_raster_clamped <- clamp(total_raster, lower = 0, upper = cover_cutoff, values = TRUE)
   # total_raster_clamped <- aggregate(total_raster_clamped, fact=2, fun=mean)
   
   # Create YlOrRd color palette from RColorBrewer
@@ -156,7 +180,7 @@
   colormap <- viridis(256)
   # colormap <- viridis(256, option = 'turbo')
   
-  unified_pal <- colorNumeric(colormap, domain = c(0, 0.5), na.color = "transparent")
+  unified_pal <- colorNumeric(colormap, domain = c(0, cover_cutoff), na.color = "transparent")
   
   total_cover_map <- leaflet() %>%
     addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
@@ -180,7 +204,102 @@
   cat("PSUs with data:", nrow(psu_total_cover), "\n")
   
   
+  ################################## sum observed cover by susceptibility ##################################
   
+  cat("\nCalculating observed cover by susceptibility...\n")
+  
+  psu_susc_cover <- combined_benthic_data_averaged %>%
+    mutate(genus = tolower(sub(" .*", "", spp))) %>%
+    filter(genus %in% all_species) %>%
+    group_by(PSU, susc, lat, lon) %>%
+    summarise(cover = sum(cover, na.rm = TRUE) / 100, .groups = 'drop')
+  
+  psu_susc_wide <- psu_susc_cover %>%
+    tidyr::pivot_wider(names_from = susc, values_from = cover, 
+                       names_prefix = "cover_", values_fill = 0)
+  
+  cat("PSU susceptibility cover calculated\n\n")
+  
+  
+  ################################## sum rasters by susceptibility ##################################
+  
+  cat("Creating susceptibility rasters...\n")
+  
+  # Get susceptibility classifications from the actual data
+  susc_groups <- combined_benthic_data_averaged %>%
+    mutate(genus = tolower(sub(" .*", "", spp))) %>%
+    filter(genus %in% all_species) %>%
+    distinct(genus, susc) %>%
+    split(.$susc) %>%
+    lapply(function(x) x$genus)
+  
+  cat("Susceptibility groups from data:\n")
+  for(susc_level in names(susc_groups)) {
+    cat(susc_level, ":", paste(susc_groups[[susc_level]], collapse = ", "), "\n")
+  }
+  cat("\n")
+  
+  # Sum rasters by group
+  susc_rasters <- lapply(susc_groups, function(species) {
+    relevant <- raster_list[names(raster_list) %in% species]
+    if(length(relevant) > 0) Reduce(`+`, relevant) else NULL
+  })
+  
+  cat("Susceptibility rasters created\n\n")
+  
+  
+  # ################################## create susceptibility maps ##################################
+  # 
+  # cat("Creating susceptibility maps...\n")
+  # 
+  # create_susc_map <- function(raster_data, psu_data, susc_level, cutoff = NULL) {
+  #   # Calculate dynamic cutoff based on max of raster and observations
+  #   if(is.null(cutoff)) {
+  #     raster_max <- max(values(raster_data), na.rm = TRUE)
+  #     obs_max <- max(psu_data[[paste0("cover_", susc_level)]], na.rm = TRUE)
+  #     cutoff <- max(raster_max, obs_max)
+  #     cat("Dynamic cutoff for", susc_level, "susceptibility:", round(cutoff, 3), "\n")
+  #   } else {
+  #     cat("Manual cutoff for", susc_level, "susceptibility:", round(cutoff, 3), "\n")
+  #   }
+  #   
+  #   raster_clamped <- clamp(raster_data, lower = 0, upper = cutoff, values = TRUE)
+  #   pal <- colorNumeric(viridis(256), domain = c(0, cutoff), na.color = "transparent")
+  #   
+  #   leaflet() %>%
+  #     addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  #     addTiles(group = "OpenStreetMap") %>%
+  #     addRasterImage(raster_clamped, colors = pal, opacity = 1.0) %>%
+  #     addCircleMarkers(data = psu_data, ~lon, ~lat, radius = 8,
+  #                      fillColor = ~pal(get(paste0("cover_", susc_level))), 
+  #                      fillOpacity = 1.0, color = "white", weight = 2,
+  #                      popup = ~paste0("<b>PSU:</b> ", PSU, "<br><b>Cover:</b> ", 
+  #                                      round(get(paste0("cover_", susc_level)) * 100, 2), "%")) %>%
+  #     addLegend("bottomright", pal = pal, values = values(raster_clamped),
+  #               title = paste0(tools::toTitleCase(susc_level), " Susceptibility (%)"),
+  #               labFormat = labelFormat(transform = function(x) x * 100, suffix = "%")) %>%
+  #     addLayersControl(baseGroups = c("Satellite", "OpenStreetMap"))
+  # }
+  # 
+  # #use max across entire domain to set default cover cutoff
+  # low_map <- create_susc_map(susc_rasters$low, psu_susc_wide, "low")
+  # moderate_map <- create_susc_map(susc_rasters$moderate, psu_susc_wide, "moderate")
+  # high_map <- create_susc_map(susc_rasters$high, psu_susc_wide, "high")
+  # 
+  # #option with manual setting of cover cutoffs, for visualization
+  # low_map <- create_susc_map(susc_rasters$low, psu_susc_wide, "low", cutoff = 0.2)
+  # moderate_map <- create_susc_map(susc_rasters$moderate, psu_susc_wide, "moderate", cutoff = 0.5)
+  # high_map <- create_susc_map(susc_rasters$high, psu_susc_wide, "high", cutoff = 0.15)
+  # 
+  # 
+  # low_map
+  # moderate_map
+  # high_map
+  # 
+  # cat("\n=== SUSCEPTIBILITY MAPS COMPLETE ===\n")
+  # cat("View maps: low_map, moderate_map, high_map\n")
+  # 
+  # 
   ################################## prepare data for ggplot ##################################
   
   
@@ -549,4 +668,19 @@
   # cat("  MAE:", round(mae_presence, 2), "%\n")
   # cat("  SD:", round(residual_sd_presence, 2), "%\n")
   # 
+  # 
+
+  
+  
+  # ################################## wrap susc_rasters for saving ##################################
+  # 
+  # # Wrap spatial rasters for safe serialization
+  # susc_rasters <- lapply(susc_rasters, function(r) {
+  #   if(!is.null(r)) terra::wrap(r) else NULL
+  # })
+  # total_raster <- terra::wrap(total_raster)
+  # 
+  # ################################## Save objects/workspace ##################################
+  # 
+  # save_new_objects("output/output_summarize_maps", existing_objects)
   # 

@@ -16,7 +16,7 @@
   ################################## TOGGLE: RUN ALL SPECIES ##################################
   
   # Set to TRUE to run all species automatically, FALSE to run single species
-  run_all_species <- TRUE
+  run_all_species <- FALSE
   
   ################################## setup ##################################
   
@@ -48,7 +48,7 @@
   species_list <- c("agaricia", "colpophyllia", "dendrogyra", "dichocoenia",
                     "diploria", "eusmilia", "madracis", "meandrina",
                     "montastraea", "mycetophyllia", "orbicella", "porites",
-                    "pseudodiploria", "siderastrea", "solenastrea")
+                    "pseudodiploria", "siderastrea", "solenastrea", "stephanocoenia")
   
   # Load all species models into a list
   all_species_models <- lapply(species_list, function(sp) {
@@ -91,11 +91,12 @@
   # species <- "meandrina" # N = 193. best is sens. w/ constraints (OPTION 8). prob a bit overpredicted
   # species <- "montastraea" # N = 490. best is target prev. ratio (OPTION 6C). looks good! maybe a bit overpredicted
   # species <- "mycetophyllia" # N = 28. best is sens. w/ EVEN MORE constraints (OPTION 9 @ 0.95). pretty good, slightly overpredicted
-  species <- "orbicella" # N = 795. best is target prev. ratio (OPTION 6C), though overstates extent a bit most likely. Kappa was useful for narrowing toward an ideal prev. ratio in the first place (useful for all common species)
+  # species <- "orbicella" # N = 795. best is target prev. ratio (OPTION 6C), though overstates extent a bit most likely. Kappa was useful for narrowing toward an ideal prev. ratio in the first place (useful for all common species)
   # species <- "porites" # N = 1016. best is target prev. ratio (OPTION 6C). looks good! maybe underestimates a bit...not sure (definitely in MCD though)
   # species <- "pseudodiploria" # N = 401. best is target prev. ratio (OPTION 6C), but really misses mesophotic pstrig (tried sens. w/ LESS constraint to handle slight underestimation but this just overstated extent in the wrong places)
   # species <- "siderastrea" # N = 845. best is target prev. ratio (OPTION 6C). looks good! probably slightly overstated
   # species <- "solenastrea" # N = 21. tried sens. w/ EVEN MORE constraints (OPTION 9 @ 0.95), but predictions are much too overestimated. may drop this species
+  species <- "stephanocoenia" # N = 192 best is sens. w/ constraints (OPTION 8). a bit overpredicted
   
   # Determine which species to run
   species_to_run <- if(run_all_species) {
