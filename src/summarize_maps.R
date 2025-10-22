@@ -77,11 +77,6 @@
   
   cat("Total raster created\n\n")
   
-  
-  #stack LS, MS, & HS rasters
-  # LS: madracis, porites, 
-  
-  
   ################################## sum observed cover by PSU ##################################
   
   cat("Calculating observed total cover...\n")
