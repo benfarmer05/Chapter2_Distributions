@@ -4128,3 +4128,7 @@
   # #updated way to handle saving of new objects
   # save_new_objects("output/output_GAMs", existing_objects)
   
+  
+  # #to load back the workspace and take a look at models
+  # load(here('output', 'output_GAMs/output_GAMs_workspace.RData'))
+  

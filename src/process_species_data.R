@@ -10,6 +10,10 @@
   
   ################################## setup ##################################
   
+  # NOTE - there is a known bug here that Helioseris was, I think, dropped out of PRCRMP data
+  #           while reading it in. also forgot to group Helioseris with Agaricia family anyways, but if
+  #           I ever wanted to include it, would need to address both bugs.
+  
   startyear = 2013
   enddate = "2018-11-30"
   
