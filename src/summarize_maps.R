@@ -518,155 +518,155 @@
   cat("  MAE:", round(mae, 2), "%\n")
   
   
-  # ################################## SD scatterplot ##################################
-  # 
-  # # Fit linear model and calculate SD
-  # lm_fit <- lm(predicted ~ observed, data = comparison_df)
-  # residual_sd <- sd(residuals(lm_fit))
-  # 
-  # # Create prediction data for smooth line with SD bands
-  # pred_data <- data.frame(observed = seq(0, 50, length.out = 100))
-  # pred_data$predicted <- predict(lm_fit, newdata = pred_data)
-  # pred_data$lower_1sd <- pred_data$predicted - residual_sd
-  # pred_data$upper_1sd <- pred_data$predicted + residual_sd
-  # pred_data$lower_2sd <- pred_data$predicted - 2*residual_sd
-  # pred_data$upper_2sd <- pred_data$predicted + 2*residual_sd
-  # 
-  # # Create scatterplot
-  # scatter_plot <- ggplot(comparison_df, aes(x = observed, y = predicted)) +
-  #   # # Add 2SD band (lighter)
-  #   # geom_ribbon(data = pred_data, aes(y = predicted, ymin = lower_2sd, ymax = upper_2sd),
-  #   #             fill = "#3498DB", alpha = 0.1) +
-  #   # Add 1SD band (darker)
-  #   geom_ribbon(data = pred_data, aes(y = predicted, ymin = lower_1sd, ymax = upper_1sd),
-  #               fill = "#3498DB", alpha = 0.2) +
-  #   # Regression line
-  #   geom_line(data = pred_data, aes(x = observed, y = predicted), 
-  #             color = "#3498DB", size = 1) +
-  #   # Data points
-  #   geom_point(size = 3, alpha = 0.6, color = "#E74C3C") +
-  #   # 1:1 line
-  #   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black", size = 1) +
-  #   # Stats annotation
-  #   annotate("text", x = 5, y = 47, 
-  #            label = paste0("r = ", round(correlation, 3), "\n",
-  #                           "RMSE = ", round(rmse, 2), "%\n",
-  #                           "MAE = ", round(mae, 2), "%\n",
-  #                           "SD = ", round(residual_sd, 2), "%"),
-  #            hjust = 0, size = 4, fontface = "bold") +
-  #   labs(title = "Predicted vs Observed Total Coral Cover",
-  #        subtitle = paste0("n = ", nrow(comparison_df), " observation sites | Shaded: ±1 SD (dark), ±2 SD (light)"),
-  #        x = "Observed Cover (%)",
-  #        y = "Predicted Cover (%)") +
-  #   coord_equal(xlim = c(0, 50), ylim = c(0, 50)) +
-  #   theme_bw(base_size = 12) +
-  #   theme(
-  #     panel.grid.major = element_line(color = "gray90", size = 0.3),
-  #     panel.grid.minor = element_blank(),
-  #     panel.background = element_rect(fill = "white"),
-  #     panel.border = element_rect(color = "black", fill = NA, size = 1),
-  #     plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
-  #     plot.subtitle = element_text(size = 10, hjust = 0.5, color = "gray30"),
-  #     axis.text = element_text(color = "black", size = 10),
-  #     axis.title = element_text(face = "bold", size = 11),
-  #     axis.ticks = element_line(color = "black")
-  #   )
-  # 
-  # 
-  # ################################## >0 cover obs scatter ##################################
-  # 
-  # 
-  # # Filter to only observations with cover > 0
-  # comparison_df_presence <- comparison_df %>%
-  #   filter(observed > 0)
-  # 
-  # cat("  Observations with cover > 0:", nrow(comparison_df_presence), 
-  #     "out of", nrow(comparison_df), "total\n")
-  # 
-  # # Recalculate statistics for presence-only data
-  # correlation_presence <- cor(comparison_df_presence$observed, comparison_df_presence$predicted)
-  # rmse_presence <- sqrt(mean((comparison_df_presence$observed - comparison_df_presence$predicted)^2))
-  # mae_presence <- mean(abs(comparison_df_presence$observed - comparison_df_presence$predicted))
-  # 
-  # # Fit linear model and calculate SD
-  # lm_fit_presence <- lm(predicted ~ observed, data = comparison_df_presence)
-  # residual_sd_presence <- sd(residuals(lm_fit_presence))
-  # 
-  # # Create prediction data for smooth line with SD bands
-  # pred_data_presence <- data.frame(observed = seq(0, 50, length.out = 100))
-  # pred_data_presence$predicted <- predict(lm_fit_presence, newdata = pred_data_presence)
-  # pred_data_presence$lower_1sd <- pred_data_presence$predicted - residual_sd_presence
-  # pred_data_presence$upper_1sd <- pred_data_presence$predicted + residual_sd_presence
-  # pred_data_presence$lower_2sd <- pred_data_presence$predicted - 2*residual_sd_presence
-  # pred_data_presence$upper_2sd <- pred_data_presence$predicted + 2*residual_sd_presence
-  # 
-  # # Create scatterplot (presence only)
-  # scatter_plot_presence <- ggplot(comparison_df_presence, aes(x = observed, y = predicted)) +
-  #   # Add 2SD band (lighter)
-  #   geom_ribbon(data = pred_data_presence, aes(y = predicted, ymin = lower_2sd, ymax = upper_2sd),
-  #               fill = "#3498DB", alpha = 0.1) +
-  #   # Add 1SD band (darker)
-  #   geom_ribbon(data = pred_data_presence, aes(y = predicted, ymin = lower_1sd, ymax = upper_1sd),
-  #               fill = "#3498DB", alpha = 0.2) +
-  #   # Regression line
-  #   geom_line(data = pred_data_presence, aes(x = observed, y = predicted), 
-  #             color = "#3498DB", size = 1) +
-  #   # Data points
-  #   geom_point(size = 3, alpha = 0.6, color = "#E74C3C") +
-  #   # 1:1 line
-  #   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black", size = 1) +
-  #   # Stats annotation
-  #   annotate("text", x = 5, y = 47, 
-  #            label = paste0("r = ", round(correlation_presence, 3), "\n",
-  #                           "RMSE = ", round(rmse_presence, 2), "%\n",
-  #                           "MAE = ", round(mae_presence, 2), "%\n",
-  #                           "SD = ", round(residual_sd_presence, 2), "%"),
-  #            hjust = 0, size = 4, fontface = "bold") +
-  #   labs(title = "Predicted vs Observed Total Coral Cover (Presence Only)",
-  #        subtitle = paste0("n = ", nrow(comparison_df_presence), " sites with observed cover > 0% | Shaded: ±1 SD (dark), ±2 SD (light)"),
-  #        x = "Observed Cover (%)",
-  #        y = "Predicted Cover (%)") +
-  #   coord_equal(xlim = c(0, 50), ylim = c(0, 50)) +
-  #   theme_bw(base_size = 12) +
-  #   theme(
-  #     panel.grid.major = element_line(color = "gray90", size = 0.3),
-  #     panel.grid.minor = element_blank(),
-  #     panel.background = element_rect(fill = "white"),
-  #     panel.border = element_rect(color = "black", fill = NA, size = 1),
-  #     plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
-  #     plot.subtitle = element_text(size = 10, hjust = 0.5, color = "gray30"),
-  #     axis.text = element_text(color = "black", size = 10),
-  #     axis.title = element_text(face = "bold", size = 11),
-  #     axis.ticks = element_line(color = "black")
-  #   )
-  # 
-  # print(scatter_plot_presence)
-  # 
+  ################################## SD scatterplot ##################################
+
+  # Fit linear model and calculate SD
+  lm_fit <- lm(predicted ~ observed, data = comparison_df)
+  residual_sd <- sd(residuals(lm_fit))
+
+  # Create prediction data for smooth line with SD bands
+  pred_data <- data.frame(observed = seq(0, 50, length.out = 100))
+  pred_data$predicted <- predict(lm_fit, newdata = pred_data)
+  pred_data$lower_1sd <- pred_data$predicted - residual_sd
+  pred_data$upper_1sd <- pred_data$predicted + residual_sd
+  pred_data$lower_2sd <- pred_data$predicted - 2*residual_sd
+  pred_data$upper_2sd <- pred_data$predicted + 2*residual_sd
+  
+  # Create scatterplot
+  scatter_plot <- ggplot(comparison_df, aes(x = observed, y = predicted)) +
+    # # Add 2SD band (lighter)
+    # geom_ribbon(data = pred_data, aes(y = predicted, ymin = lower_2sd, ymax = upper_2sd),
+    #             fill = "#3498DB", alpha = 0.1) +
+    # Add 1SD band (darker)
+    geom_ribbon(data = pred_data, aes(y = predicted, ymin = lower_1sd, ymax = upper_1sd),
+                fill = "#3498DB", alpha = 0.2) +
+    # Regression line
+    geom_line(data = pred_data, aes(x = observed, y = predicted),
+              color = "#3498DB", size = 1) +
+    # Data points
+    geom_point(size = 3, alpha = 0.6, color = "#E74C3C") +
+    # 1:1 line
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black", size = 1) +
+    # Stats annotation
+    annotate("text", x = 5, y = 47,
+             label = paste0("r = ", round(correlation, 3), "\n",
+                            "RMSE = ", round(rmse, 2), "%\n",
+                            "MAE = ", round(mae, 2), "%\n",
+                            "SD = ", round(residual_sd, 2), "%"),
+             hjust = 0, size = 4, fontface = "bold") +
+    labs(title = "Predicted vs Observed Total Coral Cover",
+         subtitle = paste0("n = ", nrow(comparison_df), " observation sites | Shaded: ±1 SD (dark), ±2 SD (light)"),
+         x = "Observed Cover (%)",
+         y = "Predicted Cover (%)") +
+    coord_equal(xlim = c(0, 50), ylim = c(0, 50)) +
+    theme_bw(base_size = 12) +
+    theme(
+      panel.grid.major = element_line(color = "gray90", size = 0.3),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white"),
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+      plot.subtitle = element_text(size = 10, hjust = 0.5, color = "gray30"),
+      axis.text = element_text(color = "black", size = 10),
+      axis.title = element_text(face = "bold", size = 11),
+      axis.ticks = element_line(color = "black")
+    )
+
+
+  ################################## >0 cover obs scatter ##################################
+
+
+  # Filter to only observations with cover > 0
+  comparison_df_presence <- comparison_df %>%
+    filter(observed > 0)
+
+  cat("  Observations with cover > 0:", nrow(comparison_df_presence),
+      "out of", nrow(comparison_df), "total\n")
+
+  # Recalculate statistics for presence-only data
+  correlation_presence <- cor(comparison_df_presence$observed, comparison_df_presence$predicted)
+  rmse_presence <- sqrt(mean((comparison_df_presence$observed - comparison_df_presence$predicted)^2))
+  mae_presence <- mean(abs(comparison_df_presence$observed - comparison_df_presence$predicted))
+
+  # Fit linear model and calculate SD
+  lm_fit_presence <- lm(predicted ~ observed, data = comparison_df_presence)
+  residual_sd_presence <- sd(residuals(lm_fit_presence))
+
+  # Create prediction data for smooth line with SD bands
+  pred_data_presence <- data.frame(observed = seq(0, 50, length.out = 100))
+  pred_data_presence$predicted <- predict(lm_fit_presence, newdata = pred_data_presence)
+  pred_data_presence$lower_1sd <- pred_data_presence$predicted - residual_sd_presence
+  pred_data_presence$upper_1sd <- pred_data_presence$predicted + residual_sd_presence
+  pred_data_presence$lower_2sd <- pred_data_presence$predicted - 2*residual_sd_presence
+  pred_data_presence$upper_2sd <- pred_data_presence$predicted + 2*residual_sd_presence
+
+  # Create scatterplot (presence only)
+  scatter_plot_presence <- ggplot(comparison_df_presence, aes(x = observed, y = predicted)) +
+    # Add 2SD band (lighter)
+    geom_ribbon(data = pred_data_presence, aes(y = predicted, ymin = lower_2sd, ymax = upper_2sd),
+                fill = "#3498DB", alpha = 0.1) +
+    # Add 1SD band (darker)
+    geom_ribbon(data = pred_data_presence, aes(y = predicted, ymin = lower_1sd, ymax = upper_1sd),
+                fill = "#3498DB", alpha = 0.2) +
+    # Regression line
+    geom_line(data = pred_data_presence, aes(x = observed, y = predicted),
+              color = "#3498DB", size = 1) +
+    # Data points
+    geom_point(size = 3, alpha = 0.6, color = "#E74C3C") +
+    # 1:1 line
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black", size = 1) +
+    # Stats annotation
+    annotate("text", x = 5, y = 47,
+             label = paste0("r = ", round(correlation_presence, 3), "\n",
+                            "RMSE = ", round(rmse_presence, 2), "%\n",
+                            "MAE = ", round(mae_presence, 2), "%\n",
+                            "SD = ", round(residual_sd_presence, 2), "%"),
+             hjust = 0, size = 4, fontface = "bold") +
+    labs(title = "Predicted vs Observed Total Coral Cover (Presence Only)",
+         subtitle = paste0("n = ", nrow(comparison_df_presence), " sites with observed cover > 0% | Shaded: ±1 SD (dark), ±2 SD (light)"),
+         x = "Observed Cover (%)",
+         y = "Predicted Cover (%)") +
+    coord_equal(xlim = c(0, 50), ylim = c(0, 50)) +
+    theme_bw(base_size = 12) +
+    theme(
+      panel.grid.major = element_line(color = "gray90", size = 0.3),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white"),
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+      plot.subtitle = element_text(size = 10, hjust = 0.5, color = "gray30"),
+      axis.text = element_text(color = "black", size = 10),
+      axis.title = element_text(face = "bold", size = 11),
+      axis.ticks = element_line(color = "black")
+    )
+
+  print(scatter_plot_presence)
+
   # # Save presence-only scatterplot
-  # ggsave(here("output/output_maps/predicted_vs_observed_presence_only.png"), 
-  #        plot = scatter_plot_presence, 
-  #        width = 8, 
-  #        height = 8, 
-  #        dpi = 300, 
+  # ggsave(here("output/output_maps/predicted_vs_observed_presence_only.png"),
+  #        plot = scatter_plot_presence,
+  #        width = 8,
+  #        height = 8,
+  #        dpi = 300,
   #        bg = "white")
   # 
-  # ggsave(here("output/output_maps/predicted_vs_observed_presence_only.pdf"), 
-  #        plot = scatter_plot_presence, 
-  #        width = 8, 
-  #        height = 8, 
+  # ggsave(here("output/output_maps/predicted_vs_observed_presence_only.pdf"),
+  #        plot = scatter_plot_presence,
+  #        width = 8,
+  #        height = 8,
   #        device = "pdf")
-  # 
-  # cat("\n✓ Presence-only scatterplot saved\n")
-  # cat("\nPresence-Only Model Performance:\n")
-  # cat("  Correlation (r):", round(correlation_presence, 3), "\n")
-  # cat("  RMSE:", round(rmse_presence, 2), "%\n")
-  # cat("  MAE:", round(mae_presence, 2), "%\n")
-  # cat("  SD:", round(residual_sd_presence, 2), "%\n")
-  # 
-  # 
 
-  
-  
+  cat("\n✓ Presence-only scatterplot saved\n")
+  cat("\nPresence-Only Model Performance:\n")
+  cat("  Correlation (r):", round(correlation_presence, 3), "\n")
+  cat("  RMSE:", round(rmse_presence, 2), "%\n")
+  cat("  MAE:", round(mae_presence, 2), "%\n")
+  cat("  SD:", round(residual_sd_presence, 2), "%\n")
+
+
+
+
+
   # ################################## wrap susc_rasters for saving ##################################
   # 
   # # Wrap spatial rasters for safe serialization
