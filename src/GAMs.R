@@ -689,7 +689,7 @@
                                      data = agaricia_model_data[agaricia_model_data$cover_prop > 0, ],
                                      # select = TRUE,
                                      family = betar())
-
+  
   # # beta with cloglog using observed/estimate concurvity, WITH spatial smooth (test)
   # agaricia_gam_abundance_beta <- gam(cover_prop ~ s(depth_bathy) +
   #                                      s(slope) +
