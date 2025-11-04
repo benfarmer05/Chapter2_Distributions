@@ -13,6 +13,27 @@ cat("========================================\n")
 cat("Abundance Model Cross-Validation Summary\n")
 cat("========================================\n\n")
 
+# ========== CALIBRATION SETTINGS ==========
+# Choose calibration method:
+# "linear" = standard quantile mapping (discrete, matches observed distribution exactly)
+# "smooth" = smoothed spline quantile mapping (continuous, reduces discrete binning)
+CALIBRATION_METHOD <- "linear"  # Options: "linear" or "smooth"
+N_QUANTILES <- 100              # Number of quantiles for calibration (try 20-100)
+SMOOTH_SPAR <- 0.5              # Smoothing parameter for spline (0.3-0.7; lower = less smooth)
+
+# ========== HISTOGRAM SETTINGS ==========
+HIST_BINWIDTH <- 0.25           # Width of histogram bins in % cover (e.g., 0.25 = quarter percent bins)
+
+cat("Calibration settings:\n")
+cat("  Method:", CALIBRATION_METHOD, "\n")
+cat("  Quantiles:", N_QUANTILES, "\n")
+if(CALIBRATION_METHOD == "smooth") {
+  cat("  Smoothing parameter:", SMOOTH_SPAR, "\n")
+}
+cat("\nHistogram settings:\n")
+cat("  Bin width:", HIST_BINWIDTH, "% cover\n")
+cat("\n")
+
 # Load combined data
 load(here("output", "all_combined_data.rda"))
 
@@ -49,8 +70,9 @@ calculate_regression_metrics <- function(observed, predicted) {
   ss_tot <- sum((observed - mean(observed))^2)
   R2 <- 1 - (ss_res / ss_tot)
   
-  rmse <- sqrt(mean((observed - predicted)^2))
-  mae <- mean(abs(observed - predicted))
+  # Convert RMSE and MAE to percentage cover
+  rmse <- sqrt(mean((observed - predicted)^2)) * 100
+  mae <- mean(abs(observed - predicted)) * 100
   
   return(c(r = r, r2 = r_squared, R2 = R2, RMSE = rmse, MAE = mae))
 }
@@ -59,13 +81,36 @@ calculate_regression_metrics <- function(observed, predicted) {
 
 cat("Running 5-fold cross-validation on abundance models...\n\n")
 
-# Calibration function
-calibrate_quantiles <- function(predictions, observations, n_quantiles = 100) {
+# Calibration functions
+calibrate_quantiles_linear <- function(predictions, observations, n_quantiles = 100) {
   probs <- seq(0, 1, length.out = n_quantiles)
   pred_q <- quantile(predictions, probs)
   obs_q <- quantile(observations, probs)
   correction_fn <- approxfun(pred_q, obs_q, method = "linear", rule = 2)
   list(correction_function = correction_fn)
+}
+
+calibrate_quantiles_smooth <- function(predictions, observations, n_quantiles = 20, spar = 0.5) {
+  probs <- seq(0, 1, length.out = n_quantiles)
+  pred_q <- quantile(predictions, probs)
+  obs_q <- quantile(observations, probs)
+  smooth_fit <- smooth.spline(pred_q, obs_q, spar = spar)
+  correction_fn <- function(x) predict(smooth_fit, x)$y
+  list(correction_function = correction_fn,
+       pred_quantiles = pred_q,
+       obs_quantiles = obs_q)
+}
+
+# Wrapper function to select calibration method
+calibrate_quantiles <- function(predictions, observations, 
+                                method = CALIBRATION_METHOD, 
+                                n_quantiles = N_QUANTILES,
+                                spar = SMOOTH_SPAR) {
+  if(method == "smooth") {
+    calibrate_quantiles_smooth(predictions, observations, n_quantiles, spar)
+  } else {
+    calibrate_quantiles_linear(predictions, observations, n_quantiles)
+  }
 }
 
 # Initialize results storage
@@ -115,7 +160,7 @@ for(species in names(all_results)) {
   overall_results_raw_list[[species]] <- overall_metrics_raw
   
   # Calibrated metrics
-  cal_full <- calibrate_quantiles(overall_pred_raw, complete_data$cover_prop, n_quantiles = 100)
+  cal_full <- calibrate_quantiles(overall_pred_raw, complete_data$cover_prop)
   overall_pred_calibrated <- cal_full$correction_function(overall_pred_raw)
   overall_metrics_calib <- calculate_regression_metrics(complete_data$cover_prop, overall_pred_calibrated)
   overall_results_calib_list[[species]] <- overall_metrics_calib
@@ -161,7 +206,7 @@ for(species in names(all_results)) {
     train_obs_fold <- complete_data$cover_prop[train_idx]
     
     # Calibration
-    cal_cv <- calibrate_quantiles(train_pred_fold, train_obs_fold, n_quantiles = 100)
+    cal_cv <- calibrate_quantiles(train_pred_fold, train_obs_fold)
     test_pred_calibrated <- cal_cv$correction_function(test_pred_raw)
     test_obs <- complete_data$cover_prop[test_idx]
     
@@ -235,7 +280,7 @@ sus_groups <- c("LS", "LS", "LS", "LS", "LS", "MS", "MS",
 species_mapping <- data.frame(code = species_codes, display = display_names, 
                               sus = sus_groups, stringsAsFactors = FALSE)
 
-# Format tables
+# Format tables with rounding to 2 decimal places
 format_table <- function(cv_df, overall_df) {
   cv_df <- cv_df %>%
     mutate(Species_lower = tolower(Species)) %>%
@@ -253,7 +298,8 @@ format_table <- function(cv_df, overall_df) {
     left_join(overall_df, by = "Taxon", suffix = c("_cv", "_all")) %>%
     select(Taxon, r_All = r_all, r_Test = r_cv, r2_All = r2_all, r2_Test = r2_cv,
            R2_All = R2_all, R2_Test = R2_cv, RMSE_All = RMSE_all, RMSE_Test = RMSE_cv,
-           MAE_All = MAE_all, MAE_Test = MAE_cv)
+           MAE_All = MAE_all, MAE_Test = MAE_cv) %>%
+    mutate(across(where(is.numeric), ~round(.x, 2)))
   
   return(combined)
 }
@@ -266,7 +312,7 @@ combined_calib <- format_table(cv_summary_calib_df, overall_summary_calib_df)
 print_table <- function(combined, title) {
   display_table <- combined
   display_table[, 2:11] <- lapply(display_table[, 2:11], function(x) {
-    if(all(abs(x) < 1, na.rm = TRUE)) sprintf("%.4f", x) else sprintf("%.2f", x)
+    sprintf("%.2f", x)
   })
   
   cat("\n========================================\n")
@@ -294,6 +340,8 @@ print_table(combined_calib, "CALIBRATED PREDICTIONS - MODEL PERFORMANCE")
 cat("\n✓ Analysis complete\n")
 cat("\nNote: 'All' = full dataset; 'Test' = 5-fold CV average\n")
 cat("      r = Pearson correlation; r² = r-squared; R² = coefficient of determination\n")
+cat("      RMSE and MAE reported in % cover\n")
+cat("      Calibration method:", CALIBRATION_METHOD, "\n")
 
 # Save tables
 write.csv(combined_raw, here("output", "output_figures_tables", "cv_abundance_raw_table.csv"), row.names = FALSE)
@@ -307,7 +355,7 @@ cat("CREATING SCATTER PLOTS\n")
 cat("========================================\n\n")
 
 available_species <- names(scatter_data_list)
-set.seed(123)
+# set.seed(123)
 selected_species <- sample(available_species, min(3, length(available_species)))
 
 cat("Creating scatter plots for:", paste(selected_species, collapse=", "), "\n\n")
@@ -328,8 +376,16 @@ for(sp in selected_species) {
   plot_max_test <- max(c(data_list$test_raw$observed, data_list$test_raw$predicted,
                          data_list$test_calib$predicted))
   
+  # Calculate regression lines for each plot
+  lm_overall_raw <- lm(observed ~ predicted, data = data_list$overall_raw)
+  lm_overall_calib <- lm(observed ~ predicted, data = data_list$overall_calib)
+  lm_test_raw <- lm(observed ~ predicted, data = data_list$test_raw)
+  lm_test_calib <- lm(observed ~ predicted, data = data_list$test_calib)
+  
   p1 <- ggplot(data_list$overall_raw, aes(x = predicted, y = observed)) +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+    geom_abline(intercept = coef(lm_overall_raw)[1], slope = coef(lm_overall_raw)[2], 
+                color = "#E69F00", linewidth = 0.7) +
     geom_point(alpha = 0.4, size = 1, color = "#E69F00") +
     labs(title = "Overall - Raw", x = "Predicted", y = "Observed") +
     annotate("text", x = plot_max_overall * 0.05, y = plot_max_overall * 0.95,
@@ -342,6 +398,8 @@ for(sp in selected_species) {
   
   p2 <- ggplot(data_list$overall_calib, aes(x = predicted, y = observed)) +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+    geom_abline(intercept = coef(lm_overall_calib)[1], slope = coef(lm_overall_calib)[2], 
+                color = "#009E73", linewidth = 0.7) +
     geom_point(alpha = 0.4, size = 1, color = "#009E73") +
     labs(title = "Overall - Calibrated", x = "Predicted", y = "Observed") +
     annotate("text", x = plot_max_overall * 0.05, y = plot_max_overall * 0.95,
@@ -354,6 +412,8 @@ for(sp in selected_species) {
   
   p3 <- ggplot(data_list$test_raw, aes(x = predicted, y = observed)) +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+    geom_abline(intercept = coef(lm_test_raw)[1], slope = coef(lm_test_raw)[2], 
+                color = "#E69F00", linewidth = 0.7) +
     geom_point(alpha = 0.5, size = 1.2, color = "#E69F00") +
     labs(title = "Test Fold - Raw", x = "Predicted", y = "Observed") +
     annotate("text", x = plot_max_test * 0.05, y = plot_max_test * 0.95,
@@ -366,6 +426,8 @@ for(sp in selected_species) {
   
   p4 <- ggplot(data_list$test_calib, aes(x = predicted, y = observed)) +
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50", linewidth = 0.5) +
+    geom_abline(intercept = coef(lm_test_calib)[1], slope = coef(lm_test_calib)[2], 
+                color = "#009E73", linewidth = 0.7) +
     geom_point(alpha = 0.5, size = 1.2, color = "#009E73") +
     labs(title = "Test Fold - Calibrated", x = "Predicted", y = "Observed") +
     annotate("text", x = plot_max_test * 0.05, y = plot_max_test * 0.95,
@@ -381,6 +443,96 @@ for(sp in selected_species) {
                     theme = theme(plot.title = element_text(face = "italic", hjust = 0.5, size = 11)))
   
   print(combined_plot)
+  
+  # Create histogram comparison plots
+  cat("  Creating histograms for", display_name, "...\n")
+  
+  # Prepare data for histograms - Overall
+  hist_data_overall <- data.frame(
+    value = c(data_list$overall_raw$observed * 100,
+              data_list$overall_raw$predicted * 100,
+              data_list$overall_calib$predicted * 100),
+    type = rep(c("Observed", "Raw Predicted", "Calibrated Predicted"),
+               each = nrow(data_list$overall_raw))
+  )
+  
+  # Prepare data for histograms - Test
+  hist_data_test <- data.frame(
+    value = c(data_list$test_raw$observed * 100,
+              data_list$test_raw$predicted * 100,
+              data_list$test_calib$predicted * 100),
+    type = rep(c("Observed", "Raw Predicted", "Calibrated Predicted"),
+               each = nrow(data_list$test_raw))
+  )
+  
+  # Set factor levels for consistent ordering
+  hist_data_overall$type <- factor(hist_data_overall$type, 
+                                   levels = c("Observed", "Raw Predicted", "Calibrated Predicted"))
+  hist_data_test$type <- factor(hist_data_test$type,
+                                levels = c("Observed", "Raw Predicted", "Calibrated Predicted"))
+  
+  # Calculate shared y-axis limit for Overall panels
+  all_values_overall <- hist_data_overall$value
+  breaks_overall <- seq(floor(min(all_values_overall)), 
+                        ceiling(max(all_values_overall)) + HIST_BINWIDTH, 
+                        by = HIST_BINWIDTH)
+  
+  max_count_overall <- max(sapply(unique(hist_data_overall$type), function(t) {
+    data_subset <- hist_data_overall$value[hist_data_overall$type == t]
+    max(hist(data_subset, breaks = breaks_overall, plot = FALSE)$counts)
+  }))
+  
+  y_limit_overall <- max_count_overall * 1.05  # Add 5% padding
+  
+  # Calculate shared y-axis limit for Test panels
+  all_values_test <- hist_data_test$value
+  breaks_test <- seq(floor(min(all_values_test)),
+                     ceiling(max(all_values_test)) + HIST_BINWIDTH,
+                     by = HIST_BINWIDTH)
+  
+  max_count_test <- max(sapply(unique(hist_data_test$type), function(t) {
+    data_subset <- hist_data_test$value[hist_data_test$type == t]
+    max(hist(data_subset, breaks = breaks_test, plot = FALSE)$counts)
+  }))
+  
+  y_limit_test <- max_count_test * 1.05  # Add 5% padding
+  
+  # Overall histogram - faceted
+  h1 <- ggplot(hist_data_overall, aes(x = value, fill = type)) +
+    geom_histogram(binwidth = HIST_BINWIDTH, color = "white", linewidth = 0.2) +
+    scale_fill_manual(values = c("Observed" = "gray30", 
+                                 "Raw Predicted" = "#E69F00",
+                                 "Calibrated Predicted" = "#009E73")) +
+    facet_wrap(~ type, ncol = 1) +
+    coord_cartesian(ylim = c(0, y_limit_overall)) +
+    labs(title = "Overall - Distribution Comparison",
+         x = "Cover (%)", y = "Count") +
+    theme_classic(base_size = 9) +
+    theme(legend.position = "none",
+          strip.background = element_rect(fill = "gray95", color = "gray60"),
+          strip.text = element_text(face = "bold", size = 8))
+  
+  # Test fold histogram - faceted
+  h2 <- ggplot(hist_data_test, aes(x = value, fill = type)) +
+    geom_histogram(binwidth = HIST_BINWIDTH, color = "white", linewidth = 0.2) +
+    scale_fill_manual(values = c("Observed" = "gray30",
+                                 "Raw Predicted" = "#E69F00",
+                                 "Calibrated Predicted" = "#009E73")) +
+    facet_wrap(~ type, ncol = 1) +
+    coord_cartesian(ylim = c(0, y_limit_test)) +
+    labs(title = "Test Fold - Distribution Comparison",
+         x = "Cover (%)", y = "Count") +
+    theme_classic(base_size = 9) +
+    theme(legend.position = "none",
+          strip.background = element_rect(fill = "gray95", color = "gray60"),
+          strip.text = element_text(face = "bold", size = 8))
+  
+  hist_plot <- h1 | h2
+  hist_plot <- hist_plot + 
+    plot_annotation(title = paste(display_name, "- Distribution Histograms"),
+                    theme = theme(plot.title = element_text(face = "italic", hjust = 0.5, size = 11)))
+  
+  print(hist_plot)
 }
 
-cat("\n✓ Scatter plots created\n")
+cat("\n✓ Scatter plots and histograms created\n")
