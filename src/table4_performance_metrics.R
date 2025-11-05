@@ -71,6 +71,7 @@
   # Initialize results storage
   cv_results_list <- list()
   overall_results_list <- list()
+  threshold_list <- list()  # NEW: Store thresholds
   
   for(species in names(all_results)) {
     cat("Processing", species, "...\n")
@@ -78,6 +79,7 @@
     # Get threshold from results
     species_result <- all_results[[species]]
     optimal_threshold <- species_result$threshold
+    threshold_list[[species]] <- optimal_threshold  # NEW: Store threshold
     
     # Load the full model file to get presence_model and model_data
     model_file <- here("output", "output_GAMs", paste0(species, "_models.rds"))
@@ -154,6 +156,13 @@
   overall_summary_df$Species <- rownames(overall_summary_df)
   overall_summary_df <- overall_summary_df[, c("Species", "AUC", "Sensitivity", "Specificity", "Accuracy")]
   
+  # NEW: Create threshold summary table
+  threshold_summary <- data.frame(
+    Species = names(threshold_list),
+    Threshold = unlist(threshold_list),
+    stringsAsFactors = FALSE
+  )
+  
   # Define display order and names (GROUPED BY SUSCEPTIBILITY)
   species_codes <- c("agaricia", "madracis", "porites", "siderastrea", "stephanocoenia",  # LS
                      "montastraea", "orbicella",  # MS
@@ -189,6 +198,13 @@
     mutate(Species_lower = tolower(Species)) %>%
     left_join(species_mapping, by = c("Species_lower" = "code")) %>%
     select(Taxon = display, Sus = sus, AUC, Sensitivity, Specificity, Accuracy) %>%
+    arrange(match(Taxon, display_names))
+  
+  # NEW: Reorder and format threshold results
+  threshold_summary_df <- threshold_summary %>%
+    mutate(Species_lower = tolower(Species)) %>%
+    left_join(species_mapping, by = c("Species_lower" = "code")) %>%
+    select(Taxon = display, Threshold) %>%
     arrange(match(Taxon, display_names))
   
   # Calculate group means for CV
@@ -261,6 +277,21 @@
     Accuracy = mean(overall_summary_df$Accuracy)
   )
   
+  # NEW: Add placeholder rows for threshold means
+  threshold_placeholder <- data.frame(Taxon = "Mean", Threshold = NA)
+  threshold_grand_placeholder <- data.frame(Taxon = "Grand Mean", Threshold = NA)
+  
+  # NEW: Combine thresholds with means
+  threshold_with_means <- rbind(
+    threshold_summary_df[1:5, ],
+    threshold_placeholder,
+    threshold_summary_df[6:7, ],
+    threshold_placeholder,
+    threshold_summary_df[8:15, ],
+    threshold_placeholder,
+    threshold_grand_placeholder
+  )
+  
   # Combine with group means (LS rows 1-5, MS rows 6-7, HS rows 8-15)
   cv_with_means <- rbind(
     cv_summary_df[1:5, ],
@@ -291,11 +322,13 @@
   
   ################################## Print Results ##################################
   
-  # Create combined table with All and Test columns
+  # NEW: Create combined table with Threshold column
   combined_results <- cv_summary_df %>%
+    left_join(threshold_summary_df, by = "Taxon") %>%  # Add threshold
     left_join(overall_summary_df, by = "Taxon", suffix = c("_cv", "_all")) %>%
     select(
       Taxon,
+      Threshold,  # NEW: Threshold column
       AUC_All = AUC_all,
       AUC_Test = AUC_cv,
       Sensitivity_All = Sensitivity_all,
@@ -311,8 +344,8 @@
   cat("DATA VALIDATION CHECKS\n")
   cat("========================================\n\n")
   
-  # Check 1: Verify no NAs in final table
-  na_check <- sapply(combined_results[, -1], function(x) sum(is.na(x)))
+  # Check 1: Verify no NAs in final table (excluding Threshold which may have NAs for means)
+  na_check <- sapply(combined_results[, -c(1, 2)], function(x) sum(is.na(x)))
   if(any(na_check > 0)) {
     cat("⚠ WARNING: NA values detected in results!\n")
     print(na_check[na_check > 0])
@@ -391,28 +424,41 @@
     cat("  ✗ WARNING: Some AUC values are out of range!\n")
   }
   
+  # NEW: Check 6: Verify thresholds are in valid range [0, 1]
+  cat("\n✓ Check 6: Verifying threshold values are in valid range...\n")
+  threshold_values <- combined_results$Threshold[!is.na(combined_results$Threshold)]
+  if(all(threshold_values >= 0 & threshold_values <= 1)) {
+    cat("  ✓ All threshold values are in valid range [0, 1]\n")
+  } else {
+    cat("  ✗ WARNING: Some threshold values are out of range!\n")
+  }
+  
   cat("\n========================================\n")
   cat("VALIDATION COMPLETE\n")
   cat("========================================\n")
   
-  # Format for display (2 decimal places)
+  # Format for display (2 decimal places for metrics, 3 for threshold)
   display_table <- combined_results
-  display_table[, 2:9] <- lapply(display_table[, 2:9], function(x) sprintf("%.2f", x))
+  display_table$Threshold <- ifelse(is.na(display_table$Threshold), 
+                                    "", 
+                                    sprintf("%.3f", display_table$Threshold))
+  display_table[, 3:10] <- lapply(display_table[, 3:10], function(x) sprintf("%.2f", x))
   
   # Print as one block for proper alignment
   {
     cat("\n========================================\n")
     cat("MODEL PERFORMANCE METRICS\n")
     cat("========================================\n\n")
-    cat(sprintf("%-20s %17s %17s %17s %17s\n",
-                "Taxon", "AUC", "Sensitivity", "Specificity", "Accuracy"))
-    cat(sprintf("%-20s %8s %8s %8s %8s %8s %8s %8s %8s\n",
-                "", "All", "Test", "All", "Test", "All", "Test", "All", "Test"))
-    cat(paste(rep("-", 100), collapse = ""), "\n")
+    cat(sprintf("%-20s %9s %17s %17s %17s %17s\n",
+                "Taxon", "Threshold", "AUC", "Sensitivity", "Specificity", "Accuracy"))
+    cat(sprintf("%-20s %9s %8s %8s %8s %8s %8s %8s %8s %8s\n",
+                "", "", "All", "Test", "All", "Test", "All", "Test", "All", "Test"))
+    cat(paste(rep("-", 110), collapse = ""), "\n")
     
     for(i in 1:nrow(display_table)) {
-      cat(sprintf("%-20s %8s %8s %8s %8s %8s %8s %8s %8s\n",
+      cat(sprintf("%-20s %9s %8s %8s %8s %8s %8s %8s %8s %8s\n",
                   display_table$Taxon[i],
+                  display_table$Threshold[i],
                   display_table$AUC_All[i],
                   display_table$AUC_Test[i],
                   display_table$Sensitivity_All[i],
@@ -425,11 +471,13 @@
     
     cat("\n✓ Analysis complete\n")
     cat("\nNote: 'All' = full dataset performance; 'Test' = 5-fold CV average\n")
+    cat("      Threshold = optimal classification probability threshold\n")
   }
   
-  # Save table to CSV (with 2 decimal places to match printout)
+  # Save table to CSV (with appropriate decimal places)
   csv_output <- combined_results
-  csv_output[, 2:9] <- lapply(csv_output[, 2:9], function(x) round(x, 2))
+  csv_output$Threshold <- round(csv_output$Threshold, 3)
+  csv_output[, 3:10] <- lapply(csv_output[, 3:10], function(x) round(x, 2))
   output_csv <- here("output", "output_figures_tables", "cv_performance_table.csv")
   write.csv(csv_output, output_csv, row.names = FALSE)
   cat("\n✓ Table saved to:", output_csv, "\n")
