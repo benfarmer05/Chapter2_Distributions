@@ -9,7 +9,9 @@
   #         in August 2024) homebrew installation of proj and gdal (https://github.com/OSGeo/gdal/pull/7389).
   #         could cause issues with macports installation of other things for QGIS but we'll see
   
-  # #must run this after updating spatial packages in homebrew (or conda for Windows), for spatial packages to link properly
+  # #must run this after updating spatial packages in homebrew (for MacOS), for spatial packages to link properly. if on windows,
+  #     can just re-install 'sf' from binary and it should automatically update spatial packages (GEOS, GDAL, PROJ). not sure if
+  #     they're always the most recent spatial packages, but seems to work okay
   # install.packages("terra", type = "source")
   # install.packages("sf", type = "source") 
   
