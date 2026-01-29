@@ -3863,266 +3863,266 @@
   # 
   # 
   
-  # ################################## hard hurdle test & map ##################################
-  # 
-  # # STOPPING POINT - 17 sep 2025
-  # #   - need to add lon and lat as spatrasters to env_complex to be able to make any
-  # #       predictions using them. still not convinced they'll work anyways...
-  # 
-  # # Species toggle - change this to switch between species
-  # # species <- "orbicella" #0.5
-  # # species <- "pseudodiploria" #0.45
-  # species <- "orbicella" #0.38
-  # # species <- "montastraea" #0.25
-  # # species <- "colpophyllia" #0.1
-  # # species <- "porites" #0.54
-  # 
-  # # Dynamically construct model variable names based on species
-  # presence_model_name <- paste0(species, "_gam_presence_binom")
-  # abundance_model_name <- paste0(species, "_gam_abundance_beta")
-  # # abundance_model_name <- paste0(species, "_gam_abundance_gamma")
-  # 
-  # # Get the actual model objects (assuming they exist in your environment)
-  # presence_model <- get(presence_model_name)
-  # abundance_model <- get(abundance_model_name)
-  # 
-  # # Manually specify required variables (using raster layer names)
-  # presence_vars <- all.vars(formula(presence_model))[-1]
-  # abundance_vars <- all.vars(formula(abundance_model))[-1]
-  # required_vars <- unique(c(presence_vars, abundance_vars))
-  # 
-  # # Subset raster stack to only required variables
-  # required_vars <- gsub("^depth_bathy$", "depth", required_vars)
-  # env_subset <- env_complex[[required_vars]]
-  # 
-  # # Convert subset raster to dataframe
-  # env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
-  # 
-  # # Rename depth column to match model expectation
-  # names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
-  # 
-  # # Take only 1/100th of the data for testing
-  # sample_size <- ceiling(nrow(env_df) / 100)
-  # set.seed(123)  # For reproducible sampling
-  # sample_indices <- sample(nrow(env_df), sample_size)
-  # env_df_sample <- env_df[sample_indices, ]
-  # 
-  # cat("Species:", species, "\n")
-  # cat("Full dataset size:", nrow(env_df), "cells\n")
-  # cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
-  # 
-  # # Test predictions on sample
-  # cat("Testing presence prediction...\n")
-  # start_time <- Sys.time()
-  # presence_prob_sample <- predict(presence_model, newdata = env_df_sample, type = "response")
-  # presence_time <- difftime(Sys.time(), start_time, units = "secs")
-  # cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
-  # 
-  # # Convert presence probability to binary (hard hurdle)
-  # presence_threshold <- 0.5 # 0.1 # 0.25 # 0.38 # 0.45 # 0.5
-  # presence_binary_sample <- ifelse(presence_prob_sample > presence_threshold, 1, 0)
-  # 
-  # cat("Testing abundance prediction...\n")
-  # start_time <- Sys.time()
-  # abundance_pred_sample <- predict(abundance_model, newdata = env_df_sample, type = "response")
-  # abundance_time <- difftime(Sys.time(), start_time, units = "secs")
-  # cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
-  # 
-  # # Create hurdle predictions (only abundance where presence predicted)
-  # hurdle_pred_sample <- ifelse(presence_binary_sample == 1, abundance_pred_sample, 0)
-  # 
-  # # Add predictions to sample dataframe
-  # env_df_sample$presence_prob <- presence_prob_sample
-  # env_df_sample$presence_binary <- presence_binary_sample
-  # env_df_sample$abundance_pred <- abundance_pred_sample
-  # env_df_sample$hurdle_pred <- hurdle_pred_sample
-  # 
-  # # Estimate full dataset time
-  # total_sample_time <- as.numeric(presence_time + abundance_time)
-  # estimated_full_time <- total_sample_time * 100
-  # 
-  # cat("\nSample results summary:\n")
-  # cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
-  # cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
-  # cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
-  # 
-  # cat("\nTime estimates:\n")
-  # cat("Sample time:", round(total_sample_time, 2), "seconds\n")
-  # cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
-  # if(estimated_full_time > 60) {
-  #   cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
-  # }
-  # cat("\n")
-  # 
-  # # Quick plot of sample results
-  # ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
-  #   geom_point(size = 0.5) +
-  #   scale_color_viridis_c(name = "Presence\nProbability") +
+  ################################## hard hurdle test & map ##################################
+
+  # STOPPING POINT - 17 sep 2025
+  #   - need to add lon and lat as spatrasters to env_complex to be able to make any
+  #       predictions using them. still not convinced they'll work anyways...
+
+  # Species toggle - change this to switch between species
+  # species <- "orbicella" #0.5
+  # species <- "pseudodiploria" #0.45
+  species <- "orbicella" #0.38
+  # species <- "montastraea" #0.25
+  # species <- "colpophyllia" #0.1
+  # species <- "porites" #0.54
+
+  # Dynamically construct model variable names based on species
+  presence_model_name <- paste0(species, "_gam_presence_binom")
+  abundance_model_name <- paste0(species, "_gam_abundance_beta")
+  # abundance_model_name <- paste0(species, "_gam_abundance_gamma")
+
+  # Get the actual model objects (assuming they exist in your environment)
+  presence_model <- get(presence_model_name)
+  abundance_model <- get(abundance_model_name)
+
+  # Manually specify required variables (using raster layer names)
+  presence_vars <- all.vars(formula(presence_model))[-1]
+  abundance_vars <- all.vars(formula(abundance_model))[-1]
+  required_vars <- unique(c(presence_vars, abundance_vars))
+
+  # Subset raster stack to only required variables
+  required_vars <- gsub("^depth_bathy$", "depth", required_vars)
+  env_subset <- env_complex[[required_vars]]
+
+  # Convert subset raster to dataframe
+  env_df <- as.data.frame(env_subset, xy = TRUE, na.rm = TRUE)
+
+  # Rename depth column to match model expectation
+  names(env_df)[names(env_df) == "depth"] <- "depth_bathy"
+
+  # Take only 1/100th of the data for testing
+  sample_size <- ceiling(nrow(env_df) / 100)
+  set.seed(123)  # For reproducible sampling
+  sample_indices <- sample(nrow(env_df), sample_size)
+  env_df_sample <- env_df[sample_indices, ]
+
+  cat("Species:", species, "\n")
+  cat("Full dataset size:", nrow(env_df), "cells\n")
+  cat("Sample size (1/100th):", nrow(env_df_sample), "cells\n")
+
+  # Test predictions on sample
+  cat("Testing presence prediction...\n")
+  start_time <- Sys.time()
+  presence_prob_sample <- predict(presence_model, newdata = env_df_sample, type = "response")
+  presence_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample presence prediction:", round(presence_time, 2), "seconds\n")
+
+  # Convert presence probability to binary (hard hurdle)
+  presence_threshold <- 0.5 # 0.1 # 0.25 # 0.38 # 0.45 # 0.5
+  presence_binary_sample <- ifelse(presence_prob_sample > presence_threshold, 1, 0)
+
+  cat("Testing abundance prediction...\n")
+  start_time <- Sys.time()
+  abundance_pred_sample <- predict(abundance_model, newdata = env_df_sample, type = "response")
+  abundance_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Sample abundance prediction:", round(abundance_time, 2), "seconds\n")
+
+  # Create hurdle predictions (only abundance where presence predicted)
+  hurdle_pred_sample <- ifelse(presence_binary_sample == 1, abundance_pred_sample, 0)
+
+  # Add predictions to sample dataframe
+  env_df_sample$presence_prob <- presence_prob_sample
+  env_df_sample$presence_binary <- presence_binary_sample
+  env_df_sample$abundance_pred <- abundance_pred_sample
+  env_df_sample$hurdle_pred <- hurdle_pred_sample
+
+  # Estimate full dataset time
+  total_sample_time <- as.numeric(presence_time + abundance_time)
+  estimated_full_time <- total_sample_time * 100
+
+  cat("\nSample results summary:\n")
+  cat("Presence probability range:", round(range(presence_prob_sample), 4), "\n")
+  cat("Abundance prediction range:", round(range(abundance_pred_sample), 6), "\n")
+  cat("Hurdle prediction range:", round(range(hurdle_pred_sample), 6), "\n")
+
+  cat("\nTime estimates:\n")
+  cat("Sample time:", round(total_sample_time, 2), "seconds\n")
+  cat("Estimated full dataset time:", round(estimated_full_time, 1), "seconds")
+  if(estimated_full_time > 60) {
+    cat(" (", round(estimated_full_time/60, 1), " minutes)", sep="")
+  }
+  cat("\n")
+
+  # Quick plot of sample results
+  ggplot(env_df_sample, aes(x = x, y = y, color = presence_prob)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Presence\nProbability") +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste(stringr::str_to_title(species), "Presence Probability"))
+
+  ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
+
+  hist(env_df_sample$hurdle_pred[env_df_sample$hurdle_pred > 0 & env_df_sample$hurdle_pred < 1])
+
+  ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
+    geom_point(size = 0.5) +
+    scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
+    coord_equal() +
+    theme_minimal() +
+    ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  # Run full model predictions - THIS TAKES A LOT OF TIME / COMPUTING RESOURCES. 15-20+ MINUTES
+  cat("\nRunning full model predictions...\n")
+  start_time <- Sys.time()
+
+  # Full presence prediction
+  presence_threshold = 0.5 # 0.38 # 0.5
+  presence_prob_full <- predict(presence_model, newdata = env_df, type = "response")
+  presence_binary_full <- ifelse(presence_prob_full > presence_threshold, 1, 0)
+
+  # Full abundance prediction
+  abundance_pred_full <- predict(abundance_model, newdata = env_df, type = "response")
+
+  # Full hurdle prediction
+  hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full, 0)
+
+  full_time <- difftime(Sys.time(), start_time, units = "secs")
+  cat("Full prediction time:", round(full_time, 1), "seconds\n")
+
+  # Add predictions to full dataframe
+  env_df$hurdle_pred <- hurdle_pred_full
+
+  # # Plot full results
+  # ggplot(env_df, aes(x = x, y = y, color = hurdle_pred)) +
+  #   geom_point(size = 0.1) +
+  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
   #   coord_equal() +
   #   theme_minimal() +
-  #   ggtitle(paste(stringr::str_to_title(species), "Presence Probability"))
-  # 
-  # ggplot(env_df_sample, aes(x = x, y = y, color = hurdle_pred)) +
-  #   geom_point(size = 0.5) +
-  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
-  #   coord_equal() +
-  #   theme_minimal() +
-  #   ggtitle(paste("Hurdle Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))
-  # 
-  # hist(env_df_sample$hurdle_pred[env_df_sample$hurdle_pred > 0 & env_df_sample$hurdle_pred < 1])
-  # 
-  # ggplot(env_df_sample, aes(x = x, y = y, color = abundance_pred)) +
-  #   geom_point(size = 0.5) +
-  #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.1)) +
-  #   coord_equal() +
-  #   theme_minimal() +
-  #   ggtitle(paste("Raw Abundance Model Sample Prediction -", stringr::str_to_title(species), "(n =", nrow(env_df_sample), ")"))  
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # # Run full model predictions - THIS TAKES A LOT OF TIME / COMPUTING RESOURCES. 15-20+ MINUTES
-  # cat("\nRunning full model predictions...\n")
-  # start_time <- Sys.time()
-  # 
-  # # Full presence prediction
-  # presence_threshold = 0.5 # 0.38 # 0.5
-  # presence_prob_full <- predict(presence_model, newdata = env_df, type = "response")
-  # presence_binary_full <- ifelse(presence_prob_full > presence_threshold, 1, 0)
-  # 
-  # # Full abundance prediction
-  # abundance_pred_full <- predict(abundance_model, newdata = env_df, type = "response")
-  # 
-  # # Full hurdle prediction
-  # hurdle_pred_full <- ifelse(presence_binary_full == 1, abundance_pred_full, 0)
-  # 
-  # full_time <- difftime(Sys.time(), start_time, units = "secs")
-  # cat("Full prediction time:", round(full_time, 1), "seconds\n")
-  # 
-  # # Add predictions to full dataframe
-  # env_df$hurdle_pred <- hurdle_pred_full
-  # 
-  # # # Plot full results
-  # # ggplot(env_df, aes(x = x, y = y, color = hurdle_pred)) +
-  # #   geom_point(size = 0.1) +
-  # #   scale_color_viridis_c(name = "Predicted\nCover", limits = c(0, 0.2)) +
-  # #   coord_equal() +
-  # #   theme_minimal() +
-  # #   ggtitle(paste("Full Hurdle Model Prediction -", stringr::str_to_title(species)))
-  # 
-  # 
-  # 
-  # # Convert predictions back to raster using the original env_df coordinates
-  # hurdle_raster <- rast(env_df[, c("x", "y", "hurdle_pred")], type="xyz")
-  # shallow_mask <- bathy_final > -60
-  # hurdle_raster <- resample(hurdle_raster, bathy_final)
-  # hurdle_raster <- mask(hurdle_raster, shallow_mask, maskvalues = FALSE)
-  # 
-  # # Plot with terra
-  # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 0.1, values = TRUE)
-  # # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 1.0, values = TRUE)
-  # # plot(hurdle_raster_clamped, main = paste("Full Hurdle Model -", stringr::str_to_title(species)), 
-  # #      colNA = "gray90")  
-  # 
-  # 
-  # 
-  # 
-  # # Create leaflet map with hurdle predictions
-  # pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
-  # 
-  # leaflet() %>%
-  #   addTiles(group = "OpenStreetMap") %>%
-  #   addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
-  #   addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
-  #   addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
-  #             title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
-  #   addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
-  #                    options = layersControlOptions(collapsed = FALSE))
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # #draft code to pull up another leaflet with spp-specific cover
-  # species <- "orbicella" #0.1
-  # 
-  # # Get unique PSU locations with coral cover data for the selected species
-  # spp_leaflet_cover_data <- combined_benthic_data_averaged %>%
-  #   filter(grepl(species, spp, ignore.case = TRUE)) %>%
-  #   group_by(PSU) %>%
-  #   summarise(
-  #     lat = first(lat),
-  #     lon = first(lon),
-  #     dataset = first(dataset),
-  #     avg_cover = mean(cover, na.rm = TRUE),
-  #     .groups = 'drop'
-  #   )
-  # 
-  # # Create color palette for coral cover (yellow to red)
-  # color_pal <- colorNumeric(
-  #   palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
-  #   domain = spp_leaflet_cover_data$avg_cover,
-  #   na.color = "gray"
-  # )
-  # 
-  # # Create the interactive leaflet map
-  # coral_cover_map <- leaflet(spp_leaflet_cover_data) %>%
-  #   addTiles(group = "OpenStreetMap") %>%
-  #   addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
-  #   addCircleMarkers(
-  #     lng = ~lon, 
-  #     lat = ~lat,
-  #     popup = ~paste0(
-  #       "<b>PSU:</b> ", PSU, "<br>",
-  #       "<b>Dataset:</b> ", dataset, "<br>",
-  #       "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
-  #       "<b>Latitude:</b> ", round(lat, 5), "<br>",
-  #       "<b>Longitude:</b> ", round(lon, 5)
-  #     ),
-  #     label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
-  #     radius = 8,
-  #     color = "white",
-  #     fillColor = ~color_pal(avg_cover),
-  #     fillOpacity = 0.8,
-  #     weight = 2,
-  #     stroke = TRUE
-  #   ) %>%
-  #   addLegend(
-  #     "bottomright",
-  #     pal = color_pal,
-  #     values = ~avg_cover,
-  #     title = "Coral Cover (%)",
-  #     opacity = 1,
-  #     labFormat = labelFormat(suffix = "%")
-  #   ) %>%
-  #   addLayersControl(
-  #     baseGroups = c("OpenStreetMap", "Satellite"),
-  #     options = layersControlOptions(collapsed = FALSE)
-  #   ) %>%
-  #   fitBounds(
-  #     lng1 = min(spp_leaflet_cover_data$lon, na.rm = TRUE) - 0.1,
-  #     lat1 = min(spp_leaflet_cover_data$lat, na.rm = TRUE) - 0.1,
-  #     lng2 = max(spp_leaflet_cover_data$lon, na.rm = TRUE) + 0.1,
-  #     lat2 = max(spp_leaflet_cover_data$lat, na.rm = TRUE) + 0.1
-  #   )
-  # 
-  # # Display the map
-  # coral_cover_map
-  # 
+  #   ggtitle(paste("Full Hurdle Model Prediction -", stringr::str_to_title(species)))
+
+
+
+  # Convert predictions back to raster using the original env_df coordinates
+  hurdle_raster <- rast(env_df[, c("x", "y", "hurdle_pred")], type="xyz")
+  shallow_mask <- bathy_final > -60
+  hurdle_raster <- resample(hurdle_raster, bathy_final)
+  hurdle_raster <- mask(hurdle_raster, shallow_mask, maskvalues = FALSE)
+
+  # Plot with terra
+  hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 0.1, values = TRUE)
+  # hurdle_raster_clamped <- clamp(hurdle_raster, lower = 0, upper = 1.0, values = TRUE)
+  # plot(hurdle_raster_clamped, main = paste("Full Hurdle Model -", stringr::str_to_title(species)),
+  #      colNA = "gray90")
+
+
+
+
+  # Create leaflet map with hurdle predictions
+  pal <- colorNumeric("viridis", values(hurdle_raster_clamped), na.color = "transparent")
+
+  leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addRasterImage(hurdle_raster_clamped, colors = pal, opacity = 0.7) %>%
+    addLegend("bottomright", pal = pal, values = values(hurdle_raster_clamped),
+              title = paste(stringr::str_to_title(species), "Cover (%)")) %>%
+    addLayersControl(baseGroups = c("OpenStreetMap", "Satellite"),
+                     options = layersControlOptions(collapsed = FALSE))
+
+
+
+
+
+
+
+
+  #draft code to pull up another leaflet with spp-specific cover
+  species <- "orbicella" #0.1
+
+  # Get unique PSU locations with coral cover data for the selected species
+  spp_leaflet_cover_data <- combined_benthic_data_averaged %>%
+    filter(grepl(species, spp, ignore.case = TRUE)) %>%
+    group_by(PSU) %>%
+    summarise(
+      lat = first(lat),
+      lon = first(lon),
+      dataset = first(dataset),
+      avg_cover = mean(cover, na.rm = TRUE),
+      .groups = 'drop'
+    )
+
+  # Create color palette for coral cover (yellow to red)
+  color_pal <- colorNumeric(
+    palette = c("#FFFF00", "#FF8C00", "#FF4500", "#FF0000"),  # Yellow to Red
+    domain = spp_leaflet_cover_data$avg_cover,
+    na.color = "gray"
+  )
+
+  # Create the interactive leaflet map
+  coral_cover_map <- leaflet(spp_leaflet_cover_data) %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+    addCircleMarkers(
+      lng = ~lon,
+      lat = ~lat,
+      popup = ~paste0(
+        "<b>PSU:</b> ", PSU, "<br>",
+        "<b>Dataset:</b> ", dataset, "<br>",
+        "<b>Average Coral Cover:</b> ", round(avg_cover, 2), "%<br>",
+        "<b>Latitude:</b> ", round(lat, 5), "<br>",
+        "<b>Longitude:</b> ", round(lon, 5)
+      ),
+      label = ~paste0("PSU ", PSU, ": ", round(avg_cover, 1), "% cover"),
+      radius = 8,
+      color = "white",
+      fillColor = ~color_pal(avg_cover),
+      fillOpacity = 0.8,
+      weight = 2,
+      stroke = TRUE
+    ) %>%
+    addLegend(
+      "bottomright",
+      pal = color_pal,
+      values = ~avg_cover,
+      title = "Coral Cover (%)",
+      opacity = 1,
+      labFormat = labelFormat(suffix = "%")
+    ) %>%
+    addLayersControl(
+      baseGroups = c("OpenStreetMap", "Satellite"),
+      options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    fitBounds(
+      lng1 = min(spp_leaflet_cover_data$lon, na.rm = TRUE) - 0.1,
+      lat1 = min(spp_leaflet_cover_data$lat, na.rm = TRUE) - 0.1,
+      lng2 = max(spp_leaflet_cover_data$lon, na.rm = TRUE) + 0.1,
+      lat2 = max(spp_leaflet_cover_data$lat, na.rm = TRUE) + 0.1
+    )
+
+  # Display the map
+  coral_cover_map
+
   ################################## Save objects/workspace ##################################
   
   # #updated way to handle saving of new objects
