@@ -198,6 +198,18 @@
   cat("Species included:", length(all_results), "\n")
   cat("PSUs with data:", nrow(psu_total_cover), "\n")
   
+  ################################## export reef extent shapefile ##################################
+  
+  # Binary raster of reef extent
+  reef_binary <- ifel(total_raster_clamped > 0, 1, NA)
+  plot(reef_binary, main = "Reef Extent (binary)", col = "coral")
+  
+  # Export and verify the newly written shapefile
+  writeRaster(reef_binary, here("output/reef_extent.tif"), overwrite = TRUE)
+  reef_check <- rast(here("output/reef_extent.tif"))
+  plot(reef_check, main = "Reef Extent (read back)", col = "coral")
+  crs(total_raster_clamped)
+  crs(reef_check)
   
   ################################## sum observed cover by susceptibility ##################################
   

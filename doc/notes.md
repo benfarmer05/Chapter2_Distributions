@@ -4,34 +4,6 @@
 #   - calculate_bathy_rasters.R
 
 
-#           Consider:
-
-# Main script (e.g., main_script.R)
-
-# Source the first script
-source("script1.R")
-
-# Source the second script
-source("script2.R")
-
-# Source the third script
-source("script3.R")
-
-# Continue with additional scripts as needed
-
-
-
-- from calculate_bathy_rasters.R:
-
-  # STOPPING POINT - 3 SEPT 2024
-  #   - yes okay the more I think about it, why not just use the native NCRMP grid(s) directly to calculate bathymetry, slope, aspect etc.
-  #       within their grid squares? this might be really computationally expensive, I don't know. but I'll have to figure out something
-  #   - and anyways, next steps will require
-  #       - test how bad the mosaicing / artifact patterns matter in Blondeau's NOAA product (produce slope/complexity and plot)
-  #       - compare with NOAA CRM exports. bring in mine and Holstein's to R, clip to 0-50 m, merge them (may need to clip PR against USVI
-  #         first). then produce slope/complexity and plot. compare plot with that of Blondeau's product
-  #       - lastly, and actually I'll do this first, is porting data from Allen Coral Atlas and seeing how that bathy looks! and turbidity
-  
     # STOPPING POINT - 3 SEPT 2024
   # - above, I was finishing up plotting the derived bathymetric products and seeing the effect of the weird patterns in the Blondeau data.
   #   so far, signs point toward me needing to make a better merged bathymetry because of the issues present. should be doable
